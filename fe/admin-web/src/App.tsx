@@ -12,6 +12,7 @@ import { useAuth } from './features/auth/auth-context'
 import { ChangePasswordPage, ForgotPasswordPage, ResetPasswordPage } from './features/auth/password-pages'
 import { StaffPage } from './features/staff/staff-page'
 import { PatientLinksPage } from './features/patient-links/patient-links-page'
+import { CatalogPage } from './features/catalog/catalog-page'
 
 const loginSchema = z.object({
   identifier: z.string().trim().min(3, 'Nhập tài khoản, email hoặc số điện thoại.'),
@@ -95,6 +96,8 @@ function AdminLayout() {
     || user?.permissions.includes('USERS_MANAGE')
   const canManagePatientLinks = user?.roles.some((role) => role.code === 'ADMIN')
     || user?.permissions.includes('PATIENT_PORTAL_LINK_MANAGE')
+  const canManageCatalog = user?.roles.some((role) => role.code === 'ADMIN')
+    || user?.permissions.includes('MASTER_DATA_MANAGE')
 
   const onLogout = async () => {
     setIsLoggingOut(true)
@@ -109,6 +112,7 @@ function AdminLayout() {
           <NavLink to="/dashboard">Tổng quan</NavLink>
           {canManageStaff && <NavLink to="/staff">Nhân sự</NavLink>}
           {canManagePatientLinks && <NavLink to="/patient-links">Liên kết hồ sơ</NavLink>}
+          {canManageCatalog && <NavLink to="/catalog">Danh mục</NavLink>}
           <NavLink to="/change-password">Đổi mật khẩu</NavLink>
           <a href="#appointments">Lịch hẹn</a>
           <a href="#patients">Bệnh nhân</a>
@@ -173,6 +177,7 @@ export default function App() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/staff" element={<StaffPage />} />
         <Route path="/patient-links" element={<PatientLinksPage />} />
+        <Route path="/catalog" element={<CatalogPage />} />
         <Route path="/change-password" element={<ChangePasswordPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

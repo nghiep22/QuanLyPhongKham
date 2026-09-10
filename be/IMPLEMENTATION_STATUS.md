@@ -121,19 +121,39 @@ Phạm vi đã hoàn thành:
 - Mobile có màn quản lý hồ sơ/yêu cầu/thu hồi; Admin Web có hàng đợi lọc theo
   chi nhánh/trạng thái và form duyệt/từ chối; OpenAPI đồng bộ 9 operation.
 
+## DONE — Slice 07: Organization Catalog & Public Directory
+
+Phạm vi đã hoàn thành:
+
+- Public directory cho chi nhánh, chuyên khoa, dịch vụ có giá/khả dụng đang hiệu
+  lực và bác sĩ đang hoạt động, nhận lịch online; không lộ dữ liệu workforce riêng.
+- Thêm public UUID cho phòng, nhóm dịch vụ và dịch vụ; API không dùng bigint nội bộ.
+- Admin/Manager quản lý phòng theo đúng scope chi nhánh với `ETag`/`If-Match`;
+  stale update trả conflict và mọi mutation được audit trong transaction.
+- Định nghĩa dịch vụ là danh mục cấp tổ chức, chỉ assignment toàn cục được tạo/sửa;
+  Branch Manager chỉ thiết lập giá và khả dụng tại chi nhánh của mình.
+- Lịch sử giá VND có ngày hiệu lực, không cho hồi tố/chồng khoảng; khi lên lịch giá
+  mới, khoảng trước được đóng tự động mà không sửa snapshot giao dịch cũ.
+- Clinic Service xác minh JWT RS256 cục bộ bằng public key Auth và đối chiếu trạng
+  thái/token version qua `v_clinic_principal_v1`, không gọi Auth cho từng request.
+- Gateway ưu tiên route Admin Catalog sang Clinic Service; OpenAPI/generated client
+  đồng bộ 12 operation; Admin Web có màn Danh mục responsive với trạng thái lỗi,
+  rỗng, loading, forbidden, conflict và retry qua query invalidation.
+
 ### Bằng chứng xác minh local toàn bộ
 
 | Kiểm tra | Kết quả |
 |---|---|
-| Baseline SQL chạy lại idempotent | Đạt; 69 bảng, 13 view, 78 procedure, 29 trigger |
-| SQL auth session/staff RBAC/staff safety/password lifecycle/patient registration/patient link regression | PASS/PASS/PASS/PASS/PASS/PASS; rollback sạch |
+| Baseline SQL chạy lại idempotent | Đạt; 70 bảng, 23 view, 81 procedure, 30 trigger |
+| SQL auth session/staff RBAC/staff safety/password lifecycle/patient registration/patient link/catalog-directory regression | PASS/PASS/PASS/PASS/PASS/PASS/PASS; rollback sạch |
 | npm run openapi:check | Đạt; contract và generated code đồng bộ |
 | npm run lint | Đạt, không cảnh báo |
 | npm run typecheck | Đạt |
-| npm test | 40 test đạt (Auth 34, Mobile 3, Clinic 3) |
+| npm test | 60 test đạt (Auth 34, Mobile 14, Clinic 12) |
 | npm run build | Đạt; .NET 0 warning/0 error |
 | npm run doctor:mobile | 21/21 |
 | Gateway → Auth → SQL smoke test | Registration thiếu idempotency key trả 400; challenge lạ trả generic OTP 400; ba route patient-access mới đi đúng Auth và trả 401 + request ID + `Cache-Control: no-store` khi thiếu token |
+| Clinic Catalog → SQL smoke test | Public branch/service trả dữ liệu và giá hiệu lực từ SQL thật; Admin Catalog thiếu token trả 401; read repository trả đủ branch/service/doctor và lịch sử giá |
 | npm audit --omit=dev --audit-level=high | Đạt; 0 high/critical. Còn 17 moderate từ dependency bắc cầu Expo/React Navigation, chưa có bản sửa không breaking |
 
 ## Chưa hoàn thành
@@ -143,3 +163,4 @@ Phạm vi đã hoàn thành:
 - Theo dõi bản vá upstream cho 17 cảnh báo moderate bắc cầu Expo/React Navigation;
   không dùng `npm audit fix --force` vì công cụ đề xuất hạ Expo xuống bản breaking.
 - Các mục Auth P1 như MFA, quản lý permission động và lịch sử session.
+- Phase 3 còn quản trị hồ sơ bệnh nhân, dedupe/search và read policy theo care relationship.

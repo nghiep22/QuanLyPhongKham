@@ -143,6 +143,71 @@ export function createApiClient(options: ApiClientOptions) {
           { method: 'DELETE', body: JSON.stringify(body) },
         ),
     },
+    publicCatalog: {
+      branches: () => request<import('@clinic/generated-api-types').PublicBranchListResponse>(
+        '/api/v1/public/branches',
+      ),
+      specialties: () => request<import('@clinic/generated-api-types').PublicSpecialtyListResponse>(
+        '/api/v1/public/specialties',
+      ),
+      services: (query: { branchPublicId: string; specialtyPublicId?: string; query?: string }) => {
+        const search = new URLSearchParams();
+        Object.entries(query).forEach(([key, value]) => {
+          if (value !== undefined && value !== '') search.set(key, value);
+        });
+        return request<import('@clinic/generated-api-types').PublicServiceListResponse>(
+          `/api/v1/public/services?${search.toString()}`,
+        );
+      },
+      doctors: (query: {
+        branchPublicId?: string; specialtyPublicId?: string; servicePublicId?: string; query?: string;
+      } = {}) => {
+        const search = new URLSearchParams();
+        Object.entries(query).forEach(([key, value]) => {
+          if (value !== undefined && value !== '') search.set(key, value);
+        });
+        const suffix = search.size ? `?${search.toString()}` : '';
+        return request<import('@clinic/generated-api-types').PublicDoctorListResponse>(
+          `/api/v1/public/doctors${suffix}`,
+        );
+      },
+    },
+    catalog: {
+      references: () => request<import('@clinic/generated-api-types').CatalogReferenceResponse>(
+        '/api/v1/admin/catalog/reference-data',
+      ),
+      rooms: (branchPublicId: string) => request<import('@clinic/generated-api-types').CatalogRoomListResponse>(
+        `/api/v1/admin/catalog/rooms?${new URLSearchParams({ branchPublicId }).toString()}`,
+      ),
+      createRoom: (body: import('@clinic/generated-api-types').CreateCatalogRoomRequest) =>
+        request<import('@clinic/generated-api-types').CatalogRoomResponse>('/api/v1/admin/catalog/rooms', {
+          method: 'POST', body: JSON.stringify(body),
+        }),
+      updateRoom: (roomId: string, body: import('@clinic/generated-api-types').UpdateCatalogRoomRequest,
+        rowVersion: string) => request<import('@clinic/generated-api-types').CatalogRoomResponse>(
+          `/api/v1/admin/catalog/rooms/${encodeURIComponent(roomId)}`,
+          { method: 'PUT', headers: { 'if-match': `"${rowVersion}"` }, body: JSON.stringify(body) },
+        ),
+      services: (branchPublicId: string) => request<import('@clinic/generated-api-types').CatalogServiceListResponse>(
+        `/api/v1/admin/catalog/services?${new URLSearchParams({ branchPublicId }).toString()}`,
+      ),
+      createService: (branchPublicId: string, body: import('@clinic/generated-api-types').CreateCatalogServiceRequest) =>
+        request<import('@clinic/generated-api-types').CatalogServiceResponse>(
+          `/api/v1/admin/catalog/services?${new URLSearchParams({ branchPublicId }).toString()}`,
+          { method: 'POST', body: JSON.stringify(body) },
+        ),
+      updateService: (serviceId: string, branchPublicId: string,
+        body: import('@clinic/generated-api-types').UpdateCatalogServiceRequest, rowVersion: string) =>
+        request<import('@clinic/generated-api-types').CatalogServiceResponse>(
+          `/api/v1/admin/catalog/services/${encodeURIComponent(serviceId)}?${new URLSearchParams({ branchPublicId }).toString()}`,
+          { method: 'PUT', headers: { 'if-match': `"${rowVersion}"` }, body: JSON.stringify(body) },
+        ),
+      setBranchPrice: (serviceId: string, body: import('@clinic/generated-api-types').SetCatalogBranchPriceRequest) =>
+        request<import('@clinic/generated-api-types').CatalogServiceResponse>(
+          `/api/v1/admin/catalog/services/${encodeURIComponent(serviceId)}/prices`,
+          { method: 'POST', body: JSON.stringify(body) },
+        ),
+    },
     staff: {
       references: () =>
         request<import('@clinic/generated-api-types').StaffReferenceResponse>(

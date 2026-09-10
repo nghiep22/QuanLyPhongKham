@@ -552,6 +552,207 @@ export type GrantRoleRequest = {
     validToUtc?: string;
 };
 
+export type CatalogRoomType = 'CONSULTATION' | 'PROCEDURE' | 'LAB' | 'IMAGING' | 'PHARMACY' | 'OTHER';
+
+export type CatalogServiceType = 'CONSULTATION' | 'LAB' | 'IMAGING' | 'PROCEDURE' | 'VACCINATION' | 'OTHER';
+
+export type CatalogReference = {
+    publicId: string;
+    code: string;
+    name: string;
+};
+
+export type PublicBranch = CatalogReference & {
+    phone: string | null;
+    email: string | null;
+    addressLine: string;
+    ward: string | null;
+    district: string | null;
+    province: string | null;
+    timezoneName: string;
+    bookingHorizonDays: number;
+    onlineHoldMinutes: number;
+    cancellationDeadlineMinutes: number;
+};
+
+export type PublicSpecialty = CatalogReference & {
+    description: string | null;
+};
+
+export type EffectivePrice = {
+    amount: string;
+    currency: 'VND';
+    effectiveFrom: string;
+};
+
+export type PublicService = {
+    publicId: string;
+    code: string;
+    name: string;
+    type: CatalogServiceType;
+    category: CatalogReference;
+    specialty: CatalogReference | null;
+    durationMinutes: number;
+    requiresDoctor: boolean;
+    price: EffectivePrice;
+};
+
+export type NamedPublicReference = {
+    publicId: string;
+    name: string;
+};
+
+export type PublicDoctor = {
+    publicId: string;
+    fullName: string;
+    academicTitle: string | null;
+    biography: string | null;
+    defaultSlotMinutes: number;
+    branches: Array<NamedPublicReference>;
+    specialties: Array<NamedPublicReference>;
+    servicePublicIds: Array<string>;
+};
+
+export type PublicBranchListResponse = {
+    data: Array<PublicBranch>;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type PublicSpecialtyListResponse = {
+    data: Array<PublicSpecialty>;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type PublicServiceListResponse = {
+    data: Array<PublicService>;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type PublicDoctorListResponse = {
+    data: Array<PublicDoctor>;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type CatalogReferenceData = {
+    branches: Array<CatalogReference>;
+    categories: Array<CatalogReference>;
+    specialties: Array<CatalogReference>;
+    canManageOrganizationServices: boolean;
+};
+
+export type CatalogReferenceResponse = {
+    data: CatalogReferenceData;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type CatalogRoom = {
+    publicId: string;
+    branch: CatalogReference;
+    code: string;
+    name: string;
+    type: CatalogRoomType;
+    floorNo: number | null;
+    capacity: number;
+    isActive: boolean;
+    rowVersion: string;
+};
+
+export type CatalogBranchPrice = EffectivePrice & {
+    publicId: string;
+    effectiveTo: string | null;
+    isAvailable: boolean;
+};
+
+export type CatalogService = {
+    publicId: string;
+    code: string;
+    name: string;
+    type: CatalogServiceType;
+    category: CatalogReference;
+    specialty: CatalogReference | null;
+    durationMinutes: number;
+    basePrice: string;
+    requiresDoctor: boolean;
+    isActive: boolean;
+    branchPrices: Array<CatalogBranchPrice>;
+    rowVersion: string;
+};
+
+export type CatalogRoomResponse = {
+    data: CatalogRoom;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type CatalogRoomListResponse = {
+    data: Array<CatalogRoom>;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type CatalogServiceResponse = {
+    data: CatalogService;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type CatalogServiceListResponse = {
+    data: Array<CatalogService>;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type CreateCatalogRoomRequest = {
+    branchPublicId: string;
+    code: string;
+    name: string;
+    type: CatalogRoomType;
+    floorNo?: number;
+    capacity: number;
+};
+
+export type UpdateCatalogRoomRequest = {
+    name: string;
+    type: CatalogRoomType;
+    floorNo?: number;
+    capacity: number;
+    isActive: boolean;
+};
+
+export type CreateCatalogServiceRequest = {
+    categoryPublicId: string;
+    specialtyPublicId?: string;
+    code: string;
+    name: string;
+    type: CatalogServiceType;
+    durationMinutes: number;
+    basePrice: string;
+    requiresDoctor: boolean;
+};
+
+export type UpdateCatalogServiceRequest = {
+    categoryPublicId: string;
+    specialtyPublicId?: string;
+    name: string;
+    type: CatalogServiceType;
+    durationMinutes: number;
+    basePrice: string;
+    requiresDoctor: boolean;
+    isActive: boolean;
+};
+
+export type SetCatalogBranchPriceRequest = {
+    branchPublicId: string;
+    amount: string;
+    effectiveFrom: string;
+    isAvailable: boolean;
+};
+
 export type ApiErrorResponse = {
     error: ApiError;
     requestId: RequestId;
@@ -596,6 +797,13 @@ export type UserId = string;
  * Strong ETag containing the Base64 employee rowversion and optional doctor rowversion.
  */
 export type IfMatch = string;
+
+/**
+ * Strong ETag containing the Base64 rowversion of a catalog resource.
+ */
+export type CatalogIfMatch = string;
+
+export type BranchPublicIdQuery = string;
 
 /**
  * UUID that makes retries with the same operation payload return the original result.
@@ -1651,3 +1859,428 @@ export type RevokeStaffRoleResponses = {
 };
 
 export type RevokeStaffRoleResponse = RevokeStaffRoleResponses[keyof RevokeStaffRoleResponses];
+
+export type ListPublicBranchesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/public/branches';
+};
+
+export type ListPublicBranchesResponses = {
+    /**
+     * Active public branch directory.
+     */
+    200: PublicBranchListResponse;
+};
+
+export type ListPublicBranchesResponse = ListPublicBranchesResponses[keyof ListPublicBranchesResponses];
+
+export type ListPublicSpecialtiesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/public/specialties';
+};
+
+export type ListPublicSpecialtiesResponses = {
+    /**
+     * Active public specialty directory.
+     */
+    200: PublicSpecialtyListResponse;
+};
+
+export type ListPublicSpecialtiesResponse = ListPublicSpecialtiesResponses[keyof ListPublicSpecialtiesResponses];
+
+export type ListPublicServicesData = {
+    body?: never;
+    path?: never;
+    query: {
+        branchPublicId: string;
+        specialtyPublicId?: string;
+        query?: string;
+    };
+    url: '/api/v1/public/services';
+};
+
+export type ListPublicServicesErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+};
+
+export type ListPublicServicesError = ListPublicServicesErrors[keyof ListPublicServicesErrors];
+
+export type ListPublicServicesResponses = {
+    /**
+     * Booking-facing service directory with effective VND prices.
+     */
+    200: PublicServiceListResponse;
+};
+
+export type ListPublicServicesResponse = ListPublicServicesResponses[keyof ListPublicServicesResponses];
+
+export type ListPublicDoctorsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        branchPublicId?: string;
+        specialtyPublicId?: string;
+        servicePublicId?: string;
+        query?: string;
+    };
+    url: '/api/v1/public/doctors';
+};
+
+export type ListPublicDoctorsErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+};
+
+export type ListPublicDoctorsError = ListPublicDoctorsErrors[keyof ListPublicDoctorsErrors];
+
+export type ListPublicDoctorsResponses = {
+    /**
+     * Booking-facing doctor directory without private workforce fields.
+     */
+    200: PublicDoctorListResponse;
+};
+
+export type ListPublicDoctorsResponse = ListPublicDoctorsResponses[keyof ListPublicDoctorsResponses];
+
+export type GetCatalogReferenceDataData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/catalog/reference-data';
+};
+
+export type GetCatalogReferenceDataErrors = {
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+};
+
+export type GetCatalogReferenceDataError = GetCatalogReferenceDataErrors[keyof GetCatalogReferenceDataErrors];
+
+export type GetCatalogReferenceDataResponses = {
+    /**
+     * Catalog reference data scoped to the actor.
+     */
+    200: CatalogReferenceResponse;
+};
+
+export type GetCatalogReferenceDataResponse = GetCatalogReferenceDataResponses[keyof GetCatalogReferenceDataResponses];
+
+export type ListCatalogRoomsData = {
+    body?: never;
+    path?: never;
+    query: {
+        branchPublicId: string;
+    };
+    url: '/api/v1/admin/catalog/rooms';
+};
+
+export type ListCatalogRoomsErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+};
+
+export type ListCatalogRoomsError = ListCatalogRoomsErrors[keyof ListCatalogRoomsErrors];
+
+export type ListCatalogRoomsResponses = {
+    /**
+     * Rooms in the selected branch.
+     */
+    200: CatalogRoomListResponse;
+};
+
+export type ListCatalogRoomsResponse = ListCatalogRoomsResponses[keyof ListCatalogRoomsResponses];
+
+export type CreateCatalogRoomData = {
+    body: CreateCatalogRoomRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/catalog/rooms';
+};
+
+export type CreateCatalogRoomErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type CreateCatalogRoomError = CreateCatalogRoomErrors[keyof CreateCatalogRoomErrors];
+
+export type CreateCatalogRoomResponses = {
+    /**
+     * Room created.
+     */
+    201: CatalogRoomResponse;
+};
+
+export type CreateCatalogRoomResponse = CreateCatalogRoomResponses[keyof CreateCatalogRoomResponses];
+
+export type UpdateCatalogRoomData = {
+    body: UpdateCatalogRoomRequest;
+    headers: {
+        /**
+         * Strong ETag containing the Base64 rowversion of a catalog resource.
+         */
+        'If-Match': string;
+    };
+    path: {
+        roomId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/catalog/rooms/{roomId}';
+};
+
+export type UpdateCatalogRoomErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+    /**
+     * The If-Match precondition is required for this update.
+     */
+    428: ApiErrorResponse;
+};
+
+export type UpdateCatalogRoomError = UpdateCatalogRoomErrors[keyof UpdateCatalogRoomErrors];
+
+export type UpdateCatalogRoomResponses = {
+    /**
+     * Room updated.
+     */
+    200: CatalogRoomResponse;
+};
+
+export type UpdateCatalogRoomResponse = UpdateCatalogRoomResponses[keyof UpdateCatalogRoomResponses];
+
+export type ListCatalogServicesData = {
+    body?: never;
+    path?: never;
+    query: {
+        branchPublicId: string;
+    };
+    url: '/api/v1/admin/catalog/services';
+};
+
+export type ListCatalogServicesErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+};
+
+export type ListCatalogServicesError = ListCatalogServicesErrors[keyof ListCatalogServicesErrors];
+
+export type ListCatalogServicesResponses = {
+    /**
+     * Organization services with selected-branch prices.
+     */
+    200: CatalogServiceListResponse;
+};
+
+export type ListCatalogServicesResponse = ListCatalogServicesResponses[keyof ListCatalogServicesResponses];
+
+export type CreateCatalogServiceData = {
+    body: CreateCatalogServiceRequest;
+    path?: never;
+    query: {
+        branchPublicId: string;
+    };
+    url: '/api/v1/admin/catalog/services';
+};
+
+export type CreateCatalogServiceErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type CreateCatalogServiceError = CreateCatalogServiceErrors[keyof CreateCatalogServiceErrors];
+
+export type CreateCatalogServiceResponses = {
+    /**
+     * Organization service created.
+     */
+    201: CatalogServiceResponse;
+};
+
+export type CreateCatalogServiceResponse = CreateCatalogServiceResponses[keyof CreateCatalogServiceResponses];
+
+export type UpdateCatalogServiceData = {
+    body: UpdateCatalogServiceRequest;
+    headers: {
+        /**
+         * Strong ETag containing the Base64 rowversion of a catalog resource.
+         */
+        'If-Match': string;
+    };
+    path: {
+        serviceId: string;
+    };
+    query: {
+        branchPublicId: string;
+    };
+    url: '/api/v1/admin/catalog/services/{serviceId}';
+};
+
+export type UpdateCatalogServiceErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+    /**
+     * The If-Match precondition is required for this update.
+     */
+    428: ApiErrorResponse;
+};
+
+export type UpdateCatalogServiceError = UpdateCatalogServiceErrors[keyof UpdateCatalogServiceErrors];
+
+export type UpdateCatalogServiceResponses = {
+    /**
+     * Organization service updated.
+     */
+    200: CatalogServiceResponse;
+};
+
+export type UpdateCatalogServiceResponse = UpdateCatalogServiceResponses[keyof UpdateCatalogServiceResponses];
+
+export type SetCatalogBranchPriceData = {
+    body: SetCatalogBranchPriceRequest;
+    path: {
+        serviceId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/catalog/services/{serviceId}/prices';
+};
+
+export type SetCatalogBranchPriceErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type SetCatalogBranchPriceError = SetCatalogBranchPriceErrors[keyof SetCatalogBranchPriceErrors];
+
+export type SetCatalogBranchPriceResponses = {
+    /**
+     * Branch price period scheduled without overlap.
+     */
+    201: CatalogServiceResponse;
+};
+
+export type SetCatalogBranchPriceResponse = SetCatalogBranchPriceResponses[keyof SetCatalogBranchPriceResponses];

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Private Clinic API
-  version: 0.3.0
+  version: 0.4.0
   description: Public contract for the private clinic management system.
 servers:
   - url: http://localhost:5000
@@ -781,6 +781,335 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+  /api/v1/public/branches:
+    get:
+      operationId: listPublicBranches
+      summary: List active clinic branches available for online booking
+      responses:
+        '200':
+          description: Active public branch directory.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicBranchListResponse'
+  /api/v1/public/specialties:
+    get:
+      operationId: listPublicSpecialties
+      summary: List active specialties
+      responses:
+        '200':
+          description: Active public specialty directory.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicSpecialtyListResponse'
+  /api/v1/public/services:
+    get:
+      operationId: listPublicServices
+      summary: List services currently available and priced at a branch
+      parameters:
+        - $ref: '#/components/parameters/BranchPublicIdQuery'
+        - name: specialtyPublicId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: query
+          in: query
+          schema:
+            type: string
+            maxLength: 100
+      responses:
+        '200':
+          description: Booking-facing service directory with effective VND prices.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicServiceListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/public/doctors:
+    get:
+      operationId: listPublicDoctors
+      summary: List active doctors who accept online booking
+      parameters:
+        - name: branchPublicId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: specialtyPublicId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: servicePublicId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: query
+          in: query
+          schema:
+            type: string
+            maxLength: 100
+      responses:
+        '200':
+          description: Booking-facing doctor directory without private workforce fields.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicDoctorListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /api/v1/admin/catalog/reference-data:
+    get:
+      operationId: getCatalogReferenceData
+      summary: Get manageable branches and catalog references
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Catalog reference data scoped to the actor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogReferenceResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/admin/catalog/rooms:
+    get:
+      operationId: listCatalogRooms
+      summary: List rooms in a manageable branch
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/BranchPublicIdQuery'
+      responses:
+        '200':
+          description: Rooms in the selected branch.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogRoomListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      operationId: createCatalogRoom
+      summary: Create a room in a manageable branch
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCatalogRoomRequest'
+      responses:
+        '201':
+          description: Room created.
+          headers:
+            ETag:
+              $ref: '#/components/headers/CatalogEtag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogRoomResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/admin/catalog/rooms/{roomId}:
+    put:
+      operationId: updateCatalogRoom
+      summary: Update a room with optimistic concurrency
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/CatalogIfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCatalogRoomRequest'
+      responses:
+        '200':
+          description: Room updated.
+          headers:
+            ETag:
+              $ref: '#/components/headers/CatalogEtag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogRoomResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+  /api/v1/admin/catalog/services:
+    get:
+      operationId: listCatalogServices
+      summary: List organization services and branch price history
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/BranchPublicIdQuery'
+      responses:
+        '200':
+          description: Organization services with selected-branch prices.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogServiceListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      operationId: createCatalogService
+      summary: Create an organization-wide service
+      description: Requires a global MASTER_DATA_MANAGE assignment. Branch managers cannot create organization catalog definitions.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/BranchPublicIdQuery'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCatalogServiceRequest'
+      responses:
+        '201':
+          description: Organization service created.
+          headers:
+            ETag:
+              $ref: '#/components/headers/CatalogEtag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogServiceResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/admin/catalog/services/{serviceId}:
+    put:
+      operationId: updateCatalogService
+      summary: Update an organization-wide service with optimistic concurrency
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: serviceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/BranchPublicIdQuery'
+        - $ref: '#/components/parameters/CatalogIfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCatalogServiceRequest'
+      responses:
+        '200':
+          description: Organization service updated.
+          headers:
+            ETag:
+              $ref: '#/components/headers/CatalogEtag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogServiceResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+  /api/v1/admin/catalog/services/{serviceId}/prices:
+    post:
+      operationId: setCatalogBranchPrice
+      summary: Schedule a branch price and availability change
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: serviceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetCatalogBranchPriceRequest'
+      responses:
+        '201':
+          description: Branch price period scheduled without overlap.
+          headers:
+            ETag:
+              $ref: '#/components/headers/CatalogEtag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogServiceResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
 components:
   parameters:
     StaffId:
@@ -805,6 +1134,21 @@ components:
       schema:
         type: string
         pattern: '^"[A-Za-z0-9+/]{11}=(:[A-Za-z0-9+/]{11}=)?"$'
+    CatalogIfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Strong ETag containing the Base64 rowversion of a catalog resource.
+      schema:
+        type: string
+        pattern: '^"[A-Za-z0-9+/]{11}="$'
+    BranchPublicIdQuery:
+      name: branchPublicId
+      in: query
+      required: true
+      schema:
+        type: string
+        format: uuid
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -836,6 +1180,11 @@ components:
         type: string
         pattern: '^"[A-Za-z0-9+/]{11}="$'
   headers:
+    CatalogEtag:
+      description: Strong ETag containing the Base64 SQL rowversion.
+      schema:
+        type: string
+        pattern: '^"[A-Za-z0-9+/]{11}="$'
     StaffEtag:
       description: Strong ETag for optimistic concurrency.
       schema:
@@ -2098,6 +2447,502 @@ components:
         validToUtc:
           type: string
           format: date-time
+    CatalogRoomType:
+      type: string
+      enum: [CONSULTATION, PROCEDURE, LAB, IMAGING, PHARMACY, OTHER]
+    CatalogServiceType:
+      type: string
+      enum: [CONSULTATION, LAB, IMAGING, PROCEDURE, VACCINATION, OTHER]
+    CatalogReference:
+      type: object
+      additionalProperties: false
+      required: [publicId, code, name]
+      properties:
+        publicId:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+    PublicBranch:
+      allOf:
+        - $ref: '#/components/schemas/CatalogReference'
+        - type: object
+          additionalProperties: false
+          required:
+            - phone
+            - email
+            - addressLine
+            - ward
+            - district
+            - province
+            - timezoneName
+            - bookingHorizonDays
+            - onlineHoldMinutes
+            - cancellationDeadlineMinutes
+          properties:
+            phone:
+              type: [string, 'null']
+            email:
+              type: [string, 'null']
+              format: email
+            addressLine:
+              type: string
+            ward:
+              type: [string, 'null']
+            district:
+              type: [string, 'null']
+            province:
+              type: [string, 'null']
+            timezoneName:
+              type: string
+            bookingHorizonDays:
+              type: integer
+              minimum: 1
+              maximum: 365
+            onlineHoldMinutes:
+              type: integer
+              minimum: 1
+              maximum: 120
+            cancellationDeadlineMinutes:
+              type: integer
+              minimum: 0
+    PublicSpecialty:
+      allOf:
+        - $ref: '#/components/schemas/CatalogReference'
+        - type: object
+          additionalProperties: false
+          required: [description]
+          properties:
+            description:
+              type: [string, 'null']
+    EffectivePrice:
+      type: object
+      additionalProperties: false
+      required: [amount, currency, effectiveFrom]
+      properties:
+        amount:
+          type: string
+          pattern: '^(0|[1-9][0-9]{0,16})(\.[0-9]{1,2})?$'
+          example: '200000.00'
+        currency:
+          type: string
+          enum: [VND]
+        effectiveFrom:
+          type: string
+          format: date
+    PublicService:
+      type: object
+      additionalProperties: false
+      required: [publicId, code, name, type, category, specialty, durationMinutes, requiresDoctor, price]
+      properties:
+        publicId:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        type:
+          $ref: '#/components/schemas/CatalogServiceType'
+        category:
+          $ref: '#/components/schemas/CatalogReference'
+        specialty:
+          oneOf:
+            - $ref: '#/components/schemas/CatalogReference'
+            - type: 'null'
+        durationMinutes:
+          type: integer
+          minimum: 5
+          maximum: 480
+        requiresDoctor:
+          type: boolean
+        price:
+          $ref: '#/components/schemas/EffectivePrice'
+    NamedPublicReference:
+      type: object
+      additionalProperties: false
+      required: [publicId, name]
+      properties:
+        publicId:
+          type: string
+          format: uuid
+        name:
+          type: string
+    PublicDoctor:
+      type: object
+      additionalProperties: false
+      required: [publicId, fullName, academicTitle, biography, defaultSlotMinutes, branches, specialties, servicePublicIds]
+      properties:
+        publicId:
+          type: string
+          format: uuid
+        fullName:
+          type: string
+        academicTitle:
+          type: [string, 'null']
+        biography:
+          type: [string, 'null']
+        defaultSlotMinutes:
+          type: integer
+          minimum: 5
+          maximum: 240
+        branches:
+          type: array
+          items:
+            $ref: '#/components/schemas/NamedPublicReference'
+        specialties:
+          type: array
+          items:
+            $ref: '#/components/schemas/NamedPublicReference'
+        servicePublicIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+    PublicBranchListResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicBranch'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+        requestId:
+          $ref: '#/components/schemas/RequestId'
+    PublicSpecialtyListResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicSpecialty'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+        requestId:
+          $ref: '#/components/schemas/RequestId'
+    PublicServiceListResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicService'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+        requestId:
+          $ref: '#/components/schemas/RequestId'
+    PublicDoctorListResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicDoctor'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+        requestId:
+          $ref: '#/components/schemas/RequestId'
+    CatalogReferenceData:
+      type: object
+      additionalProperties: false
+      required: [branches, categories, specialties, canManageOrganizationServices]
+      properties:
+        branches:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogReference'
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogReference'
+        specialties:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogReference'
+        canManageOrganizationServices:
+          type: boolean
+    CatalogReferenceResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data:
+          $ref: '#/components/schemas/CatalogReferenceData'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+        requestId:
+          $ref: '#/components/schemas/RequestId'
+    CatalogRoom:
+      type: object
+      additionalProperties: false
+      required: [publicId, branch, code, name, type, floorNo, capacity, isActive, rowVersion]
+      properties:
+        publicId:
+          type: string
+          format: uuid
+        branch:
+          $ref: '#/components/schemas/CatalogReference'
+        code:
+          type: string
+        name:
+          type: string
+        type:
+          $ref: '#/components/schemas/CatalogRoomType'
+        floorNo:
+          type: [integer, 'null']
+        capacity:
+          type: integer
+          minimum: 1
+        isActive:
+          type: boolean
+        rowVersion:
+          type: string
+          pattern: '^[A-Za-z0-9+/]{11}=$'
+    CatalogBranchPrice:
+      allOf:
+        - $ref: '#/components/schemas/EffectivePrice'
+        - type: object
+          additionalProperties: false
+          required: [publicId, effectiveTo, isAvailable]
+          properties:
+            publicId:
+              type: string
+              format: uuid
+            effectiveTo:
+              type: [string, 'null']
+              format: date
+            isAvailable:
+              type: boolean
+    CatalogService:
+      type: object
+      additionalProperties: false
+      required:
+        - publicId
+        - code
+        - name
+        - type
+        - category
+        - specialty
+        - durationMinutes
+        - basePrice
+        - requiresDoctor
+        - isActive
+        - branchPrices
+        - rowVersion
+      properties:
+        publicId:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        type:
+          $ref: '#/components/schemas/CatalogServiceType'
+        category:
+          $ref: '#/components/schemas/CatalogReference'
+        specialty:
+          oneOf:
+            - $ref: '#/components/schemas/CatalogReference'
+            - type: 'null'
+        durationMinutes:
+          type: integer
+          minimum: 5
+          maximum: 480
+        basePrice:
+          type: string
+          pattern: '^(0|[1-9][0-9]{0,16})(\.[0-9]{1,2})?$'
+        requiresDoctor:
+          type: boolean
+        isActive:
+          type: boolean
+        branchPrices:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogBranchPrice'
+        rowVersion:
+          type: string
+          pattern: '^[A-Za-z0-9+/]{11}=$'
+    CatalogRoomResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data:
+          $ref: '#/components/schemas/CatalogRoom'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+        requestId:
+          $ref: '#/components/schemas/RequestId'
+    CatalogRoomListResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogRoom'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+        requestId:
+          $ref: '#/components/schemas/RequestId'
+    CatalogServiceResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data:
+          $ref: '#/components/schemas/CatalogService'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+        requestId:
+          $ref: '#/components/schemas/RequestId'
+    CatalogServiceListResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogService'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+        requestId:
+          $ref: '#/components/schemas/RequestId'
+    CreateCatalogRoomRequest:
+      type: object
+      additionalProperties: false
+      required: [branchPublicId, code, name, type, capacity]
+      properties:
+        branchPublicId:
+          type: string
+          format: uuid
+        code:
+          type: string
+          minLength: 1
+          maxLength: 30
+        name:
+          type: string
+          minLength: 2
+          maxLength: 150
+        type:
+          $ref: '#/components/schemas/CatalogRoomType'
+        floorNo:
+          type: integer
+          minimum: -5
+          maximum: 200
+        capacity:
+          type: integer
+          minimum: 1
+          maximum: 500
+    UpdateCatalogRoomRequest:
+      type: object
+      additionalProperties: false
+      required: [name, type, capacity, isActive]
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 150
+        type:
+          $ref: '#/components/schemas/CatalogRoomType'
+        floorNo:
+          type: integer
+          minimum: -5
+          maximum: 200
+        capacity:
+          type: integer
+          minimum: 1
+          maximum: 500
+        isActive:
+          type: boolean
+    CreateCatalogServiceRequest:
+      type: object
+      additionalProperties: false
+      required: [categoryPublicId, code, name, type, durationMinutes, basePrice, requiresDoctor]
+      properties:
+        categoryPublicId:
+          type: string
+          format: uuid
+        specialtyPublicId:
+          type: string
+          format: uuid
+        code:
+          type: string
+          minLength: 1
+          maxLength: 30
+        name:
+          type: string
+          minLength: 2
+          maxLength: 200
+        type:
+          $ref: '#/components/schemas/CatalogServiceType'
+        durationMinutes:
+          type: integer
+          minimum: 5
+          maximum: 480
+        basePrice:
+          type: string
+          pattern: '^(0|[1-9][0-9]{0,16})(\.[0-9]{1,2})?$'
+        requiresDoctor:
+          type: boolean
+    UpdateCatalogServiceRequest:
+      type: object
+      additionalProperties: false
+      required: [categoryPublicId, name, type, durationMinutes, basePrice, requiresDoctor, isActive]
+      properties:
+        categoryPublicId:
+          type: string
+          format: uuid
+        specialtyPublicId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 2
+          maxLength: 200
+        type:
+          $ref: '#/components/schemas/CatalogServiceType'
+        durationMinutes:
+          type: integer
+          minimum: 5
+          maximum: 480
+        basePrice:
+          type: string
+          pattern: '^(0|[1-9][0-9]{0,16})(\.[0-9]{1,2})?$'
+        requiresDoctor:
+          type: boolean
+        isActive:
+          type: boolean
+    SetCatalogBranchPriceRequest:
+      type: object
+      additionalProperties: false
+      required: [branchPublicId, amount, effectiveFrom, isAvailable]
+      properties:
+        branchPublicId:
+          type: string
+          format: uuid
+        amount:
+          type: string
+          pattern: '^(0|[1-9][0-9]{0,16})(\.[0-9]{1,2})?$'
+        effectiveFrom:
+          type: string
+          format: date
+        isAvailable:
+          type: boolean
     ApiErrorResponse:
       type: object
       additionalProperties: false

@@ -86,6 +86,17 @@ BEGIN TRY
     DECLARE @role_manager_id bigint=SCOPE_IDENTITY();
     INSERT dbo.user_roles(user_id,role_id,branch_id,granted_by_user_id)
     VALUES(@role_manager_id,@manager_role_id,NULL,@role_manager_id);
+    -- Cô lập fixture: database development có thể đã có admin.demo. Mọi thay đổi
+    -- trạng thái đều nằm trong transaction và được rollback sau assertion.
+    UPDATE u SET status='DISABLED',updated_at_utc=SYSUTCDATETIME()
+    FROM dbo.users u
+    WHERE u.status='ACTIVE' AND EXISTS
+    (
+        SELECT 1 FROM dbo.user_roles ur
+        WHERE ur.user_id=u.user_id AND ur.role_id=@admin_role_id AND ur.branch_id IS NULL
+          AND ur.is_active=1 AND ur.valid_from_utc<=SYSUTCDATETIME()
+          AND (ur.valid_to_utc IS NULL OR ur.valid_to_utc>SYSUTCDATETIME())
+    );
     INSERT dbo.users(username,password_hash,display_name,status)
     VALUES(CONCAT(N'test-last-admin-',@last_suffix),REPLICATE('x',60),N'Last admin','ACTIVE');
     DECLARE @last_admin_id bigint=SCOPE_IDENTITY();

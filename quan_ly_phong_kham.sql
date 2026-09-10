@@ -101,6 +101,7 @@ BEGIN
     CREATE TABLE dbo.rooms
     (
         room_id          bigint IDENTITY(1,1) NOT NULL,
+        public_id        uniqueidentifier NOT NULL CONSTRAINT DF_rooms_public_id DEFAULT NEWSEQUENTIALID(),
         branch_id        bigint NOT NULL,
         room_code        varchar(30) NOT NULL,
         room_name        nvarchar(150) NOT NULL,
@@ -112,6 +113,7 @@ BEGIN
         updated_at_utc   datetime2(3) NOT NULL CONSTRAINT DF_rooms_updated DEFAULT SYSUTCDATETIME(),
         row_ver          rowversion NOT NULL,
         CONSTRAINT PK_rooms PRIMARY KEY CLUSTERED (room_id),
+        CONSTRAINT UQ_rooms_public_id UNIQUE (public_id),
         CONSTRAINT FK_rooms_branch FOREIGN KEY (branch_id) REFERENCES dbo.branches(branch_id),
         CONSTRAINT UQ_rooms_branch_code UNIQUE (branch_id, room_code),
         CONSTRAINT CK_rooms_type CHECK (room_type IN
@@ -119,6 +121,19 @@ BEGIN
         CONSTRAINT CK_rooms_capacity CHECK (capacity > 0)
     );
 END;
+GO
+
+IF COL_LENGTH(N'dbo.rooms', N'public_id') IS NULL
+    ALTER TABLE dbo.rooms ADD public_id uniqueidentifier NULL;
+IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.rooms') AND name=N'public_id' AND is_nullable=1)
+BEGIN
+    EXEC sys.sp_executesql N'UPDATE dbo.rooms SET public_id=NEWID() WHERE public_id IS NULL;';
+    EXEC sys.sp_executesql N'ALTER TABLE dbo.rooms ALTER COLUMN public_id uniqueidentifier NOT NULL;';
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.default_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.rooms') AND name=N'DF_rooms_public_id')
+    EXEC sys.sp_executesql N'ALTER TABLE dbo.rooms ADD CONSTRAINT DF_rooms_public_id DEFAULT NEWSEQUENTIALID() FOR public_id;';
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.rooms') AND name=N'UX_rooms_public_id')
+    EXEC sys.sp_executesql N'CREATE UNIQUE INDEX UX_rooms_public_id ON dbo.rooms(public_id);';
 GO
 
 IF OBJECT_ID(N'dbo.specialties', N'U') IS NULL
@@ -158,14 +173,29 @@ BEGIN
     CREATE TABLE dbo.service_categories
     (
         service_category_id bigint IDENTITY(1,1) NOT NULL,
+        public_id            uniqueidentifier NOT NULL CONSTRAINT DF_service_categories_public_id DEFAULT NEWSEQUENTIALID(),
         category_code       varchar(30) NOT NULL,
         category_name       nvarchar(150) NOT NULL,
         display_order       int NOT NULL CONSTRAINT DF_service_categories_order DEFAULT (0),
         is_active           bit NOT NULL CONSTRAINT DF_service_categories_active DEFAULT (1),
         CONSTRAINT PK_service_categories PRIMARY KEY CLUSTERED (service_category_id),
+        CONSTRAINT UQ_service_categories_public_id UNIQUE (public_id),
         CONSTRAINT UQ_service_categories_code UNIQUE (category_code)
     );
 END;
+GO
+
+IF COL_LENGTH(N'dbo.service_categories', N'public_id') IS NULL
+    ALTER TABLE dbo.service_categories ADD public_id uniqueidentifier NULL;
+IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.service_categories') AND name=N'public_id' AND is_nullable=1)
+BEGIN
+    EXEC sys.sp_executesql N'UPDATE dbo.service_categories SET public_id=NEWID() WHERE public_id IS NULL;';
+    EXEC sys.sp_executesql N'ALTER TABLE dbo.service_categories ALTER COLUMN public_id uniqueidentifier NOT NULL;';
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.default_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.service_categories') AND name=N'DF_service_categories_public_id')
+    EXEC sys.sp_executesql N'ALTER TABLE dbo.service_categories ADD CONSTRAINT DF_service_categories_public_id DEFAULT NEWSEQUENTIALID() FOR public_id;';
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.service_categories') AND name=N'UX_service_categories_public_id')
+    EXEC sys.sp_executesql N'CREATE UNIQUE INDEX UX_service_categories_public_id ON dbo.service_categories(public_id);';
 GO
 
 IF OBJECT_ID(N'dbo.services', N'U') IS NULL
@@ -173,6 +203,7 @@ BEGIN
     CREATE TABLE dbo.services
     (
         service_id             bigint IDENTITY(1,1) NOT NULL,
+        public_id              uniqueidentifier NOT NULL CONSTRAINT DF_services_public_id DEFAULT NEWSEQUENTIALID(),
         service_category_id    bigint NOT NULL,
         specialty_id           bigint NULL,
         service_code           varchar(30) NOT NULL,
@@ -187,6 +218,7 @@ BEGIN
         updated_at_utc         datetime2(3) NOT NULL CONSTRAINT DF_services_updated DEFAULT SYSUTCDATETIME(),
         row_ver                rowversion NOT NULL,
         CONSTRAINT PK_services PRIMARY KEY CLUSTERED (service_id),
+        CONSTRAINT UQ_services_public_id UNIQUE (public_id),
         CONSTRAINT FK_services_category FOREIGN KEY (service_category_id)
             REFERENCES dbo.service_categories(service_category_id),
         CONSTRAINT FK_services_specialty FOREIGN KEY (specialty_id)
@@ -199,6 +231,50 @@ BEGIN
         CONSTRAINT CK_services_result_json CHECK
             (result_schema_json IS NULL OR ISJSON(result_schema_json) = 1)
     );
+END;
+GO
+
+IF COL_LENGTH(N'dbo.services', N'public_id') IS NULL
+    ALTER TABLE dbo.services ADD public_id uniqueidentifier NULL;
+IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.services') AND name=N'public_id' AND is_nullable=1)
+BEGIN
+    EXEC sys.sp_executesql N'UPDATE dbo.services SET public_id=NEWID() WHERE public_id IS NULL;';
+    EXEC sys.sp_executesql N'ALTER TABLE dbo.services ALTER COLUMN public_id uniqueidentifier NOT NULL;';
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.default_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.services') AND name=N'DF_services_public_id')
+    EXEC sys.sp_executesql N'ALTER TABLE dbo.services ADD CONSTRAINT DF_services_public_id DEFAULT NEWSEQUENTIALID() FOR public_id;';
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.services') AND name=N'UX_services_public_id')
+    EXEC sys.sp_executesql N'CREATE UNIQUE INDEX UX_services_public_id ON dbo.services(public_id);';
+GO
+
+IF OBJECT_ID(N'dbo.service_branch_prices', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.service_branch_prices
+    (
+        service_branch_price_id bigint IDENTITY(1,1) NOT NULL,
+        public_id                uniqueidentifier NOT NULL CONSTRAINT DF_service_branch_prices_public_id DEFAULT NEWSEQUENTIALID(),
+        branch_id                bigint NOT NULL,
+        service_id               bigint NOT NULL,
+        price_amount             decimal(19,2) NOT NULL,
+        currency_code            char(3) NOT NULL CONSTRAINT DF_service_branch_prices_currency DEFAULT ('VND'),
+        effective_from           date NOT NULL,
+        effective_to             date NULL,
+        is_available             bit NOT NULL CONSTRAINT DF_service_branch_prices_available DEFAULT (1),
+        created_by_user_id       bigint NULL,
+        created_at_utc           datetime2(3) NOT NULL CONSTRAINT DF_service_branch_prices_created DEFAULT SYSUTCDATETIME(),
+        row_ver                  rowversion NOT NULL,
+        CONSTRAINT PK_service_branch_prices PRIMARY KEY CLUSTERED (service_branch_price_id),
+        CONSTRAINT UQ_service_branch_prices_public_id UNIQUE (public_id),
+        CONSTRAINT UQ_service_branch_prices_start UNIQUE (branch_id, service_id, effective_from),
+        CONSTRAINT FK_service_branch_prices_branch FOREIGN KEY (branch_id) REFERENCES dbo.branches(branch_id),
+        CONSTRAINT FK_service_branch_prices_service FOREIGN KEY (service_id) REFERENCES dbo.services(service_id),
+        CONSTRAINT CK_service_branch_prices_amount CHECK (price_amount >= 0),
+        CONSTRAINT CK_service_branch_prices_currency CHECK (currency_code = 'VND'),
+        CONSTRAINT CK_service_branch_prices_period CHECK (effective_to IS NULL OR effective_to >= effective_from)
+    );
+    CREATE INDEX IX_service_branch_prices_current
+        ON dbo.service_branch_prices(branch_id, service_id, effective_from, effective_to)
+        INCLUDE (price_amount, currency_code, is_available);
 END;
 GO
 
@@ -298,6 +374,13 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.users
     CREATE UNIQUE INDEX UX_users_email ON dbo.users(email_normalized) WHERE email IS NOT NULL;
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.users') AND name = N'UX_users_phone')
     CREATE UNIQUE INDEX UX_users_phone ON dbo.users(phone_normalized) WHERE phone IS NOT NULL;
+GO
+
+IF NOT EXISTS
+   (SELECT 1 FROM sys.foreign_keys WHERE parent_object_id=OBJECT_ID(N'dbo.service_branch_prices')
+    AND name=N'FK_service_branch_prices_creator')
+    ALTER TABLE dbo.service_branch_prices ADD CONSTRAINT FK_service_branch_prices_creator
+        FOREIGN KEY (created_by_user_id) REFERENCES dbo.users(user_id);
 GO
 
 IF OBJECT_ID(N'dbo.user_sessions', N'U') IS NULL
@@ -2412,6 +2495,16 @@ WHERE sc.category_code = 'CONSULTATION'
   AND sp.specialty_code = 'GENERAL'
   AND NOT EXISTS (SELECT 1 FROM dbo.services WHERE service_code = 'CONSULT_GENERAL');
 
+INSERT dbo.service_branch_prices
+    (branch_id, service_id, price_amount, currency_code, effective_from, is_available)
+SELECT b.branch_id, s.service_id, s.current_price, 'VND', CONVERT(date, '20000101'), 1
+FROM dbo.branches b
+JOIN dbo.services s ON s.service_code = 'CONSULT_GENERAL'
+WHERE b.branch_code = 'MAIN'
+  AND NOT EXISTS
+      (SELECT 1 FROM dbo.service_branch_prices p
+       WHERE p.branch_id = b.branch_id AND p.service_id = s.service_id);
+
 INSERT dbo.rooms (branch_id, room_code, room_name, room_type, capacity, is_active)
 SELECT b.branch_id, v.room_code, v.room_name, v.room_type, 1, 1
 FROM dbo.branches b
@@ -2832,6 +2925,166 @@ JOIN dbo.appointments a
  AND a.scheduled_start_utc < dto.ends_at_utc
  AND a.scheduled_end_utc > dto.starts_at_utc
 WHERE dto.status = 'APPROVED';
+GO
+
+CREATE OR ALTER VIEW dbo.v_clinic_principal_v1
+AS
+SELECT
+    u.user_id,
+    u.public_id AS user_public_id,
+    u.token_version,
+    r.role_code,
+    ur.branch_id AS role_branch_id,
+    p.permission_code
+FROM dbo.users u
+JOIN dbo.user_roles ur ON ur.user_id = u.user_id
+JOIN dbo.roles r ON r.role_id = ur.role_id AND r.is_active = 1
+LEFT JOIN dbo.role_permissions rp ON rp.role_id = r.role_id
+LEFT JOIN dbo.permissions p ON p.permission_id = rp.permission_id
+WHERE u.status = 'ACTIVE'
+  AND u.deleted_at_utc IS NULL
+  AND (u.locked_until_utc IS NULL OR u.locked_until_utc <= SYSUTCDATETIME())
+  AND ur.is_active = 1
+  AND ur.valid_from_utc <= SYSUTCDATETIME()
+  AND (ur.valid_to_utc IS NULL OR ur.valid_to_utc > SYSUTCDATETIME());
+GO
+
+CREATE OR ALTER VIEW dbo.v_public_branches_v1
+AS
+SELECT
+    public_id, branch_code, branch_name, phone, email, address_line, ward,
+    district, province, timezone_name, booking_horizon_days,
+    online_hold_minutes, cancellation_deadline_minutes
+FROM dbo.branches
+WHERE is_active = 1;
+GO
+
+CREATE OR ALTER VIEW dbo.v_public_specialties_v1
+AS
+SELECT public_id, specialty_code, specialty_name, description
+FROM dbo.specialties
+WHERE is_active = 1;
+GO
+
+CREATE OR ALTER VIEW dbo.v_public_services_v1
+AS
+SELECT
+    b.public_id AS branch_public_id,
+    s.public_id AS service_public_id,
+    s.service_code,
+    s.service_name,
+    s.service_type,
+    s.default_duration_min,
+    s.requires_doctor,
+    sc.public_id AS category_public_id,
+    sc.category_code,
+    sc.category_name,
+    sp.public_id AS specialty_public_id,
+    sp.specialty_code,
+    sp.specialty_name,
+    CONVERT(varchar(30), bp.price_amount) AS price_amount,
+    bp.currency_code,
+    bp.effective_from
+FROM dbo.branches b
+CROSS APPLY
+(
+    SELECT CONVERT(date, (SYSUTCDATETIME() AT TIME ZONE 'UTC') AT TIME ZONE b.timezone_name) AS local_date
+) clock
+JOIN dbo.service_branch_prices bp
+  ON bp.branch_id = b.branch_id
+ AND bp.is_available = 1
+ AND bp.effective_from <= clock.local_date
+ AND (bp.effective_to IS NULL OR bp.effective_to >= clock.local_date)
+JOIN dbo.services s ON s.service_id = bp.service_id AND s.is_active = 1
+JOIN dbo.service_categories sc ON sc.service_category_id = s.service_category_id AND sc.is_active = 1
+LEFT JOIN dbo.specialties sp ON sp.specialty_id = s.specialty_id AND sp.is_active = 1
+WHERE b.is_active = 1;
+GO
+
+CREATE OR ALTER VIEW dbo.v_public_doctors_v1
+AS
+SELECT
+    d.public_id AS doctor_public_id,
+    e.full_name,
+    d.academic_title,
+    d.biography,
+    d.default_slot_minutes,
+    b.public_id AS branch_public_id,
+    b.branch_name,
+    sp.public_id AS specialty_public_id,
+    sp.specialty_name,
+    svc.public_id AS service_public_id
+FROM dbo.doctors d
+JOIN dbo.employees e ON e.employee_id = d.employee_id AND e.employment_status = 'ACTIVE'
+JOIN dbo.users u ON u.user_id = e.user_id AND u.status = 'ACTIVE' AND u.deleted_at_utc IS NULL
+JOIN dbo.doctor_branch_assignments dba
+  ON dba.doctor_id = d.doctor_id
+ AND dba.is_active = 1
+JOIN dbo.branches b
+  ON b.branch_id = dba.branch_id
+ AND b.is_active = 1
+ AND dba.effective_from <= CONVERT(date, (SYSUTCDATETIME() AT TIME ZONE 'UTC') AT TIME ZONE b.timezone_name)
+ AND (dba.effective_to IS NULL OR dba.effective_to >= CONVERT(date, (SYSUTCDATETIME() AT TIME ZONE 'UTC') AT TIME ZONE b.timezone_name))
+LEFT JOIN dbo.doctor_specialties ds ON ds.doctor_id = d.doctor_id
+LEFT JOIN dbo.specialties sp ON sp.specialty_id = ds.specialty_id AND sp.is_active = 1
+LEFT JOIN dbo.doctor_services dsvc ON dsvc.doctor_id = d.doctor_id AND dsvc.is_active = 1
+LEFT JOIN dbo.services svc
+  ON svc.service_id = dsvc.service_id
+ AND svc.is_active = 1
+ AND EXISTS
+     (SELECT 1 FROM dbo.v_public_services_v1 ps
+      WHERE ps.branch_public_id=b.public_id AND ps.service_public_id=svc.public_id)
+WHERE d.is_active = 1 AND d.accepts_online_booking = 1 AND svc.public_id IS NOT NULL;
+GO
+
+CREATE OR ALTER VIEW dbo.v_catalog_branches_v1
+AS
+SELECT branch_id,public_id,branch_code,branch_name,is_active
+FROM dbo.branches;
+GO
+
+CREATE OR ALTER VIEW dbo.v_catalog_categories_v1
+AS
+SELECT service_category_id,public_id,category_code,category_name,display_order,is_active
+FROM dbo.service_categories;
+GO
+
+CREATE OR ALTER VIEW dbo.v_catalog_specialties_v1
+AS
+SELECT specialty_id,public_id,specialty_code,specialty_name,is_active
+FROM dbo.specialties;
+GO
+
+CREATE OR ALTER VIEW dbo.v_catalog_rooms_v1
+AS
+SELECT
+    r.room_id, r.public_id, r.branch_id, b.public_id AS branch_public_id,
+    b.branch_code, b.branch_name, r.room_code, r.room_name, r.room_type,
+    r.floor_no, r.capacity, r.is_active,
+    CONVERT(varchar(16), r.row_ver, 2) AS row_version
+FROM dbo.rooms r
+JOIN dbo.branches b ON b.branch_id = r.branch_id;
+GO
+
+CREATE OR ALTER VIEW dbo.v_catalog_services_v1
+AS
+SELECT
+    s.service_id, s.public_id, s.service_code, s.service_name, s.service_type,
+    s.default_duration_min, s.current_price, s.requires_doctor, s.is_active,
+    CONVERT(varchar(16), s.row_ver, 2) AS row_version,
+    sc.service_category_id, sc.public_id AS category_public_id,
+    sc.category_code, sc.category_name,
+    sp.specialty_id, sp.public_id AS specialty_public_id,
+    sp.specialty_code, sp.specialty_name,
+    bp.branch_id, b.public_id AS branch_public_id,
+    bp.public_id AS price_public_id,
+    CONVERT(varchar(30), bp.price_amount) AS price_amount,
+    bp.currency_code, bp.effective_from, bp.effective_to, bp.is_available
+FROM dbo.services s
+JOIN dbo.service_categories sc ON sc.service_category_id = s.service_category_id
+LEFT JOIN dbo.specialties sp ON sp.specialty_id = s.specialty_id
+LEFT JOIN dbo.service_branch_prices bp ON bp.service_id = s.service_id
+LEFT JOIN dbo.branches b ON b.branch_id = bp.branch_id;
 GO
 
 /*=============================================================================
@@ -3925,6 +4178,27 @@ BEGIN
 END;
 GO
 
+CREATE OR ALTER TRIGGER dbo.trg_service_branch_prices_no_overlap
+ON dbo.service_branch_prices
+AFTER INSERT, UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF EXISTS
+    (
+        SELECT 1
+        FROM inserted i
+        JOIN dbo.service_branch_prices p
+          ON p.branch_id = i.branch_id
+         AND p.service_id = i.service_id
+         AND p.service_branch_price_id <> i.service_branch_price_id
+         AND p.effective_from <= COALESCE(i.effective_to, CONVERT(date,'99991231'))
+         AND i.effective_from <= COALESCE(p.effective_to, CONVERT(date,'99991231'))
+    )
+        THROW 52062, N'Khoảng hiệu lực giá dịch vụ theo chi nhánh bị chồng nhau.', 1;
+END;
+GO
+
 /*=============================================================================
   14. COMMAND PROCEDURES - KHỞI TẠO, NHÂN SỰ, RBAC VÀ BỆNH NHÂN
 =============================================================================*/
@@ -3962,6 +4236,44 @@ BEGIN
 END;
 GO
 
+CREATE OR ALTER PROCEDURE dbo.sp_update_room
+    @actor_user_id bigint,
+    @branch_id bigint,
+    @room_id bigint,
+    @room_name nvarchar(150),
+    @room_type varchar(30),
+    @floor_no smallint = NULL,
+    @capacity smallint,
+    @is_active bit,
+    @expected_row_ver varbinary(8)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    EXEC dbo.sp_assert_permission @actor_user_id,'MASTER_DATA_MANAGE',@branch_id;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        UPDATE dbo.rooms
+           SET room_name=@room_name, room_type=@room_type, floor_no=@floor_no,
+               capacity=@capacity, is_active=@is_active, updated_at_utc=SYSUTCDATETIME()
+         WHERE room_id=@room_id AND branch_id=@branch_id AND row_ver=@expected_row_ver;
+        IF @@ROWCOUNT=0
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM dbo.rooms WHERE room_id=@room_id AND branch_id=@branch_id)
+                THROW 53600,N'Phòng không tồn tại trong chi nhánh.',1;
+            THROW 53601,N'Phòng đã được cập nhật bởi phiên khác.',1;
+        END;
+        DECLARE @entity_id varchar(100)=CONVERT(varchar(100),@room_id);
+        EXEC dbo.sp_write_audit @actor_user_id,@branch_id,'ROOM_UPDATED','ROOM',@entity_id;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
 CREATE OR ALTER PROCEDURE dbo.sp_create_service
     @actor_user_id bigint,
     @branch_id bigint,
@@ -3978,9 +4290,15 @@ AS
 BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
-    EXEC dbo.sp_assert_permission @actor_user_id,'MASTER_DATA_MANAGE',@branch_id;
+    -- Dịch vụ là danh mục cấp tổ chức; chỉ assignment toàn cục mới được sửa.
+    EXEC dbo.sp_assert_permission @actor_user_id,'MASTER_DATA_MANAGE',NULL;
     BEGIN TRY
         BEGIN TRANSACTION;
+        IF NOT EXISTS (SELECT 1 FROM dbo.service_categories WHERE service_category_id=@service_category_id AND is_active=1)
+            THROW 53602,N'Nhóm dịch vụ không tồn tại hoặc đã ngừng.',1;
+        IF @specialty_id IS NOT NULL
+           AND NOT EXISTS (SELECT 1 FROM dbo.specialties WHERE specialty_id=@specialty_id AND is_active=1)
+            THROW 53603,N'Chuyên khoa không tồn tại hoặc đã ngừng.',1;
         INSERT dbo.services
             (service_category_id,specialty_id,service_code,service_name,service_type,
              default_duration_min,current_price,requires_doctor,is_active)
@@ -3989,7 +4307,131 @@ BEGIN
              @default_duration_min,@current_price,@requires_doctor,1);
         SET @service_id=SCOPE_IDENTITY();
         DECLARE @entity_id varchar(100)=CONVERT(varchar(100),@service_id);
-        EXEC dbo.sp_write_audit @actor_user_id,@branch_id,'SERVICE_CREATED','SERVICE',@entity_id;
+        EXEC dbo.sp_write_audit @actor_user_id,NULL,'SERVICE_CREATED','SERVICE',@entity_id;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_update_service
+    @actor_user_id bigint,
+    @service_id bigint,
+    @service_category_id bigint,
+    @specialty_id bigint = NULL,
+    @service_name nvarchar(200),
+    @service_type varchar(30),
+    @default_duration_min smallint,
+    @current_price decimal(19,2),
+    @requires_doctor bit,
+    @is_active bit,
+    @expected_row_ver varbinary(8)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    EXEC dbo.sp_assert_permission @actor_user_id,'MASTER_DATA_MANAGE',NULL;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        IF NOT EXISTS (SELECT 1 FROM dbo.service_categories WHERE service_category_id=@service_category_id AND is_active=1)
+            THROW 53602,N'Nhóm dịch vụ không tồn tại hoặc đã ngừng.',1;
+        IF @specialty_id IS NOT NULL
+           AND NOT EXISTS (SELECT 1 FROM dbo.specialties WHERE specialty_id=@specialty_id AND is_active=1)
+            THROW 53603,N'Chuyên khoa không tồn tại hoặc đã ngừng.',1;
+        UPDATE dbo.services
+           SET service_category_id=@service_category_id, specialty_id=@specialty_id,
+               service_name=@service_name, service_type=@service_type,
+               default_duration_min=@default_duration_min, current_price=@current_price,
+               requires_doctor=@requires_doctor, is_active=@is_active,
+               updated_at_utc=SYSUTCDATETIME()
+         WHERE service_id=@service_id AND row_ver=@expected_row_ver;
+        IF @@ROWCOUNT=0
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM dbo.services WHERE service_id=@service_id)
+                THROW 53604,N'Dịch vụ không tồn tại.',1;
+            THROW 53605,N'Dịch vụ đã được cập nhật bởi phiên khác.',1;
+        END;
+        DECLARE @entity_id varchar(100)=CONVERT(varchar(100),@service_id);
+        EXEC dbo.sp_write_audit @actor_user_id,NULL,'SERVICE_UPDATED','SERVICE',@entity_id;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_set_branch_service_price
+    @actor_user_id bigint,
+    @branch_id bigint,
+    @service_id bigint,
+    @price_amount decimal(19,2),
+    @effective_from date,
+    @is_available bit = 1,
+    @service_branch_price_id bigint OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    EXEC dbo.sp_assert_permission @actor_user_id,'MASTER_DATA_MANAGE',@branch_id;
+    IF @price_amount < 0 THROW 53606,N'Giá dịch vụ không được âm.',1;
+
+    DECLARE @business_date date;
+    EXEC dbo.sp_get_branch_business_date @branch_id,NULL,@business_date OUTPUT;
+    IF @effective_from < @business_date
+        THROW 53607,N'Không được tạo giá hồi tố trước ngày nghiệp vụ hiện tại.',1;
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        IF NOT EXISTS (SELECT 1 FROM dbo.branches WHERE branch_id=@branch_id AND is_active=1)
+            THROW 53608,N'Chi nhánh không tồn tại hoặc đã ngừng.',1;
+        IF NOT EXISTS (SELECT 1 FROM dbo.services WHERE service_id=@service_id AND is_active=1)
+            THROW 53609,N'Dịch vụ không tồn tại hoặc đã ngừng.',1;
+
+        DECLARE @lock_result int;
+        DECLARE @lock_resource nvarchar(255)=CONCAT(N'catalog-price:',@branch_id,N':',@service_id);
+        EXEC @lock_result=sys.sp_getapplock
+            @Resource=@lock_resource,
+            @LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000;
+        IF @lock_result<0 THROW 53610,N'Không thể khóa lịch sử giá dịch vụ.',1;
+
+        IF EXISTS
+           (SELECT 1 FROM dbo.service_branch_prices WITH (UPDLOCK,HOLDLOCK)
+            WHERE branch_id=@branch_id AND service_id=@service_id AND effective_from=@effective_from)
+            THROW 53611,N'Giá tại ngày hiệu lực này đã tồn tại.',1;
+
+        DECLARE @next_start date =
+           (SELECT MIN(effective_from) FROM dbo.service_branch_prices
+            WHERE branch_id=@branch_id AND service_id=@service_id AND effective_from>@effective_from);
+
+        UPDATE dbo.service_branch_prices
+           SET effective_to=DATEADD(day,-1,@effective_from)
+         WHERE service_branch_price_id=
+           (SELECT TOP(1) service_branch_price_id FROM dbo.service_branch_prices
+            WHERE branch_id=@branch_id AND service_id=@service_id AND effective_from<@effective_from
+            ORDER BY effective_from DESC)
+           AND (effective_to IS NULL OR effective_to>=@effective_from);
+
+        INSERT dbo.service_branch_prices
+            (branch_id,service_id,price_amount,currency_code,effective_from,effective_to,
+             is_available,created_by_user_id)
+        VALUES
+            (@branch_id,@service_id,@price_amount,'VND',@effective_from,
+             CASE WHEN @next_start IS NULL THEN NULL ELSE DATEADD(day,-1,@next_start) END,
+             @is_available,@actor_user_id);
+        SET @service_branch_price_id=SCOPE_IDENTITY();
+
+        DECLARE @entity_id varchar(100)=CONVERT(varchar(100),@service_branch_price_id);
+        DECLARE @new_values nvarchar(max)=CONCAT(N'{"serviceId":',@service_id,
+            N',"price":',CONVERT(varchar(30),@price_amount),N',"effectiveFrom":"',
+            CONVERT(char(10),@effective_from,23),N'","available":',
+            CASE WHEN @is_available=1 THEN N'true' ELSE N'false' END,N'}');
+        EXEC dbo.sp_write_audit @actor_user_id,@branch_id,'SERVICE_BRANCH_PRICE_SET',
+             'SERVICE_BRANCH_PRICE',@entity_id,NULL,@new_values;
         COMMIT TRANSACTION;
     END TRY
     BEGIN CATCH
@@ -8755,7 +9197,10 @@ REVOKE EXECUTE ON OBJECT::dbo.sp_auth_decide_patient_link_request FROM clinic_ap
 REVOKE EXECUTE ON OBJECT::dbo.sp_auth_revoke_patient_link FROM clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_auth_list_patient_link_requests FROM clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_create_room TO clinic_api_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_update_room TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_create_service TO clinic_api_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_update_service TO clinic_api_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_set_branch_service_price TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_assign_doctor_service TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_create_medicine_batch TO clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_grant_user_role FROM clinic_api_executor;
@@ -8815,6 +9260,16 @@ GRANT SELECT ON OBJECT::dbo.v_inventory_by_batch TO clinic_api_executor;
 GRANT SELECT ON OBJECT::dbo.v_low_stock TO clinic_api_executor;
 GRANT SELECT ON OBJECT::dbo.v_expiring_medicine_batches TO clinic_api_executor;
 GRANT SELECT ON OBJECT::dbo.v_invoice_balances TO clinic_api_executor;
+GRANT SELECT ON OBJECT::dbo.v_clinic_principal_v1 TO clinic_api_executor;
+GRANT SELECT ON OBJECT::dbo.v_public_branches_v1 TO clinic_api_executor;
+GRANT SELECT ON OBJECT::dbo.v_public_specialties_v1 TO clinic_api_executor;
+GRANT SELECT ON OBJECT::dbo.v_public_services_v1 TO clinic_api_executor;
+GRANT SELECT ON OBJECT::dbo.v_public_doctors_v1 TO clinic_api_executor;
+GRANT SELECT ON OBJECT::dbo.v_catalog_rooms_v1 TO clinic_api_executor;
+GRANT SELECT ON OBJECT::dbo.v_catalog_branches_v1 TO clinic_api_executor;
+GRANT SELECT ON OBJECT::dbo.v_catalog_categories_v1 TO clinic_api_executor;
+GRANT SELECT ON OBJECT::dbo.v_catalog_specialties_v1 TO clinic_api_executor;
+GRANT SELECT ON OBJECT::dbo.v_catalog_services_v1 TO clinic_api_executor;
 GO
 
 GRANT SELECT ON OBJECT::dbo.v_doctor_daily_schedule TO clinic_report_reader;

@@ -21,6 +21,16 @@ Mọi response tuân theo envelope ở `PROJECT_PLAN.md` mục 11.1. Mutation s�
 `executeCommand()` trên một connection được giữ bằng transaction; helper đặt và
 xóa `request_id`, `actor_user_id`, `branch_id` trong `SESSION_CONTEXT`.
 
+## Catalog & public directory
+
+- Public: `GET /api/v1/public/branches`, `/specialties`, `/services` và `/doctors`.
+- Admin: `/api/v1/admin/catalog/reference-data`, `/rooms`, `/services` và
+  `/services/{serviceId}/prices`.
+- Clinic Service xác minh access token RS256 bằng public key của Auth, rồi đối
+  chiếu trạng thái và `token_version` qua read contract `v_clinic_principal_v1`.
+- Phòng và dịch vụ dùng `ETag`/`If-Match`; giá chi nhánh là lịch sử có hiệu lực,
+  không cho hồi tố hoặc chồng khoảng.
+
 ## SQL Server local trên Windows
 
 Khi TCP/IP bật, dùng `SQL_SERVER=localhost`. Nếu không có quyền Administrator để

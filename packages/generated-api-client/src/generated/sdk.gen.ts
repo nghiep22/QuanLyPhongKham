@@ -2,7 +2,7 @@
 
 import { client } from './client.gen.js';
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client/index.js';
-import type { CancelPatientLinkRequestData, CancelPatientLinkRequestErrors, CancelPatientLinkRequestResponses, ChangePasswordData, ChangePasswordErrors, ChangePasswordResponses, CreateStaffData, CreateStaffErrors, CreateStaffResponses, DecidePatientLinkRequestData, DecidePatientLinkRequestErrors, DecidePatientLinkRequestResponses, GetAuthJwksData, GetAuthJwksResponses, GetLivenessData, GetLivenessResponses, GetManagedPatientLinkReferenceDataData, GetManagedPatientLinkReferenceDataErrors, GetManagedPatientLinkReferenceDataResponses, GetPatientAccessData, GetPatientAccessErrors, GetPatientAccessResponses, GetPatientLinkReferenceDataData, GetPatientLinkReferenceDataErrors, GetPatientLinkReferenceDataResponses, GetReadinessData, GetReadinessErrors, GetReadinessResponses, GetStaffData, GetStaffErrors, GetStaffReferenceDataData, GetStaffReferenceDataErrors, GetStaffReferenceDataResponses, GetStaffResponses, GrantStaffRoleData, GrantStaffRoleErrors, GrantStaffRoleResponses, ListPatientLinkRequestsData, ListPatientLinkRequestsErrors, ListPatientLinkRequestsResponses, ListStaffData, ListStaffErrors, ListStaffResponses, LoginData, LoginErrors, LoginResponses, LogoutAllData2, LogoutAllErrors, LogoutAllResponses, LogoutData2, LogoutErrors, LogoutResponses, RefreshSessionData, RefreshSessionErrors, RefreshSessionResponses, RequestPasswordResetData, RequestPasswordResetErrors, RequestPasswordResetResponses, RequestPatientLinkData, RequestPatientLinkErrors, RequestPatientLinkResponses, RequestPatientRegistrationData, RequestPatientRegistrationErrors, RequestPatientRegistrationResponses, ResetPasswordData, ResetPasswordErrors, ResetPasswordResponses, RevokeOwnPatientLinkData, RevokeOwnPatientLinkErrors, RevokeOwnPatientLinkResponses, RevokePatientLinkAsStaffData, RevokePatientLinkAsStaffErrors, RevokePatientLinkAsStaffResponses, RevokeStaffRoleData, RevokeStaffRoleErrors, RevokeStaffRoleResponses, SetStaffAccountStatusData, SetStaffAccountStatusErrors, SetStaffAccountStatusResponses, UnlockStaffAccountData, UnlockStaffAccountErrors, UnlockStaffAccountResponses, UpdateStaffData, UpdateStaffErrors, UpdateStaffResponses, VerifyPatientRegistrationData, VerifyPatientRegistrationErrors, VerifyPatientRegistrationResponses } from './types.gen.js';
+import type { CancelPatientLinkRequestData, CancelPatientLinkRequestErrors, CancelPatientLinkRequestResponses, ChangePasswordData, ChangePasswordErrors, ChangePasswordResponses, CreateCatalogRoomData, CreateCatalogRoomErrors, CreateCatalogRoomResponses, CreateCatalogServiceData, CreateCatalogServiceErrors, CreateCatalogServiceResponses, CreateStaffData, CreateStaffErrors, CreateStaffResponses, DecidePatientLinkRequestData, DecidePatientLinkRequestErrors, DecidePatientLinkRequestResponses, GetAuthJwksData, GetAuthJwksResponses, GetCatalogReferenceDataData, GetCatalogReferenceDataErrors, GetCatalogReferenceDataResponses, GetLivenessData, GetLivenessResponses, GetManagedPatientLinkReferenceDataData, GetManagedPatientLinkReferenceDataErrors, GetManagedPatientLinkReferenceDataResponses, GetPatientAccessData, GetPatientAccessErrors, GetPatientAccessResponses, GetPatientLinkReferenceDataData, GetPatientLinkReferenceDataErrors, GetPatientLinkReferenceDataResponses, GetReadinessData, GetReadinessErrors, GetReadinessResponses, GetStaffData, GetStaffErrors, GetStaffReferenceDataData, GetStaffReferenceDataErrors, GetStaffReferenceDataResponses, GetStaffResponses, GrantStaffRoleData, GrantStaffRoleErrors, GrantStaffRoleResponses, ListCatalogRoomsData, ListCatalogRoomsErrors, ListCatalogRoomsResponses, ListCatalogServicesData, ListCatalogServicesErrors, ListCatalogServicesResponses, ListPatientLinkRequestsData, ListPatientLinkRequestsErrors, ListPatientLinkRequestsResponses, ListPublicBranchesData, ListPublicBranchesResponses, ListPublicDoctorsData, ListPublicDoctorsErrors, ListPublicDoctorsResponses, ListPublicServicesData, ListPublicServicesErrors, ListPublicServicesResponses, ListPublicSpecialtiesData, ListPublicSpecialtiesResponses, ListStaffData, ListStaffErrors, ListStaffResponses, LoginData, LoginErrors, LoginResponses, LogoutAllData2, LogoutAllErrors, LogoutAllResponses, LogoutData2, LogoutErrors, LogoutResponses, RefreshSessionData, RefreshSessionErrors, RefreshSessionResponses, RequestPasswordResetData, RequestPasswordResetErrors, RequestPasswordResetResponses, RequestPatientLinkData, RequestPatientLinkErrors, RequestPatientLinkResponses, RequestPatientRegistrationData, RequestPatientRegistrationErrors, RequestPatientRegistrationResponses, ResetPasswordData, ResetPasswordErrors, ResetPasswordResponses, RevokeOwnPatientLinkData, RevokeOwnPatientLinkErrors, RevokeOwnPatientLinkResponses, RevokePatientLinkAsStaffData, RevokePatientLinkAsStaffErrors, RevokePatientLinkAsStaffResponses, RevokeStaffRoleData, RevokeStaffRoleErrors, RevokeStaffRoleResponses, SetCatalogBranchPriceData, SetCatalogBranchPriceErrors, SetCatalogBranchPriceResponses, SetStaffAccountStatusData, SetStaffAccountStatusErrors, SetStaffAccountStatusResponses, UnlockStaffAccountData, UnlockStaffAccountErrors, UnlockStaffAccountResponses, UpdateCatalogRoomData, UpdateCatalogRoomErrors, UpdateCatalogRoomResponses, UpdateCatalogServiceData, UpdateCatalogServiceErrors, UpdateCatalogServiceResponses, UpdateStaffData, UpdateStaffErrors, UpdateStaffResponses, VerifyPatientRegistrationData, VerifyPatientRegistrationErrors, VerifyPatientRegistrationResponses } from './types.gen.js';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -344,6 +344,120 @@ export const grantStaffRole = <ThrowOnError extends boolean = false>(options: Op
 export const revokeStaffRole = <ThrowOnError extends boolean = false>(options: Options<RevokeStaffRoleData, ThrowOnError>): RequestResult<RevokeStaffRoleResponses, RevokeStaffRoleErrors, ThrowOnError> => (options.client ?? client).delete<RevokeStaffRoleResponses, RevokeStaffRoleErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/v1/admin/users/{userId}/roles/{assignmentId}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List active clinic branches available for online booking
+ */
+export const listPublicBranches = <ThrowOnError extends boolean = false>(options?: Options<ListPublicBranchesData, ThrowOnError>): RequestResult<ListPublicBranchesResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListPublicBranchesResponses, unknown, ThrowOnError>({ url: '/api/v1/public/branches', ...options });
+
+/**
+ * List active specialties
+ */
+export const listPublicSpecialties = <ThrowOnError extends boolean = false>(options?: Options<ListPublicSpecialtiesData, ThrowOnError>): RequestResult<ListPublicSpecialtiesResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListPublicSpecialtiesResponses, unknown, ThrowOnError>({ url: '/api/v1/public/specialties', ...options });
+
+/**
+ * List services currently available and priced at a branch
+ */
+export const listPublicServices = <ThrowOnError extends boolean = false>(options: Options<ListPublicServicesData, ThrowOnError>): RequestResult<ListPublicServicesResponses, ListPublicServicesErrors, ThrowOnError> => (options.client ?? client).get<ListPublicServicesResponses, ListPublicServicesErrors, ThrowOnError>({ url: '/api/v1/public/services', ...options });
+
+/**
+ * List active doctors who accept online booking
+ */
+export const listPublicDoctors = <ThrowOnError extends boolean = false>(options?: Options<ListPublicDoctorsData, ThrowOnError>): RequestResult<ListPublicDoctorsResponses, ListPublicDoctorsErrors, ThrowOnError> => (options?.client ?? client).get<ListPublicDoctorsResponses, ListPublicDoctorsErrors, ThrowOnError>({ url: '/api/v1/public/doctors', ...options });
+
+/**
+ * Get manageable branches and catalog references
+ */
+export const getCatalogReferenceData = <ThrowOnError extends boolean = false>(options?: Options<GetCatalogReferenceDataData, ThrowOnError>): RequestResult<GetCatalogReferenceDataResponses, GetCatalogReferenceDataErrors, ThrowOnError> => (options?.client ?? client).get<GetCatalogReferenceDataResponses, GetCatalogReferenceDataErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/catalog/reference-data',
+    ...options
+});
+
+/**
+ * List rooms in a manageable branch
+ */
+export const listCatalogRooms = <ThrowOnError extends boolean = false>(options: Options<ListCatalogRoomsData, ThrowOnError>): RequestResult<ListCatalogRoomsResponses, ListCatalogRoomsErrors, ThrowOnError> => (options.client ?? client).get<ListCatalogRoomsResponses, ListCatalogRoomsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/catalog/rooms',
+    ...options
+});
+
+/**
+ * Create a room in a manageable branch
+ */
+export const createCatalogRoom = <ThrowOnError extends boolean = false>(options: Options<CreateCatalogRoomData, ThrowOnError>): RequestResult<CreateCatalogRoomResponses, CreateCatalogRoomErrors, ThrowOnError> => (options.client ?? client).post<CreateCatalogRoomResponses, CreateCatalogRoomErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/catalog/rooms',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Update a room with optimistic concurrency
+ */
+export const updateCatalogRoom = <ThrowOnError extends boolean = false>(options: Options<UpdateCatalogRoomData, ThrowOnError>): RequestResult<UpdateCatalogRoomResponses, UpdateCatalogRoomErrors, ThrowOnError> => (options.client ?? client).put<UpdateCatalogRoomResponses, UpdateCatalogRoomErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/catalog/rooms/{roomId}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List organization services and branch price history
+ */
+export const listCatalogServices = <ThrowOnError extends boolean = false>(options: Options<ListCatalogServicesData, ThrowOnError>): RequestResult<ListCatalogServicesResponses, ListCatalogServicesErrors, ThrowOnError> => (options.client ?? client).get<ListCatalogServicesResponses, ListCatalogServicesErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/catalog/services',
+    ...options
+});
+
+/**
+ * Create an organization-wide service
+ *
+ * Requires a global MASTER_DATA_MANAGE assignment. Branch managers cannot create organization catalog definitions.
+ */
+export const createCatalogService = <ThrowOnError extends boolean = false>(options: Options<CreateCatalogServiceData, ThrowOnError>): RequestResult<CreateCatalogServiceResponses, CreateCatalogServiceErrors, ThrowOnError> => (options.client ?? client).post<CreateCatalogServiceResponses, CreateCatalogServiceErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/catalog/services',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Update an organization-wide service with optimistic concurrency
+ */
+export const updateCatalogService = <ThrowOnError extends boolean = false>(options: Options<UpdateCatalogServiceData, ThrowOnError>): RequestResult<UpdateCatalogServiceResponses, UpdateCatalogServiceErrors, ThrowOnError> => (options.client ?? client).put<UpdateCatalogServiceResponses, UpdateCatalogServiceErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/catalog/services/{serviceId}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Schedule a branch price and availability change
+ */
+export const setCatalogBranchPrice = <ThrowOnError extends boolean = false>(options: Options<SetCatalogBranchPriceData, ThrowOnError>): RequestResult<SetCatalogBranchPriceResponses, SetCatalogBranchPriceErrors, ThrowOnError> => (options.client ?? client).post<SetCatalogBranchPriceResponses, SetCatalogBranchPriceErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/catalog/services/{serviceId}/prices',
     ...options,
     headers: {
         'Content-Type': 'application/json',

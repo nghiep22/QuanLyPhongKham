@@ -134,6 +134,13 @@ hàng đợi nhân viên. Lễ tân/Manager có permission `PATIENT_PORTAL_LINK_
 mở **Liên kết hồ sơ** trên Admin Web, đối chiếu giấy tờ rồi duyệt hoặc từ chối.
 Yêu cầu mặc định hết hạn sau 7 ngày và tối đa 5 yêu cầu mỗi tài khoản trong 24 giờ.
 
+Admin/Manager có permission `MASTER_DATA_MANAGE` mở **Danh mục** để quản lý phòng,
+giá và khả dụng dịch vụ theo chi nhánh. Chỉ Admin toàn cục được tạo, sửa hoặc
+ngừng định nghĩa dịch vụ dùng chung. Giá mới có ngày hiệu lực, lịch sử không chồng
+nhau và giá giao dịch cũ không bị sửa ngược. Các directory công khai tại
+`/api/v1/public/branches`, `/specialties`, `/services` và `/doctors` chỉ trả dữ
+liệu đang hoạt động, bác sĩ nhận lịch online và giá VND đang có hiệu lực.
+
 Nếu SQL Server local chưa bật TCP/IP và bạn dùng Windows Authentication, đặt
 `SQL_SERVER=np:\\.\pipe\sql\query` trong `.env`. Xem thêm [be/README.md](./be/README.md).
 
@@ -156,6 +163,7 @@ sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\s
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\password-lifecycle.test.sql
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\patient-registration.test.sql
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\patient-link.test.sql
+sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\catalog-directory.test.sql
 ```
 
 Chi tiết nghiệp vụ và thứ tự phát triển nằm trong [PROJECT_PLAN.md](./PROJECT_PLAN.md).

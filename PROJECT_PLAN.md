@@ -25,15 +25,15 @@ Tài liệu này không thay thế đặc tả chi tiết của từng màn hìn
 |---|---|
 | Thư mục `fe/` và `be/` | Đã tạo |
 | SQL Server `quan_ly_phong_kham.sql` | Baseline candidate: đã có luồng lõi, còn gap/defect P0 tại mục 8.12 |
-| Database objects | 69 bảng, 13 view, 78 stored procedure, 29 trigger |
-| Kiểm thử database | Baseline idempotent; 6 regression suite cho session, staff/RBAC, bảo vệ Admin, password lifecycle, patient registration và portal link đều đạt; chưa coi production-ready trước khi hoàn tất mọi ca P0 |
+| Database objects | 70 bảng, 23 view, 81 stored procedure, 30 trigger |
+| Kiểm thử database | Baseline idempotent; 7 regression suite cho session, staff/RBAC, bảo vệ Admin, password lifecycle, patient registration, portal link và catalog/directory đều đạt; chưa coi production-ready trước khi hoàn tất mọi ca P0 |
 | Gateway | Đã scaffold; live/ready, request ID và route Auth/Clinic hoạt động |
 | Auth Service | Slice 06 hoàn tất: auth/session, workforce/RBAC, OTP và yêu cầu/duyệt/thu hồi patient portal link |
-| Clinic Service | Đã scaffold; logger, error envelope, SQL pool/runner và health hoạt động |
+| Clinic Service | Slice 07 hoàn tất: catalog theo chi nhánh, giá có hiệu lực, public branch/specialty/service/doctor directory và xác minh JWT cục bộ |
 | Scheduler Worker | Đã scaffold; process lifecycle và health hoạt động |
-| Admin Web | Đã có đăng nhập/protected session, Nhân sự, password lifecycle và màn duyệt liên kết hồ sơ |
+| Admin Web | Đã có đăng nhập/protected session, Nhân sự, password lifecycle, duyệt liên kết hồ sơ và quản trị Danh mục |
 | Mobile | Đã có đăng ký/OTP, đăng nhập, SecureStore, danh sách hồ sơ, yêu cầu/hủy/thu hồi liên kết |
-| OpenAPI contract | OpenAPI 3.1 đã mô tả health, Auth, Workforce/RBAC và toàn bộ 9 operation patient portal link; lint và generated types/fetch SDK hoạt động |
+| OpenAPI contract | OpenAPI 3.1 đã mô tả health, Auth, Workforce/RBAC, patient portal link và toàn bộ catalog/public directory; lint và generated types/fetch SDK hoạt động |
 
 Trong Phase 0, sửa các defect P0 ngay trên baseline candidate, chạy lại toàn bộ test rồi mới chuyển đúng một lần sang `be/database/baseline/001_initial.sql` và ghi checksum. Sau khi baseline đã dùng ở môi trường chung hoặc production, không sửa ngược; mọi thay đổi phải đi qua migration mới.
 
@@ -1156,12 +1156,15 @@ Health readiness phải kiểm tra dependency cần thiết nhưng có timeout n
 | Slice 04 — Password Lifecycle & Recovery | **DONE** | 2026-09-10 | SEC-06: đổi mật khẩu có xác minh hiện tại; reset token 256-bit dùng một lần/TTL/rate limit; chống enumeration/replay; webhook delivery an toàn; thu hồi mọi session; ba màn Admin Web; SQL regression + tổng 26 application test đạt. |
 | Slice 05 — Patient Self-registration & OTP | **DONE** | 2026-09-10 | SEC-13 phần hồ sơ mới: đăng ký email/SMS có idempotency; OTP HMAC 6 số dùng một lần/TTL/attempt/rate limit; chống enumeration/replay; tạo nguyên tử PATIENT + patient public ID + SELF link; webhook production; Mobile đăng ký/đăng nhập/SecureStore; 5 SQL regression + 33 application test đạt. |
 | Slice 06 — Patient Portal Linking | **DONE** | 2026-09-10 | SEC-10/SEC-13 và PAT-08/09: patient gửi/hủy/theo dõi yêu cầu claim hồ sơ cũ/người thân; decoy chống enumeration; nhân viên duyệt/từ chối theo chi nhánh bằng permission riêng + rowversion; kích hoạt/thu hồi link có audit; Mobile và Admin Web hoàn chỉnh; 6 SQL regression + 40 application test đạt. |
+| Slice 07 — Organization Catalog & Public Directory | **DONE** | 2026-09-10 | ADM-02/04 và public directory: branch/specialty/service/doctor read API; phòng theo chi nhánh; dịch vụ cấp tổ chức; giá/khả dụng VND theo hiệu lực không chồng nhau; JWT Clinic xác minh cục bộ và kiểm tra token version; branch-scoped RBAC, ETag/If-Match, Gateway/generated client/Admin Web; 7 SQL regression + 60 application test đạt. |
 
-Phase 1 và Slice 02–06 đã hoàn thành về source code và kiểm thử local. Phase 2
+Phase 1 và Slice 02–07 đã hoàn thành về source code và kiểm thử local. Phase 2
 đã đạt luồng MVP về source code và kiểm thử local. Các
 dependency Auth/Workforce P0 gồm public ID, token version, session metadata,
 password lifecycle, branch-scoped authorization và database role tối thiểu đã được xử lý. Phase 0
 baseline freeze tổng thể vẫn mở; lần chạy CI/branch protection được xác minh sau khi push.
+Phase 3 đã hoàn thành phần Catalog/Directory; quản trị hồ sơ bệnh nhân và read
+policy theo care relationship là lát cắt tiếp theo.
 
 ### 17.2 Thứ tự ưu tiên trong mỗi phase
 
