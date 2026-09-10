@@ -25,15 +25,15 @@ Tài liệu này không thay thế đặc tả chi tiết của từng màn hìn
 |---|---|
 | Thư mục `fe/` và `be/` | Đã tạo |
 | SQL Server `quan_ly_phong_kham.sql` | Baseline candidate: đã có luồng lõi, còn gap/defect P0 tại mục 8.12 |
-| Database objects | 66 bảng, 12 view, 57 stored procedure, 29 trigger |
-| Kiểm thử database | Bộ kiểm thử hiện có đã đạt; chưa coi production-ready trước khi bổ sung ca P0 |
+| Database objects | 66 bảng, 12 view, 62 stored procedure, 29 trigger |
+| Kiểm thử database | Baseline idempotent và regression test session rotation/replay đã đạt; chưa coi production-ready trước khi hoàn tất mọi ca P0 |
 | Gateway | Đã scaffold; live/ready, request ID và route Auth/Clinic hoạt động |
-| Auth Service | Đã scaffold; logger, error envelope, SQL pool/runner và health hoạt động |
+| Auth Service | Slice 02 hoàn tất: Argon2id login, RS256 access token/JWKS, refresh rotation/replay detection, logout và khóa tạm thời |
 | Clinic Service | Đã scaffold; logger, error envelope, SQL pool/runner và health hoạt động |
 | Scheduler Worker | Đã scaffold; process lifecycle và health hoạt động |
-| Admin Web | Đã scaffold React Router, TanStack Query và API client |
+| Admin Web | Đã có đăng nhập thật, protected route, khôi phục/rotation phiên và đăng xuất; access token chỉ giữ trong memory |
 | Mobile | Đã scaffold React Navigation, SecureStore, TanStack Query và API client |
-| OpenAPI contract | Đã có OpenAPI 3.1, lint và generated types/fetch SDK |
+| OpenAPI contract | OpenAPI 3.1 đã mô tả health và Auth API; lint và generated types/fetch SDK hoạt động |
 
 Trong Phase 0, sửa các defect P0 ngay trên baseline candidate, chạy lại toàn bộ test rồi mới chuyển đúng một lần sang `be/database/baseline/001_initial.sql` và ghi checksum. Sau khi baseline đã dùng ở môi trường chung hoặc production, không sửa ngược; mọi thay đổi phải đi qua migration mới.
 
@@ -459,6 +459,10 @@ Quy ước ưu tiên:
 | SEC-12 | Xem lịch sử đăng nhập, thiết bị và session | Người dùng/Admin | P1 |
 | SEC-13 | Bệnh nhân tự đăng ký, xác minh OTP và yêu cầu liên kết hồ sơ an toàn | Guest/Patient/Receptionist | MVP |
 | SEC-14 | Bảo vệ Admin toàn cục cuối cùng và kiểm soát tự thu hồi quyền | System Admin | MVP |
+
+Tiến độ Slice 02: SEC-01–SEC-04 đã hoàn thành. SEC-05 đã có khóa tự động
+sau ngưỡng đăng nhập sai; thao tác Admin mở khóa được giữ cho Slice 03 cùng màn
+quản trị tài khoản để không tạo API rời rạc.
 
 ### 8.2 Chi nhánh, nhân sự và danh mục
 
@@ -1145,10 +1149,12 @@ Health readiness phải kiểm tra dependency cần thiết nhưng có timeout n
 | Lát cắt | Trạng thái | Hoàn thành | Phạm vi/bằng chứng |
 |---|---|---|---|
 | Slice 01 — Platform Foundation | **DONE** | 2026-09-10 | Gateway → Auth/Clinic → SQL readiness; request ID xuyên suốt; standard envelope; OpenAPI lint/codegen; 6 integration test; lint/typecheck/build/Expo Doctor đạt. Chi tiết tại `be/IMPLEMENTATION_STATUS.md`. |
+| Slice 02 — Admin Login & Session Security | **DONE** | 2026-09-10 | Bootstrap admin không có mật khẩu mặc định; login username/email/phone; Argon2id + RS256/JWKS; refresh rotation và replay revocation; logout/logout-all; account lock; Admin Web protected route; SQL regression + 13 application test đạt. |
 
-Phase 1 đã hoàn thành về source code và kiểm thử local. Phase 0 baseline freeze vẫn mở;
-không bắt đầu Slice 02 Auth/RBAC trước khi xử lý các dependency P0 về auth schema,
-ownership/database role và public ID. Lần chạy CI/branch protection được xác minh sau khi push.
+Phase 1 và Slice 02 đã hoàn thành về source code và kiểm thử local. Các dependency
+Auth P0 gồm public ID, token version, session metadata và database role tối thiểu đã
+được xử lý. Phase 0 baseline freeze tổng thể vẫn mở; lần chạy CI/branch protection
+được xác minh sau khi push.
 
 ### 17.2 Thứ tự ưu tiên trong mỗi phase
 

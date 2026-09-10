@@ -9,6 +9,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "oxlint src tests",
     "start": "node dist/server.js",
+    "bootstrap:admin": "tsx src/scripts/bootstrap-admin.ts",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
@@ -18,7 +19,7 @@
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "helmet": "^8.1.0",
-    "jsonwebtoken": "^9.0.2",
+    "jose": "^6.2.12",
     "msnodesqlv8": "^5.3.0",
     "mssql": "^12.2.0",
     "pino": "^10.1.0",
@@ -29,7 +30,6 @@
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
-    "@types/jsonwebtoken": "^9.0.10",
     "@types/mssql": "^9.1.8",
     "@types/node": "^24.10.4",
     "@types/supertest": "^7.2.1",

@@ -2,7 +2,7 @@
 
 import { client } from './client.gen.js';
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client/index.js';
-import type { GetLivenessData, GetLivenessResponses, GetReadinessData, GetReadinessErrors, GetReadinessResponses } from './types.gen.js';
+import type { GetAuthJwksData, GetAuthJwksResponses, GetLivenessData, GetLivenessResponses, GetReadinessData, GetReadinessErrors, GetReadinessResponses, LoginData, LoginErrors, LoginResponses, LogoutAllData2, LogoutAllErrors, LogoutAllResponses, LogoutData2, LogoutErrors, LogoutResponses, RefreshSessionData, RefreshSessionErrors, RefreshSessionResponses } from './types.gen.js';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -27,3 +27,57 @@ export const getLiveness = <ThrowOnError extends boolean = false>(options?: Opti
  * Check Gateway and downstream service readiness
  */
 export const getReadiness = <ThrowOnError extends boolean = false>(options?: Options<GetReadinessData, ThrowOnError>): RequestResult<GetReadinessResponses, GetReadinessErrors, ThrowOnError> => (options?.client ?? client).get<GetReadinessResponses, GetReadinessErrors, ThrowOnError>({ url: '/health/ready', ...options });
+
+/**
+ * Get public keys used to verify access tokens
+ */
+export const getAuthJwks = <ThrowOnError extends boolean = false>(options?: Options<GetAuthJwksData, ThrowOnError>): RequestResult<GetAuthJwksResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetAuthJwksResponses, unknown, ThrowOnError>({ url: '/.well-known/jwks.json', ...options });
+
+/**
+ * Sign in with username, email, or phone
+ *
+ * Web clients receive the rotating refresh token in an HttpOnly cookie. Mobile clients receive it in the response body.
+ */
+export const login = <ThrowOnError extends boolean = false>(options: Options<LoginData, ThrowOnError>): RequestResult<LoginResponses, LoginErrors, ThrowOnError> => (options.client ?? client).post<LoginResponses, LoginErrors, ThrowOnError>({
+    url: '/api/v1/auth/login',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Rotate the refresh token and issue a new access token
+ *
+ * Send an empty object when using the web cookie, or send refreshToken for a mobile client. Reuse of an already-rotated token revokes all sessions for that user.
+ */
+export const refreshSession = <ThrowOnError extends boolean = false>(options?: Options<RefreshSessionData, ThrowOnError>): RequestResult<RefreshSessionResponses, RefreshSessionErrors, ThrowOnError> => (options?.client ?? client).post<RefreshSessionResponses, RefreshSessionErrors, ThrowOnError>({
+    url: '/api/v1/auth/refresh',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options?.headers
+    }
+});
+
+/**
+ * Revoke the current refresh session
+ */
+export const logout = <ThrowOnError extends boolean = false>(options?: Options<LogoutData2, ThrowOnError>): RequestResult<LogoutResponses, LogoutErrors, ThrowOnError> => (options?.client ?? client).post<LogoutResponses, LogoutErrors, ThrowOnError>({
+    url: '/api/v1/auth/logout',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options?.headers
+    }
+});
+
+/**
+ * Revoke every session belonging to the authenticated user
+ */
+export const logoutAll = <ThrowOnError extends boolean = false>(options?: Options<LogoutAllData2, ThrowOnError>): RequestResult<LogoutAllResponses, LogoutAllErrors, ThrowOnError> => (options?.client ?? client).post<LogoutAllResponses, LogoutAllErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/auth/logout-all',
+    ...options
+});

@@ -35,6 +35,20 @@ Sửa `.env` bằng bí mật cục bộ; tuyệt đối không commit file này
 sqlcmd -S localhost -E -C -i .\quan_ly_phong_kham.sql
 ```
 
+Tạo quản trị viên đầu tiên (chỉ chạy được khi bảng tài khoản còn trống):
+
+```powershell
+$env:BOOTSTRAP_ADMIN_USERNAME = 'admin'
+$env:BOOTSTRAP_ADMIN_DISPLAY_NAME = 'Quản trị viên'
+$securePassword = Read-Host 'Mật khẩu admin (tối thiểu 12 ký tự)' -AsSecureString
+$env:BOOTSTRAP_ADMIN_PASSWORD = [Net.NetworkCredential]::new('', $securePassword).Password
+npm run bootstrap:admin -w @clinic/auth-service
+Remove-Item Env:BOOTSTRAP_ADMIN_USERNAME, Env:BOOTSTRAP_ADMIN_DISPLAY_NAME, Env:BOOTSTRAP_ADMIN_PASSWORD
+```
+
+Script băm mật khẩu bằng Argon2id trước khi gọi stored procedure; dự án không có mật
+khẩu admin mặc định. Có thể đặt thêm `BOOTSTRAP_ADMIN_EMAIL` trước khi chạy.
+
 ## Chạy dự án
 
 ```powershell
@@ -49,6 +63,7 @@ npm run dev:mobile
 - Gateway: `http://localhost:5000`
 - Kiểm tra gateway: `http://localhost:5000/health/live`
 - Kiểm tra toàn bộ dependency: `http://localhost:5000/health/ready`
+- JWKS xác minh access token: `http://localhost:5000/.well-known/jwks.json`
 
 Nếu SQL Server local chưa bật TCP/IP và bạn dùng Windows Authentication, đặt
 `SQL_SERVER=np:\\.\pipe\sql\query` trong `.env`. Xem thêm [be/README.md](./be/README.md).

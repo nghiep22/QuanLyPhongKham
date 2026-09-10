@@ -3,7 +3,7 @@ import type { config, ConnectionPool, IProcedureResult, ISqlType, Request, Trans
 import { env } from '../../config.js';
 
 const require = createRequire(import.meta.url);
-const sql = (env.SQL_TRUSTED_CONNECTION
+export const sql = (env.SQL_TRUSTED_CONNECTION
   ? require('mssql/msnodesqlv8')
   : require('mssql')) as typeof import('mssql');
 
@@ -70,6 +70,7 @@ export type SqlParameter = {
   name: string;
   type: (() => ISqlType) | ISqlType;
   value: unknown;
+  direction?: 'input' | 'output';
 };
 
 async function setSessionContext(transaction: Transaction, context: CommandContext) {
@@ -105,7 +106,11 @@ export async function executeCommand<T>(
     await setSessionContext(transaction, context);
     const request: Request = transaction.request();
     for (const parameter of parameters) {
-      request.input(parameter.name, parameter.type, parameter.value);
+      if (parameter.direction === 'output') {
+        request.output(parameter.name, parameter.type, parameter.value);
+      } else {
+        request.input(parameter.name, parameter.type, parameter.value);
+      }
     }
     const result = await request.execute<T>(procedure);
     await clearSessionContext(transaction);

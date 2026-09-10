@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Private Clinic API
-  version: 0.1.0
+  version: 0.2.0
   description: Public contract for the private clinic management system.
 servers:
   - url: http://localhost:5000
@@ -40,11 +40,140 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
+  /.well-known/jwks.json:
+    get:
+      operationId: getAuthJwks
+      summary: Get public keys used to verify access tokens
+      responses:
+        '200':
+          description: JSON Web Key Set for RS256 verification.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JwksResponse'
+  /api/v1/auth/login:
+    post:
+      operationId: login
+      summary: Sign in with username, email, or phone
+      description: Web clients receive the rotating refresh token in an HttpOnly cookie. Mobile clients receive it in the response body.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authentication succeeded.
+          headers:
+            Set-Cookie:
+              description: Present for web clients; contains the HttpOnly refresh token.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '423':
+          description: Account is temporarily locked after repeated failures.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+  /api/v1/auth/refresh:
+    post:
+      operationId: refreshSession
+      summary: Rotate the refresh token and issue a new access token
+      description: Send an empty object when using the web cookie, or send refreshToken for a mobile client. Reuse of an already-rotated token revokes all sessions for that user.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: Session rotated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/auth/logout:
+    post:
+      operationId: logout
+      summary: Revoke the current refresh session
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: Logout is idempotent and has completed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogoutResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /api/v1/auth/logout-all:
+    post:
+      operationId: logoutAll
+      summary: Revoke every session belonging to the authenticated user
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: All sessions were revoked and the user's token version was incremented.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogoutAllResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    BadRequest:
+      description: Request validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    Unauthorized:
+      description: Authentication data is missing, invalid, expired, reused, or revoked.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    Forbidden:
+      description: The account is unavailable for login.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
   schemas:
     ResponseMeta:
       type: object
       additionalProperties: true
+    RequestId:
+      type: string
+      format: uuid
     HealthData:
       type: object
       additionalProperties: false
@@ -65,7 +194,7 @@ components:
         meta:
           $ref: '#/components/schemas/ResponseMeta'
         requestId:
-          type: string
+          $ref: '#/components/schemas/RequestId'
     DependencyHealth:
       type: object
       additionalProperties: false
@@ -100,7 +229,160 @@ components:
         meta:
           $ref: '#/components/schemas/ResponseMeta'
         requestId:
+          $ref: '#/components/schemas/RequestId'
+    ClientType:
+      type: string
+      enum: [web, mobile]
+      default: web
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [identifier, password]
+      properties:
+        identifier:
           type: string
+          minLength: 3
+          maxLength: 254
+          description: Username, normalized email address, or normalized phone number.
+        password:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 200
+        clientType:
+          $ref: '#/components/schemas/ClientType'
+    RefreshRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        refreshToken:
+          type: string
+          description: Required for mobile clients and omitted when using the web HttpOnly cookie.
+    RoleAssignment:
+      type: object
+      additionalProperties: false
+      required: [code, branchId]
+      properties:
+        code:
+          type: string
+        branchId:
+          type: [string, 'null']
+          description: Database branch identifier serialized as a string.
+    AuthenticatedUser:
+      type: object
+      additionalProperties: false
+      required: [userId, publicId, displayName, tokenVersion, roles, permissions]
+      properties:
+        userId:
+          type: integer
+          format: int64
+        publicId:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+        tokenVersion:
+          type: integer
+          minimum: 1
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleAssignment'
+        permissions:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+    AuthData:
+      type: object
+      additionalProperties: false
+      required: [accessToken, expiresIn, user]
+      properties:
+        accessToken:
+          type: string
+        expiresIn:
+          type: integer
+          minimum: 60
+          description: Access token lifetime in seconds.
+        refreshToken:
+          type: string
+          description: Present only for mobile clients.
+        user:
+          $ref: '#/components/schemas/AuthenticatedUser'
+    AuthResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data:
+          $ref: '#/components/schemas/AuthData'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+        requestId:
+          $ref: '#/components/schemas/RequestId'
+    LogoutData:
+      type: object
+      additionalProperties: false
+      required: [loggedOut]
+      properties:
+        loggedOut:
+          type: boolean
+          const: true
+    LogoutAllData:
+      allOf:
+        - $ref: '#/components/schemas/LogoutData'
+        - type: object
+          required: [allDevices]
+          properties:
+            allDevices:
+              type: boolean
+              const: true
+    LogoutResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data:
+          $ref: '#/components/schemas/LogoutData'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+        requestId:
+          $ref: '#/components/schemas/RequestId'
+    LogoutAllResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data:
+          $ref: '#/components/schemas/LogoutAllData'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+        requestId:
+          $ref: '#/components/schemas/RequestId'
+    Jwk:
+      type: object
+      additionalProperties: true
+      required: [kty, kid, use, alg]
+      properties:
+        kty:
+          type: string
+        kid:
+          type: string
+        use:
+          type: string
+          const: sig
+        alg:
+          type: string
+          const: RS256
+    JwksResponse:
+      type: object
+      additionalProperties: false
+      required: [keys]
+      properties:
+        keys:
+          type: array
+          items:
+            $ref: '#/components/schemas/Jwk'
     ApiErrorResponse:
       type: object
       additionalProperties: false
@@ -109,7 +391,7 @@ components:
         error:
           $ref: '#/components/schemas/ApiError'
         requestId:
-          type: string
+          $ref: '#/components/schemas/RequestId'
     ApiError:
       type: object
       additionalProperties: false

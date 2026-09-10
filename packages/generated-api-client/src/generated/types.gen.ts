@@ -8,6 +8,8 @@ export type ResponseMeta = {
     [key: string]: unknown;
 };
 
+export type RequestId = string;
+
 export type HealthData = {
     status: 'ok';
     service: string;
@@ -16,7 +18,7 @@ export type HealthData = {
 export type HealthResponse = {
     data: HealthData;
     meta: ResponseMeta;
-    requestId: string;
+    requestId: RequestId;
 };
 
 export type DependencyHealth = {
@@ -35,12 +37,98 @@ export type ReadinessData = {
 export type ReadinessResponse = {
     data: ReadinessData;
     meta: ResponseMeta;
-    requestId: string;
+    requestId: RequestId;
+};
+
+export type ClientType = 'web' | 'mobile';
+
+export type LoginRequest = {
+    /**
+     * Username, normalized email address, or normalized phone number.
+     */
+    identifier: string;
+    password: string;
+    clientType?: ClientType;
+};
+
+export type RefreshRequest = {
+    /**
+     * Required for mobile clients and omitted when using the web HttpOnly cookie.
+     */
+    refreshToken?: string;
+};
+
+export type RoleAssignment = {
+    code: string;
+    /**
+     * Database branch identifier serialized as a string.
+     */
+    branchId: string | null;
+};
+
+export type AuthenticatedUser = {
+    userId: number;
+    publicId: string;
+    displayName: string;
+    tokenVersion: number;
+    roles: Array<RoleAssignment>;
+    permissions: Array<string>;
+};
+
+export type AuthData = {
+    accessToken: string;
+    /**
+     * Access token lifetime in seconds.
+     */
+    expiresIn: number;
+    /**
+     * Present only for mobile clients.
+     */
+    refreshToken?: string;
+    user: AuthenticatedUser;
+};
+
+export type AuthResponse = {
+    data: AuthData;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type LogoutData = {
+    loggedOut: true;
+};
+
+export type LogoutAllData = LogoutData & {
+    allDevices: true;
+};
+
+export type LogoutResponse = {
+    data: LogoutData;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type LogoutAllResponse = {
+    data: LogoutAllData;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type Jwk = {
+    kty: string;
+    kid: string;
+    use: 'sig';
+    alg: 'RS256';
+    [key: string]: unknown;
+};
+
+export type JwksResponse = {
+    keys: Array<Jwk>;
 };
 
 export type ApiErrorResponse = {
     error: ApiError;
-    requestId: string;
+    requestId: RequestId;
 };
 
 export type ApiError = {
@@ -91,3 +179,135 @@ export type GetReadinessResponses = {
 };
 
 export type GetReadinessResponse = GetReadinessResponses[keyof GetReadinessResponses];
+
+export type GetAuthJwksData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/.well-known/jwks.json';
+};
+
+export type GetAuthJwksResponses = {
+    /**
+     * JSON Web Key Set for RS256 verification.
+     */
+    200: JwksResponse;
+};
+
+export type GetAuthJwksResponse = GetAuthJwksResponses[keyof GetAuthJwksResponses];
+
+export type LoginData = {
+    body: LoginRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/auth/login';
+};
+
+export type LoginErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * Account is temporarily locked after repeated failures.
+     */
+    423: ApiErrorResponse;
+};
+
+export type LoginError = LoginErrors[keyof LoginErrors];
+
+export type LoginResponses = {
+    /**
+     * Authentication succeeded.
+     */
+    200: AuthResponse;
+};
+
+export type LoginResponse = LoginResponses[keyof LoginResponses];
+
+export type RefreshSessionData = {
+    body?: RefreshRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/auth/refresh';
+};
+
+export type RefreshSessionErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+};
+
+export type RefreshSessionError = RefreshSessionErrors[keyof RefreshSessionErrors];
+
+export type RefreshSessionResponses = {
+    /**
+     * Session rotated successfully.
+     */
+    200: AuthResponse;
+};
+
+export type RefreshSessionResponse = RefreshSessionResponses[keyof RefreshSessionResponses];
+
+export type LogoutData2 = {
+    body?: RefreshRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/auth/logout';
+};
+
+export type LogoutErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+};
+
+export type LogoutError = LogoutErrors[keyof LogoutErrors];
+
+export type LogoutResponses = {
+    /**
+     * Logout is idempotent and has completed.
+     */
+    200: LogoutResponse;
+};
+
+export type LogoutResponse2 = LogoutResponses[keyof LogoutResponses];
+
+export type LogoutAllData2 = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/auth/logout-all';
+};
+
+export type LogoutAllErrors = {
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+};
+
+export type LogoutAllError = LogoutAllErrors[keyof LogoutAllErrors];
+
+export type LogoutAllResponses = {
+    /**
+     * All sessions were revoked and the user's token version was incremented.
+     */
+    200: LogoutAllResponse;
+};
+
+export type LogoutAllResponse2 = LogoutAllResponses[keyof LogoutAllResponses];

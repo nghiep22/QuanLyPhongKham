@@ -21,6 +21,13 @@
 
 SET NOCOUNT ON;
 SET XACT_ABORT ON;
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+SET ANSI_PADDING ON;
+SET ANSI_WARNINGS ON;
+SET CONCAT_NULL_YIELDS_NULL ON;
+SET ARITHABORT ON;
+SET NUMERIC_ROUNDABORT OFF;
 GO
 
 IF DB_ID(N'PrivateClinicManagement') IS NULL
@@ -206,6 +213,7 @@ BEGIN
     CREATE TABLE dbo.users
     (
         user_id              bigint IDENTITY(1,1) NOT NULL,
+        public_id            uniqueidentifier NOT NULL CONSTRAINT DF_users_public_id DEFAULT NEWSEQUENTIALID(),
         username             nvarchar(80) NOT NULL,
         email                varchar(254) NULL,
         phone                varchar(20) NULL,
@@ -217,6 +225,7 @@ BEGIN
         password_changed_utc datetime2(3) NOT NULL CONSTRAINT DF_users_password_changed DEFAULT SYSUTCDATETIME(),
         last_login_at_utc    datetime2(3) NULL,
         mfa_enabled          bit NOT NULL CONSTRAINT DF_users_mfa DEFAULT (0),
+        token_version        int NOT NULL CONSTRAINT DF_users_token_version DEFAULT (1),
         created_at_utc       datetime2(3) NOT NULL CONSTRAINT DF_users_created DEFAULT SYSUTCDATETIME(),
         updated_at_utc       datetime2(3) NOT NULL CONSTRAINT DF_users_updated DEFAULT SYSUTCDATETIME(),
         deleted_at_utc       datetime2(3) NULL,
@@ -227,12 +236,30 @@ BEGIN
         CONSTRAINT PK_users PRIMARY KEY CLUSTERED (user_id),
         CONSTRAINT CK_users_status CHECK (status IN ('ACTIVE','LOCKED','DISABLED','PENDING')),
         CONSTRAINT CK_users_failed CHECK (failed_login_count >= 0),
+        CONSTRAINT CK_users_token_version CHECK (token_version > 0),
         CONSTRAINT CK_users_deleted CHECK
             ((status = 'DISABLED') OR deleted_at_utc IS NULL),
         CONSTRAINT CK_users_email_not_blank CHECK (email IS NULL OR LEN(LTRIM(RTRIM(email))) > 0),
         CONSTRAINT CK_users_phone_not_blank CHECK (phone IS NULL OR LEN(LTRIM(RTRIM(phone))) > 0)
     );
 END;
+GO
+
+IF COL_LENGTH(N'dbo.users', N'public_id') IS NULL
+    ALTER TABLE dbo.users ADD public_id uniqueidentifier NULL;
+IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.users') AND name=N'public_id' AND is_nullable=1)
+BEGIN
+    EXEC sys.sp_executesql N'UPDATE dbo.users SET public_id = NEWID() WHERE public_id IS NULL;';
+    EXEC sys.sp_executesql N'ALTER TABLE dbo.users ALTER COLUMN public_id uniqueidentifier NOT NULL;';
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.default_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.users') AND name=N'DF_users_public_id')
+    EXEC sys.sp_executesql N'ALTER TABLE dbo.users ADD CONSTRAINT DF_users_public_id DEFAULT NEWSEQUENTIALID() FOR public_id;';
+IF COL_LENGTH(N'dbo.users', N'token_version') IS NULL
+    ALTER TABLE dbo.users ADD token_version int NOT NULL CONSTRAINT DF_users_token_version DEFAULT (1) WITH VALUES;
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.users') AND name=N'CK_users_token_version')
+    EXEC sys.sp_executesql N'ALTER TABLE dbo.users ADD CONSTRAINT CK_users_token_version CHECK (token_version > 0);';
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.users') AND name=N'UX_users_public_id')
+    EXEC sys.sp_executesql N'CREATE UNIQUE INDEX UX_users_public_id ON dbo.users(public_id);';
 GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.users') AND name = N'UX_users_username')
@@ -256,6 +283,9 @@ BEGIN
         expires_at_utc      datetime2(3) NOT NULL,
         revoked_at_utc      datetime2(3) NULL,
         replaced_by_id      uniqueidentifier NULL,
+        revocation_reason   varchar(30) NULL,
+        last_used_at_utc    datetime2(3) NULL,
+        token_version_snapshot int NOT NULL CONSTRAINT DF_user_sessions_token_version DEFAULT (1),
         CONSTRAINT PK_user_sessions PRIMARY KEY CLUSTERED (session_id),
         CONSTRAINT FK_user_sessions_user FOREIGN KEY (user_id) REFERENCES dbo.users(user_id),
         CONSTRAINT FK_user_sessions_replaced FOREIGN KEY (replaced_by_id) REFERENCES dbo.user_sessions(session_id),
@@ -263,6 +293,18 @@ BEGIN
         CONSTRAINT CK_user_sessions_expiry CHECK (expires_at_utc > issued_at_utc)
     );
 END;
+GO
+
+IF COL_LENGTH(N'dbo.user_sessions', N'revocation_reason') IS NULL
+    ALTER TABLE dbo.user_sessions ADD revocation_reason varchar(30) NULL;
+IF COL_LENGTH(N'dbo.user_sessions', N'last_used_at_utc') IS NULL
+    ALTER TABLE dbo.user_sessions ADD last_used_at_utc datetime2(3) NULL;
+IF COL_LENGTH(N'dbo.user_sessions', N'token_version_snapshot') IS NULL
+    ALTER TABLE dbo.user_sessions ADD token_version_snapshot int NOT NULL
+        CONSTRAINT DF_user_sessions_token_version DEFAULT (1) WITH VALUES;
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.user_sessions') AND name=N'CK_user_sessions_revocation_reason')
+    EXEC sys.sp_executesql N'ALTER TABLE dbo.user_sessions ADD CONSTRAINT CK_user_sessions_revocation_reason CHECK
+        (revocation_reason IS NULL OR revocation_reason IN (''ROTATED'',''LOGOUT'',''LOGOUT_ALL'',''REUSE_DETECTED'',''EXPIRED'',''ACCOUNT_CHANGED''));';
 GO
 
 IF OBJECT_ID(N'dbo.user_roles', N'U') IS NULL
@@ -3773,6 +3815,234 @@ BEGIN
 END;
 GO
 
+CREATE OR ALTER PROCEDURE dbo.sp_auth_record_login_failure
+    @user_id bigint,
+    @max_failed_attempts smallint = 5,
+    @lock_minutes int = 15,
+    @locked_until_utc datetime2(3) OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    SET @locked_until_utc = NULL;
+    IF @max_failed_attempts NOT BETWEEN 1 AND 20 OR @lock_minutes NOT BETWEEN 1 AND 1440
+        THROW 53030, N'Chính sách khóa đăng nhập không hợp lệ.', 1;
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        DECLARE @failed smallint, @status varchar(20);
+        SELECT @failed=failed_login_count, @status=status
+        FROM dbo.users WITH (UPDLOCK,HOLDLOCK) WHERE user_id=@user_id AND deleted_at_utc IS NULL;
+
+        IF @status='ACTIVE'
+        BEGIN
+            SET @failed = @failed + 1;
+            IF @failed >= @max_failed_attempts
+                SET @locked_until_utc = DATEADD(minute,@lock_minutes,SYSUTCDATETIME());
+            UPDATE dbo.users
+               SET failed_login_count=@failed,
+                   locked_until_utc=COALESCE(@locked_until_utc,locked_until_utc),
+                   updated_at_utc=SYSUTCDATETIME()
+             WHERE user_id=@user_id;
+            DECLARE @entity_id varchar(100)=CONVERT(varchar(100),@user_id);
+            DECLARE @audit_json nvarchar(max)=CONCAT(N'{"failedCount":',@failed,N',"locked":',
+                IIF(@locked_until_utc IS NULL,N'false',N'true'),N'}');
+            EXEC dbo.sp_write_audit @actor_user_id=@user_id,@action_code='LOGIN_FAILED',
+                @entity_type='USER',@entity_id=@entity_id,@new_values_json=@audit_json;
+        END;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_auth_create_session
+    @user_id bigint,
+    @expected_token_version int,
+    @refresh_token_hash binary(32),
+    @device_info nvarchar(500)=NULL,
+    @ip_address varchar(45)=NULL,
+    @expires_at_utc datetime2(3),
+    @session_id uniqueidentifier OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    SET @session_id = NEWID();
+    IF @expires_at_utc<=SYSUTCDATETIME() THROW 53031,N'Hạn refresh token không hợp lệ.',1;
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        IF NOT EXISTS
+        (
+            SELECT 1 FROM dbo.users WITH (UPDLOCK,HOLDLOCK)
+            WHERE user_id=@user_id AND status='ACTIVE' AND deleted_at_utc IS NULL
+              AND token_version=@expected_token_version
+              AND (locked_until_utc IS NULL OR locked_until_utc<=SYSUTCDATETIME())
+        ) THROW 53032,N'Tài khoản không ở trạng thái cho phép đăng nhập.',1;
+
+        INSERT dbo.user_sessions
+            (session_id,user_id,refresh_token_hash,device_info,ip_address,expires_at_utc,token_version_snapshot)
+        VALUES
+            (@session_id,@user_id,@refresh_token_hash,@device_info,@ip_address,@expires_at_utc,@expected_token_version);
+        UPDATE dbo.users SET failed_login_count=0,locked_until_utc=NULL,
+            last_login_at_utc=SYSUTCDATETIME(),updated_at_utc=SYSUTCDATETIME()
+        WHERE user_id=@user_id;
+        DECLARE @entity_id varchar(100)=CONVERT(varchar(100),@session_id);
+        EXEC dbo.sp_write_audit @actor_user_id=@user_id,@action_code='LOGIN_SUCCEEDED',
+            @entity_type='USER_SESSION',@entity_id=@entity_id;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_auth_rotate_session
+    @current_refresh_token_hash binary(32),
+    @new_refresh_token_hash binary(32),
+    @device_info nvarchar(500)=NULL,
+    @ip_address varchar(45)=NULL,
+    @expires_at_utc datetime2(3),
+    @user_id bigint OUTPUT,
+    @token_version int OUTPUT,
+    @new_session_id uniqueidentifier OUTPUT,
+    @reuse_detected bit OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    SELECT @user_id=NULL,@token_version=NULL,@new_session_id=NULL,@reuse_detected=0;
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        DECLARE @session_id uniqueidentifier,@session_expires datetime2(3),@revoked datetime2(3),
+                @replaced_by uniqueidentifier,@snapshot int,@status varchar(20),@current_version int,
+                @locked_until_utc datetime2(3);
+        SELECT @session_id=s.session_id,@user_id=s.user_id,@session_expires=s.expires_at_utc,
+               @revoked=s.revoked_at_utc,@replaced_by=s.replaced_by_id,@snapshot=s.token_version_snapshot
+        FROM dbo.user_sessions s WITH (UPDLOCK,HOLDLOCK)
+        WHERE s.refresh_token_hash=@current_refresh_token_hash;
+
+        IF @session_id IS NULL
+        BEGIN COMMIT TRANSACTION; RETURN; END;
+
+        SELECT @status=status,@current_version=token_version,@locked_until_utc=locked_until_utc
+        FROM dbo.users WITH (UPDLOCK,HOLDLOCK) WHERE user_id=@user_id AND deleted_at_utc IS NULL;
+        SET @token_version=@current_version;
+
+        IF @replaced_by IS NOT NULL
+        BEGIN
+            SET @reuse_detected=1;
+            UPDATE dbo.user_sessions SET revoked_at_utc=COALESCE(revoked_at_utc,SYSUTCDATETIME()),
+                revocation_reason=COALESCE(revocation_reason,'REUSE_DETECTED')
+            WHERE user_id=@user_id AND revoked_at_utc IS NULL;
+            UPDATE dbo.users SET token_version=token_version+1,updated_at_utc=SYSUTCDATETIME()
+            WHERE user_id=@user_id;
+            SET @token_version=@current_version+1;
+            DECLARE @reuse_entity_id varchar(100)=CONVERT(varchar(100),@user_id);
+            EXEC dbo.sp_write_audit @actor_user_id=@user_id,@action_code='REFRESH_TOKEN_REUSE_DETECTED',
+                @entity_type='USER',@entity_id=@reuse_entity_id;
+            COMMIT TRANSACTION;
+            RETURN;
+        END;
+
+        IF @revoked IS NOT NULL OR @session_expires<=SYSUTCDATETIME()
+           OR @status IS NULL OR @status<>'ACTIVE'
+           OR (@locked_until_utc IS NOT NULL AND @locked_until_utc>SYSUTCDATETIME())
+           OR @snapshot<>@current_version OR @expires_at_utc<=SYSUTCDATETIME()
+        BEGIN
+            UPDATE dbo.user_sessions SET revoked_at_utc=COALESCE(revoked_at_utc,SYSUTCDATETIME()),
+                revocation_reason=COALESCE(revocation_reason,IIF(@session_expires<=SYSUTCDATETIME(),'EXPIRED','ACCOUNT_CHANGED'))
+            WHERE session_id=@session_id;
+            COMMIT TRANSACTION;
+            RETURN;
+        END;
+
+        SET @new_session_id=NEWID();
+        INSERT dbo.user_sessions
+            (session_id,user_id,refresh_token_hash,device_info,ip_address,expires_at_utc,token_version_snapshot)
+        VALUES
+            (@new_session_id,@user_id,@new_refresh_token_hash,@device_info,@ip_address,@expires_at_utc,@current_version);
+        UPDATE dbo.user_sessions SET revoked_at_utc=SYSUTCDATETIME(),replaced_by_id=@new_session_id,
+            revocation_reason='ROTATED',last_used_at_utc=SYSUTCDATETIME()
+        WHERE session_id=@session_id;
+        DECLARE @rotate_entity_id varchar(100)=CONVERT(varchar(100),@new_session_id);
+        EXEC dbo.sp_write_audit @actor_user_id=@user_id,@action_code='REFRESH_TOKEN_ROTATED',
+            @entity_type='USER_SESSION',@entity_id=@rotate_entity_id;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_auth_revoke_session
+    @refresh_token_hash binary(32),
+    @reason varchar(30)='LOGOUT'
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    IF @reason NOT IN ('LOGOUT','ACCOUNT_CHANGED') THROW 53033,N'Lý do thu hồi session không hợp lệ.',1;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        DECLARE @user_id bigint,@session_id uniqueidentifier;
+        SELECT @user_id=user_id,@session_id=session_id FROM dbo.user_sessions WITH (UPDLOCK,HOLDLOCK)
+        WHERE refresh_token_hash=@refresh_token_hash;
+        UPDATE dbo.user_sessions SET revoked_at_utc=COALESCE(revoked_at_utc,SYSUTCDATETIME()),
+            revocation_reason=COALESCE(revocation_reason,@reason),last_used_at_utc=SYSUTCDATETIME()
+        WHERE session_id=@session_id;
+        IF @session_id IS NOT NULL
+        BEGIN
+            DECLARE @entity_id varchar(100)=CONVERT(varchar(100),@session_id);
+            EXEC dbo.sp_write_audit @actor_user_id=@user_id,@action_code='SESSION_REVOKED',
+                @entity_type='USER_SESSION',@entity_id=@entity_id;
+        END;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_auth_revoke_all_sessions
+    @actor_user_id bigint
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    EXEC dbo.sp_assert_actor @actor_user_id;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        IF NOT EXISTS (SELECT 1 FROM dbo.users WITH (UPDLOCK,HOLDLOCK) WHERE user_id=@actor_user_id AND deleted_at_utc IS NULL)
+            THROW 53034,N'Tài khoản không tồn tại.',1;
+        UPDATE dbo.user_sessions SET revoked_at_utc=COALESCE(revoked_at_utc,SYSUTCDATETIME()),
+            revocation_reason=COALESCE(revocation_reason,'LOGOUT_ALL')
+        WHERE user_id=@actor_user_id AND revoked_at_utc IS NULL;
+        UPDATE dbo.users SET token_version=token_version+1,updated_at_utc=SYSUTCDATETIME()
+        WHERE user_id=@actor_user_id;
+        DECLARE @entity_id varchar(100)=CONVERT(varchar(100),@actor_user_id);
+        EXEC dbo.sp_write_audit @actor_user_id=@actor_user_id,@action_code='ALL_SESSIONS_REVOKED',
+            @entity_type='USER',@entity_id=@entity_id;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
 CREATE OR ALTER PROCEDURE dbo.sp_bootstrap_first_admin
     @username nvarchar(80),
     @email varchar(254) = NULL,
@@ -6936,11 +7206,26 @@ IF DATABASE_PRINCIPAL_ID(N'clinic_job_executor') IS NULL
     CREATE ROLE clinic_job_executor AUTHORIZATION dbo;
 IF DATABASE_PRINCIPAL_ID(N'clinic_report_reader') IS NULL
     CREATE ROLE clinic_report_reader AUTHORIZATION dbo;
+IF DATABASE_PRINCIPAL_ID(N'auth_core_executor') IS NULL
+    CREATE ROLE auth_core_executor AUTHORIZATION dbo;
 GO
 
 DENY INSERT, UPDATE, DELETE ON SCHEMA::dbo TO clinic_api_executor;
 DENY INSERT, UPDATE, DELETE ON SCHEMA::dbo TO clinic_job_executor;
 DENY INSERT, UPDATE, DELETE ON SCHEMA::dbo TO clinic_report_reader;
+DENY INSERT, UPDATE, DELETE ON SCHEMA::dbo TO auth_core_executor;
+GO
+
+GRANT EXECUTE ON OBJECT::dbo.sp_auth_record_login_failure TO auth_core_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_auth_create_session TO auth_core_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_auth_rotate_session TO auth_core_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_auth_revoke_session TO auth_core_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_auth_revoke_all_sessions TO auth_core_executor;
+GRANT SELECT ON OBJECT::dbo.users TO auth_core_executor;
+GRANT SELECT ON OBJECT::dbo.user_roles TO auth_core_executor;
+GRANT SELECT ON OBJECT::dbo.roles TO auth_core_executor;
+GRANT SELECT ON OBJECT::dbo.role_permissions TO auth_core_executor;
+GRANT SELECT ON OBJECT::dbo.permissions TO auth_core_executor;
 GO
 
 GRANT EXECUTE ON OBJECT::dbo.sp_create_staff_account TO clinic_api_executor;

@@ -7,12 +7,14 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Configuration.AddJsonFile("ocelot.json", optional: false, reloadOnChange: true);
 builder.Services.AddHttpClient("readiness", client => client.Timeout = TimeSpan.FromSeconds(3));
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+    ?? ["http://localhost:5173"];
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy => policy
         .AllowAnyHeader()
         .AllowAnyMethod()
-        .SetIsOriginAllowed(_ => true)
+        .WithOrigins(allowedOrigins)
         .WithExposedHeaders("x-request-id")
         .AllowCredentials());
 });
