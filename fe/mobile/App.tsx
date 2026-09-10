@@ -15,6 +15,7 @@ import {
 } from './src/features/auth/patient-auth';
 import { apiClient } from './src/shared/api/client';
 import { authTokenStorage } from './src/shared/storage/auth-token';
+import { PatientAccessScreen } from './src/features/patient-access/patient-access-screen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const queryClient = new QueryClient();
@@ -89,6 +90,7 @@ function MobileApp() {
         <Stack.Screen name="PatientHome" options={{ title: 'Cổng bệnh nhân' }}>
           {({ navigation }) => <PatientHomeScreen user={user} onLogout={logout} navigation={navigation} />}
         </Stack.Screen>
+        <Stack.Screen name="PatientProfiles" component={PatientAccessScreen} options={{ title: 'Hồ sơ được ủy quyền' }} />
         <Stack.Screen name="Booking" component={BookingScreen} options={{ title: 'Đặt lịch khám' }} />
       </> : <>
         <Stack.Screen name="Welcome" component={WelcomeScreen} options={{ headerShown: false }} />

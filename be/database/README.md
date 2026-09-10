@@ -15,7 +15,8 @@ sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\tests\staff-rbac.te
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\tests\staff-safety.test.sql
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\tests\password-lifecycle.test.sql
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\tests\patient-registration.test.sql
+sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\tests\patient-link.test.sql
 ```
 
 Mọi test dùng transaction và rollback; không để lại tài khoản, session hoặc
-password reset/patient registration challenge thử nghiệm.
+password reset/patient registration challenge hoặc patient link thử nghiệm.

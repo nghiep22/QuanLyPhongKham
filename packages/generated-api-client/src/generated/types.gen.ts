@@ -157,6 +157,173 @@ export type PatientRegistrationCompletedResponse = {
     requestId: RequestId;
 };
 
+export type PatientRelationship = 'SELF' | 'CHILD' | 'SPOUSE' | 'PARENT' | 'GUARDIAN' | 'OTHER';
+
+export type PatientLinkRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | 'EXPIRED';
+
+export type PatientLinkReferenceData = {
+    branches: Array<BranchReference>;
+};
+
+export type PatientLinkReferenceResponse = {
+    data: PatientLinkReferenceData;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type CreatePatientLinkRequest = {
+    branchPublicId: string;
+    patientCode: string;
+    dateOfBirth: string;
+    relationshipType: PatientRelationship;
+    /**
+     * Required for a relationship other than SELF.
+     */
+    requestNote?: string;
+};
+
+export type PatientProfileReference = {
+    publicId: string;
+    code: string;
+    fullName: string;
+    dateOfBirth: string;
+};
+
+export type PatientLinkUserReference = {
+    publicId: string;
+    displayName: string;
+};
+
+export type PatientLinkVerifiedBranch = {
+    publicId: string;
+    name: string;
+};
+
+export type PatientAccessLink = {
+    publicId: string;
+    patient: PatientProfileReference;
+    relationshipType: PatientRelationship;
+    status: 'ACTIVE';
+    bookingAllowed: boolean;
+    accessKind: 'OWN' | 'DELEGATED';
+    linkedUser: PatientLinkUserReference;
+    verifiedBranch: PatientLinkVerifiedBranch | null;
+    verifiedAtUtc: string | null;
+    canRevoke: boolean;
+    rowVersion: string;
+};
+
+export type PatientLinkRequest = {
+    publicId: string;
+    branch: BranchReference;
+    patientReference: string;
+    relationshipType: PatientRelationship;
+    requestNote: string | null;
+    status: PatientLinkRequestStatus;
+    decisionReason: string | null;
+    createdAtUtc: string;
+    expiresAtUtc: string;
+    decidedAtUtc: string | null;
+    patient: {
+        publicId: string;
+        code: string;
+        fullName: string;
+    } | null;
+    rowVersion: string;
+};
+
+export type StaffPatientLinkRequester = {
+    publicId: string;
+    displayName: string;
+    email: string | null;
+    phone: string | null;
+};
+
+export type StaffPatientLinkRequest = {
+    publicId: string;
+    branch: BranchReference;
+    patientReference: string;
+    relationshipType: PatientRelationship;
+    requestNote: string | null;
+    status: PatientLinkRequestStatus;
+    decisionReason: string | null;
+    createdAtUtc: string;
+    expiresAtUtc: string;
+    decidedAtUtc: string | null;
+    patient: PatientProfileReference;
+    requester: StaffPatientLinkRequester;
+    rowVersion: string;
+};
+
+export type PatientAccessData = {
+    links: Array<PatientAccessLink>;
+    requests: Array<PatientLinkRequest>;
+};
+
+export type PatientAccessResponse = {
+    data: PatientAccessData;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type PatientLinkRequestAcceptedData = {
+    requestId: string;
+    status: 'PENDING';
+};
+
+export type PatientLinkRequestAcceptedResponse = {
+    data: PatientLinkRequestAcceptedData;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type PatientLinkReasonRequest = {
+    reason: string;
+};
+
+export type PatientLinkCancelledData = {
+    cancelled: true;
+};
+
+export type PatientLinkCancelledResponse = {
+    data: PatientLinkCancelledData;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type PatientLinkRevokedData = {
+    revoked: true;
+};
+
+export type PatientLinkRevokedResponse = {
+    data: PatientLinkRevokedData;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type PatientLinkDecisionRequest = {
+    decision: 'APPROVE' | 'REJECT';
+    reason: string;
+};
+
+export type PatientLinkDecisionData = {
+    requestId: string;
+    status: 'APPROVED' | 'REJECTED';
+    linkPublicId: string | null;
+};
+
+export type PatientLinkDecisionResponse = {
+    data: PatientLinkDecisionData;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type StaffPatientLinkRequestListResponse = {
+    data: Array<StaffPatientLinkRequest>;
+    meta: PageMeta;
+    requestId: RequestId;
+};
+
 export type RoleAssignment = {
     code: string;
     /**
@@ -431,9 +598,18 @@ export type UserId = string;
 export type IfMatch = string;
 
 /**
- * UUID that makes retries with the same registration payload return the same challenge.
+ * UUID that makes retries with the same operation payload return the original result.
  */
 export type IdempotencyKey = string;
+
+export type PatientLinkRequestId = string;
+
+export type PatientLinkId = string;
+
+/**
+ * Strong ETag containing the Base64 rowversion of the patient-link request.
+ */
+export type PatientLinkIfMatch = string;
 
 export type GetLivenessData = {
     body?: never;
@@ -699,7 +875,7 @@ export type RequestPatientRegistrationData = {
     body: PatientRegistrationRequest;
     headers: {
         /**
-         * UUID that makes retries with the same registration payload return the same challenge.
+         * UUID that makes retries with the same operation payload return the original result.
          */
         'Idempotency-Key': string;
     };
@@ -758,6 +934,356 @@ export type VerifyPatientRegistrationResponses = {
 };
 
 export type VerifyPatientRegistrationResponse = VerifyPatientRegistrationResponses[keyof VerifyPatientRegistrationResponses];
+
+export type GetPatientLinkReferenceDataData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/patient-access/reference-data';
+};
+
+export type GetPatientLinkReferenceDataErrors = {
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+};
+
+export type GetPatientLinkReferenceDataError = GetPatientLinkReferenceDataErrors[keyof GetPatientLinkReferenceDataErrors];
+
+export type GetPatientLinkReferenceDataResponses = {
+    /**
+     * Branch choices for an authenticated patient.
+     */
+    200: PatientLinkReferenceResponse;
+};
+
+export type GetPatientLinkReferenceDataResponse = GetPatientLinkReferenceDataResponses[keyof GetPatientLinkReferenceDataResponses];
+
+export type GetPatientAccessData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/patient-access';
+};
+
+export type GetPatientAccessErrors = {
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+};
+
+export type GetPatientAccessError = GetPatientAccessErrors[keyof GetPatientAccessErrors];
+
+export type GetPatientAccessResponses = {
+    /**
+     * Current portal access and request history.
+     */
+    200: PatientAccessResponse;
+};
+
+export type GetPatientAccessResponse = GetPatientAccessResponses[keyof GetPatientAccessResponses];
+
+export type RequestPatientLinkData = {
+    body: CreatePatientLinkRequest;
+    headers: {
+        /**
+         * UUID that makes retries with the same operation payload return the original result.
+         */
+        'Idempotency-Key': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/patient-access/requests';
+};
+
+export type RequestPatientLinkErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+    /**
+     * The caller exceeded the request rate limit.
+     */
+    429: ApiErrorResponse;
+};
+
+export type RequestPatientLinkError = RequestPatientLinkErrors[keyof RequestPatientLinkErrors];
+
+export type RequestPatientLinkResponses = {
+    /**
+     * The request was accepted without revealing whether the patient reference matched.
+     */
+    202: PatientLinkRequestAcceptedResponse;
+};
+
+export type RequestPatientLinkResponse = RequestPatientLinkResponses[keyof RequestPatientLinkResponses];
+
+export type CancelPatientLinkRequestData = {
+    body?: never;
+    path: {
+        requestId: string;
+    };
+    query?: never;
+    url: '/api/v1/patient-access/requests/{requestId}';
+};
+
+export type CancelPatientLinkRequestErrors = {
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type CancelPatientLinkRequestError = CancelPatientLinkRequestErrors[keyof CancelPatientLinkRequestErrors];
+
+export type CancelPatientLinkRequestResponses = {
+    /**
+     * The pending request was cancelled.
+     */
+    200: PatientLinkCancelledResponse;
+};
+
+export type CancelPatientLinkRequestResponse = CancelPatientLinkRequestResponses[keyof CancelPatientLinkRequestResponses];
+
+export type RevokeOwnPatientLinkData = {
+    body: PatientLinkReasonRequest;
+    path: {
+        linkId: string;
+    };
+    query?: never;
+    url: '/api/v1/patient-access/links/{linkId}';
+};
+
+export type RevokeOwnPatientLinkErrors = {
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type RevokeOwnPatientLinkError = RevokeOwnPatientLinkErrors[keyof RevokeOwnPatientLinkErrors];
+
+export type RevokeOwnPatientLinkResponses = {
+    /**
+     * The link was revoked and can no longer book appointments.
+     */
+    200: PatientLinkRevokedResponse;
+};
+
+export type RevokeOwnPatientLinkResponse = RevokeOwnPatientLinkResponses[keyof RevokeOwnPatientLinkResponses];
+
+export type GetManagedPatientLinkReferenceDataData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/patient-link-requests/reference-data';
+};
+
+export type GetManagedPatientLinkReferenceDataErrors = {
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+};
+
+export type GetManagedPatientLinkReferenceDataError = GetManagedPatientLinkReferenceDataErrors[keyof GetManagedPatientLinkReferenceDataErrors];
+
+export type GetManagedPatientLinkReferenceDataResponses = {
+    /**
+     * Authorized branch choices.
+     */
+    200: PatientLinkReferenceResponse;
+};
+
+export type GetManagedPatientLinkReferenceDataResponse = GetManagedPatientLinkReferenceDataResponses[keyof GetManagedPatientLinkReferenceDataResponses];
+
+export type ListPatientLinkRequestsData = {
+    body?: never;
+    path?: never;
+    query: {
+        branchPublicId: string;
+        status?: PatientLinkRequestStatus;
+        page?: number;
+        pageSize?: number;
+    };
+    url: '/api/v1/admin/patient-link-requests';
+};
+
+export type ListPatientLinkRequestsErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+};
+
+export type ListPatientLinkRequestsError = ListPatientLinkRequestsErrors[keyof ListPatientLinkRequestsErrors];
+
+export type ListPatientLinkRequestsResponses = {
+    /**
+     * A page of link requests. Decoy requests are never returned.
+     */
+    200: StaffPatientLinkRequestListResponse;
+};
+
+export type ListPatientLinkRequestsResponse = ListPatientLinkRequestsResponses[keyof ListPatientLinkRequestsResponses];
+
+export type DecidePatientLinkRequestData = {
+    body: PatientLinkDecisionRequest;
+    headers: {
+        /**
+         * Strong ETag containing the Base64 rowversion of the patient-link request.
+         */
+        'If-Match': string;
+    };
+    path: {
+        requestId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/patient-link-requests/{requestId}/decision';
+};
+
+export type DecidePatientLinkRequestErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+    /**
+     * The If-Match precondition is required for this update.
+     */
+    428: ApiErrorResponse;
+};
+
+export type DecidePatientLinkRequestError = DecidePatientLinkRequestErrors[keyof DecidePatientLinkRequestErrors];
+
+export type DecidePatientLinkRequestResponses = {
+    /**
+     * The request was decided and an approved link was activated atomically.
+     */
+    200: PatientLinkDecisionResponse;
+};
+
+export type DecidePatientLinkRequestResponse = DecidePatientLinkRequestResponses[keyof DecidePatientLinkRequestResponses];
+
+export type RevokePatientLinkAsStaffData = {
+    body: PatientLinkReasonRequest;
+    path: {
+        linkId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/patient-links/{linkId}';
+};
+
+export type RevokePatientLinkAsStaffErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type RevokePatientLinkAsStaffError = RevokePatientLinkAsStaffErrors[keyof RevokePatientLinkAsStaffErrors];
+
+export type RevokePatientLinkAsStaffResponses = {
+    /**
+     * The link was revoked with an audit reason.
+     */
+    200: PatientLinkRevokedResponse;
+};
+
+export type RevokePatientLinkAsStaffResponse = RevokePatientLinkAsStaffResponses[keyof RevokePatientLinkAsStaffResponses];
 
 export type GetStaffReferenceDataData = {
     body?: never;

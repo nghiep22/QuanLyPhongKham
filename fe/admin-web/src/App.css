@@ -89,18 +89,31 @@ header { display: flex; align-items: center; justify-content: space-between; gap
 .role-list { display: grid; gap: 8px; }
 .role-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px; border-radius: 10px; background: #f4f8fa; }
 .danger-link { padding: 8px 10px; background: transparent; color: #b42d3c; }
+.danger-button { background: #b42d3c; }
 .role-grant { display: grid; grid-template-columns: 1fr 1fr 1fr auto; }
 .status { display: inline-flex; width: fit-content; padding: 5px 8px; border-radius: 999px; background: #e4edf2; color: #486172; font-size: 11px; font-weight: 900; }
 .status-active { background: #dff3ec; color: #17614f; }
 .status-disabled, .status-locked { background: #fff0f1; color: #a12431; }
 .page-state { padding: 52px 24px; text-align: center; color: #617583; }
 .error-state { border-radius: 16px; background: #fff0f1; color: #a12431; }
+.patient-link-toolbar { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(200px, .7fr) auto; align-items: end; gap: 14px; }
+.patient-link-toolbar button { min-height: 48px; }
+.patient-link-list { display: grid; gap: 16px; }
+.patient-link-card { padding: 22px; border: 1px solid #dce7ec; border-radius: 16px; background: white; box-shadow: 0 8px 24px rgba(26, 65, 86, .06); }
+.patient-link-card h2 { margin: 10px 0 4px; }
+.patient-link-card p { margin: 4px 0; }
+.patient-link-details { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 18px 0; }
+.patient-link-details div { padding: 12px; border-radius: 10px; background: #f4f8fa; }
+.patient-link-details dt { color: #6c7f8d; font-size: 12px; font-weight: 700; }
+.patient-link-details dd { margin: 5px 0 0; overflow-wrap: anywhere; font-weight: 700; }
+.request-note { padding: 12px 14px; border-left: 3px solid #65ad9d; background: #f3faf8; }
+.decision-box { display: grid; gap: 14px; margin-top: 18px; padding-top: 18px; border-top: 1px solid #dce7ec; }
 
 @media (max-width: 900px) {
   .app-shell { grid-template-columns: 1fr; }
   aside { display: none; }
   .module-grid { grid-template-columns: 1fr; }
   .dashboard { padding: 24px; }
-  .staff-workspace, .staff-toolbar, .form-grid { grid-template-columns: 1fr; }
+  .staff-workspace, .staff-toolbar, .form-grid, .patient-link-toolbar, .patient-link-details { grid-template-columns: 1fr; }
   .role-grant { grid-template-columns: 1fr; }
 }

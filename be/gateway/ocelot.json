@@ -31,6 +31,26 @@
       "Priority": 10
     },
     {
+      "UpstreamPathTemplate": "/api/v1/patient-access",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS" ],
+      "DownstreamPathTemplate": "/api/v1/patient-access",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        { "Host": "localhost", "Port": 4001 }
+      ],
+      "Priority": 11
+    },
+    {
+      "UpstreamPathTemplate": "/api/v1/patient-access/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS" ],
+      "DownstreamPathTemplate": "/api/v1/patient-access/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        { "Host": "localhost", "Port": 4001 }
+      ],
+      "Priority": 10
+    },
+    {
       "UpstreamPathTemplate": "/api/v1/{everything}",
       "UpstreamHttpMethod": [ "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS" ],
       "DownstreamPathTemplate": "/api/v1/{everything}",

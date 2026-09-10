@@ -89,6 +89,12 @@ export class TokenService {
       .digest();
   }
 
+  hashPatientLinkRequest(canonicalPayload: string) {
+    return createHmac('sha256', env.AUTH_OTP_HASH_SECRET)
+      .update(`patient-link:request:${canonicalPayload}`, 'utf8')
+      .digest();
+  }
+
   refreshExpiry() {
     return new Date(Date.now() + env.JWT_REFRESH_TTL_DAYS * 24 * 60 * 60 * 1000);
   }

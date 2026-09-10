@@ -710,19 +710,27 @@ BEGIN
     CREATE TABLE dbo.user_patient_access
     (
         user_patient_access_id bigint IDENTITY(1,1) NOT NULL,
+        public_id               uniqueidentifier NOT NULL CONSTRAINT DF_user_patient_access_public_id DEFAULT NEWSEQUENTIALID(),
         user_id                 bigint NOT NULL,
         patient_id              bigint NOT NULL,
         relationship_type       varchar(20) NOT NULL,
         status                  varchar(20) NOT NULL CONSTRAINT DF_user_patient_status DEFAULT ('PENDING'),
         is_booking_allowed      bit NOT NULL CONSTRAINT DF_user_patient_booking DEFAULT (1),
         verified_by_user_id     bigint NULL,
+        verified_branch_id      bigint NULL,
         verified_at_utc         datetime2(3) NULL,
+        revoked_by_user_id      bigint NULL,
         revoked_at_utc          datetime2(3) NULL,
+        revocation_reason       nvarchar(500) NULL,
         created_at_utc          datetime2(3) NOT NULL CONSTRAINT DF_user_patient_created DEFAULT SYSUTCDATETIME(),
+        row_ver                 rowversion NOT NULL,
         CONSTRAINT PK_user_patient_access PRIMARY KEY CLUSTERED (user_patient_access_id),
+        CONSTRAINT UQ_user_patient_access_public_id UNIQUE (public_id),
         CONSTRAINT FK_user_patient_user FOREIGN KEY (user_id) REFERENCES dbo.users(user_id),
         CONSTRAINT FK_user_patient_patient FOREIGN KEY (patient_id) REFERENCES dbo.patients(patient_id),
         CONSTRAINT FK_user_patient_verifier FOREIGN KEY (verified_by_user_id) REFERENCES dbo.users(user_id),
+        CONSTRAINT FK_user_patient_verified_branch FOREIGN KEY (verified_branch_id) REFERENCES dbo.branches(branch_id),
+        CONSTRAINT FK_user_patient_revoker FOREIGN KEY (revoked_by_user_id) REFERENCES dbo.users(user_id),
         CONSTRAINT UQ_user_patient UNIQUE (user_id, patient_id),
         CONSTRAINT CK_user_patient_relationship CHECK (relationship_type IN
             ('SELF','CHILD','SPOUSE','PARENT','GUARDIAN','OTHER')),
@@ -731,6 +739,87 @@ BEGIN
             ((status = 'ACTIVE' AND verified_at_utc IS NOT NULL) OR status <> 'ACTIVE')
     );
 END;
+GO
+
+IF COL_LENGTH(N'dbo.user_patient_access', N'public_id') IS NULL
+    ALTER TABLE dbo.user_patient_access ADD public_id uniqueidentifier NULL;
+IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.user_patient_access') AND name=N'public_id' AND is_nullable=1)
+BEGIN
+    EXEC sys.sp_executesql N'UPDATE dbo.user_patient_access SET public_id=NEWID() WHERE public_id IS NULL;';
+    EXEC sys.sp_executesql N'ALTER TABLE dbo.user_patient_access ALTER COLUMN public_id uniqueidentifier NOT NULL;';
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.default_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.user_patient_access') AND name=N'DF_user_patient_access_public_id')
+    EXEC sys.sp_executesql N'ALTER TABLE dbo.user_patient_access ADD CONSTRAINT DF_user_patient_access_public_id DEFAULT NEWSEQUENTIALID() FOR public_id;';
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.user_patient_access') AND name=N'UQ_user_patient_access_public_id')
+    EXEC sys.sp_executesql N'CREATE UNIQUE INDEX UQ_user_patient_access_public_id ON dbo.user_patient_access(public_id);';
+IF COL_LENGTH(N'dbo.user_patient_access', N'verified_branch_id') IS NULL
+    ALTER TABLE dbo.user_patient_access ADD verified_branch_id bigint NULL;
+IF COL_LENGTH(N'dbo.user_patient_access', N'revoked_by_user_id') IS NULL
+    ALTER TABLE dbo.user_patient_access ADD revoked_by_user_id bigint NULL;
+IF COL_LENGTH(N'dbo.user_patient_access', N'revocation_reason') IS NULL
+    ALTER TABLE dbo.user_patient_access ADD revocation_reason nvarchar(500) NULL;
+IF COL_LENGTH(N'dbo.user_patient_access', N'row_ver') IS NULL
+    ALTER TABLE dbo.user_patient_access ADD row_ver rowversion NOT NULL;
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE parent_object_id=OBJECT_ID(N'dbo.user_patient_access') AND name=N'FK_user_patient_verified_branch')
+    ALTER TABLE dbo.user_patient_access ADD CONSTRAINT FK_user_patient_verified_branch FOREIGN KEY (verified_branch_id) REFERENCES dbo.branches(branch_id);
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE parent_object_id=OBJECT_ID(N'dbo.user_patient_access') AND name=N'FK_user_patient_revoker')
+    ALTER TABLE dbo.user_patient_access ADD CONSTRAINT FK_user_patient_revoker FOREIGN KEY (revoked_by_user_id) REFERENCES dbo.users(user_id);
+GO
+
+IF OBJECT_ID(N'dbo.patient_access_requests', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.patient_access_requests
+    (
+        patient_access_request_id bigint IDENTITY(1,1) NOT NULL,
+        public_id                  uniqueidentifier NOT NULL CONSTRAINT DF_patient_access_requests_public_id DEFAULT NEWSEQUENTIALID(),
+        requester_user_id          bigint NOT NULL,
+        branch_id                  bigint NOT NULL,
+        patient_id                 bigint NULL,
+        patient_reference_mask     varchar(30) NOT NULL,
+        relationship_type          varchar(20) NOT NULL,
+        request_note               nvarchar(500) NULL,
+        status                     varchar(20) NOT NULL CONSTRAINT DF_patient_access_requests_status DEFAULT ('PENDING'),
+        decision_reason            nvarchar(500) NULL,
+        decided_by_user_id         bigint NULL,
+        decided_at_utc             datetime2(3) NULL,
+        cancelled_at_utc           datetime2(3) NULL,
+        expires_at_utc             datetime2(3) NOT NULL,
+        idempotency_key            uniqueidentifier NOT NULL,
+        request_hash               binary(32) NOT NULL,
+        created_at_utc             datetime2(3) NOT NULL CONSTRAINT DF_patient_access_requests_created DEFAULT SYSUTCDATETIME(),
+        row_ver                    rowversion NOT NULL,
+        CONSTRAINT PK_patient_access_requests PRIMARY KEY CLUSTERED (patient_access_request_id),
+        CONSTRAINT UQ_patient_access_requests_public_id UNIQUE (public_id),
+        CONSTRAINT UQ_patient_access_requests_idempotency UNIQUE (requester_user_id,idempotency_key),
+        CONSTRAINT FK_patient_access_requests_requester FOREIGN KEY (requester_user_id) REFERENCES dbo.users(user_id),
+        CONSTRAINT FK_patient_access_requests_branch FOREIGN KEY (branch_id) REFERENCES dbo.branches(branch_id),
+        CONSTRAINT FK_patient_access_requests_patient FOREIGN KEY (patient_id) REFERENCES dbo.patients(patient_id),
+        CONSTRAINT FK_patient_access_requests_decider FOREIGN KEY (decided_by_user_id) REFERENCES dbo.users(user_id),
+        CONSTRAINT CK_patient_access_requests_relationship CHECK
+            (relationship_type IN ('SELF','CHILD','SPOUSE','PARENT','GUARDIAN','OTHER')),
+        CONSTRAINT CK_patient_access_requests_status CHECK
+            (status IN ('PENDING','APPROVED','REJECTED','CANCELLED')),
+        CONSTRAINT CK_patient_access_requests_state CHECK
+        (
+            (status='PENDING' AND decided_by_user_id IS NULL AND decided_at_utc IS NULL AND cancelled_at_utc IS NULL)
+            OR (status IN ('APPROVED','REJECTED') AND decided_by_user_id IS NOT NULL AND decided_at_utc IS NOT NULL AND cancelled_at_utc IS NULL)
+            OR (status='CANCELLED' AND decided_by_user_id IS NULL AND decided_at_utc IS NULL AND cancelled_at_utc IS NOT NULL)
+        ),
+        CONSTRAINT CK_patient_access_requests_approved_patient CHECK
+            (status<>'APPROVED' OR patient_id IS NOT NULL),
+        CONSTRAINT CK_patient_access_requests_expiry CHECK (expires_at_utc>created_at_utc)
+    );
+END;
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.patient_access_requests') AND name=N'IX_patient_access_requests_staff_queue')
+    CREATE INDEX IX_patient_access_requests_staff_queue
+    ON dbo.patient_access_requests(branch_id,status,created_at_utc)
+    INCLUDE (public_id,requester_user_id,patient_id,relationship_type,expires_at_utc);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.patient_access_requests') AND name=N'IX_patient_access_requests_requester')
+    CREATE INDEX IX_patient_access_requests_requester
+    ON dbo.patient_access_requests(requester_user_id,created_at_utc DESC)
+    INCLUDE (public_id,status,relationship_type,expires_at_utc);
 GO
 
 IF OBJECT_ID(N'dbo.patient_emergency_contacts', N'U') IS NULL
@@ -2372,6 +2461,7 @@ FROM (VALUES
     ('MASTER_DATA_MANAGE',    N'Quản lý danh mục',               'MASTER',     N'Chi nhánh, phòng, dịch vụ và thuốc'),
     ('PATIENTS_MANAGE',       N'Quản lý bệnh nhân',              'PATIENT',    N'Tạo và cập nhật hồ sơ hành chính'),
     ('PATIENTS_VIEW',         N'Xem hồ sơ bệnh nhân',            'PATIENT',    N'Tra cứu bệnh nhân theo phạm vi'),
+    ('PATIENT_PORTAL_LINK_MANAGE', N'Duyệt liên kết cổng bệnh nhân', 'PATIENT', N'Duyệt, từ chối và thu hồi quyền truy cập hồ sơ'),
     ('APPOINTMENTS_SELF',     N'Đặt lịch cá nhân',               'SCHEDULE',   N'Đặt/hủy lịch cho hồ sơ được ủy quyền'),
     ('APPOINTMENTS_MANAGE',   N'Quản lý lịch hẹn',               'SCHEDULE',   N'Đặt, xác nhận, đổi và hủy lịch'),
     ('APPOINTMENTS_EXPIRE',   N'Hết hạn giữ chỗ',                'SCHEDULE',   N'Tác vụ nền giải phóng lịch chờ'),
@@ -2409,6 +2499,7 @@ WHERE r.role_code = 'ADMIN'
     SELECT * FROM (VALUES
         ('MANAGER','USERS_MANAGE'), ('MANAGER','MASTER_DATA_MANAGE'),
         ('MANAGER','PATIENTS_MANAGE'), ('MANAGER','PATIENTS_VIEW'),
+        ('MANAGER','PATIENT_PORTAL_LINK_MANAGE'),
         ('MANAGER','APPOINTMENTS_MANAGE'), ('MANAGER','SCHEDULES_MANAGE'),
         ('MANAGER','QUEUE_MANAGE'), ('MANAGER','ENCOUNTERS_CREATE'),
         ('MANAGER','BILLING_MANAGE'), ('MANAGER','REPORTS_VIEW'),
@@ -2419,6 +2510,7 @@ WHERE r.role_code = 'ADMIN'
         ('NURSE','PATIENTS_VIEW'), ('NURSE','QUEUE_MANAGE'),
         ('NURSE','ENCOUNTERS_CREATE'), ('NURSE','ENCOUNTERS_CLINICAL'),
         ('RECEPTIONIST','PATIENTS_MANAGE'), ('RECEPTIONIST','PATIENTS_VIEW'),
+        ('RECEPTIONIST','PATIENT_PORTAL_LINK_MANAGE'),
         ('RECEPTIONIST','APPOINTMENTS_MANAGE'), ('RECEPTIONIST','QUEUE_MANAGE'),
         ('RECEPTIONIST','ENCOUNTERS_CREATE'),
         ('PHARMACIST','PATIENTS_VIEW'), ('PHARMACIST','PHARMACY_DISPENSE'),
@@ -2442,6 +2534,18 @@ GO
 /*=============================================================================
   11. VIEW VẬN HÀNH VÀ ĐỐI SOÁT
 =============================================================================*/
+
+CREATE OR ALTER VIEW dbo.v_auth_patient_reference_v1
+AS
+SELECT
+    patient_id,
+    public_id,
+    patient_code,
+    full_name,
+    date_of_birth,
+    status
+FROM dbo.patients;
+GO
 
 CREATE OR ALTER VIEW dbo.v_available_appointment_slots
 AS
@@ -4655,8 +4759,8 @@ BEGIN
         SELECT @patient_public_id=public_id FROM dbo.patients WHERE patient_id=@patient_id;
         INSERT dbo.user_patient_access
             (user_id,patient_id,relationship_type,status,is_booking_allowed,
-             verified_by_user_id,verified_at_utc)
-        VALUES(@user_id,@patient_id,'SELF','ACTIVE',1,@user_id,SYSUTCDATETIME());
+             verified_by_user_id,verified_branch_id,verified_at_utc)
+        VALUES(@user_id,@patient_id,'SELF','ACTIVE',1,@user_id,@branch_id,SYSUTCDATETIME());
         UPDATE dbo.patient_registration_challenges
            SET consumed_at_utc=SYSUTCDATETIME(),otp_hash=CONVERT(binary(32),0x00)
          WHERE registration_challenge_id=@registration_challenge_id;
@@ -4672,6 +4776,415 @@ BEGIN
         IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
         THROW;
     END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_auth_request_patient_link
+    @actor_user_id bigint,
+    @branch_id bigint,
+    @patient_code varchar(30),
+    @date_of_birth date,
+    @relationship_type varchar(20),
+    @request_note nvarchar(500) = NULL,
+    @idempotency_key uniqueidentifier,
+    @request_hash binary(32),
+    @expires_at_utc datetime2(3),
+    @max_requests_per_day smallint = 5,
+    @request_public_id uniqueidentifier OUTPUT,
+    @created bit OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    SET @request_public_id=NULL;
+    SET @created=0;
+
+    EXEC dbo.sp_assert_permission @actor_user_id,'APPOINTMENTS_SELF',@branch_id;
+    IF NOT EXISTS
+    (
+        SELECT 1 FROM dbo.user_roles ur
+        JOIN dbo.roles role ON role.role_id=ur.role_id AND role.role_code='PATIENT' AND role.is_active=1
+        WHERE ur.user_id=@actor_user_id AND ur.is_active=1
+          AND ur.valid_from_utc<=SYSUTCDATETIME()
+          AND (ur.valid_to_utc IS NULL OR ur.valid_to_utc>SYSUTCDATETIME())
+    ) THROW 51002,N'Chức năng chỉ dành cho tài khoản bệnh nhân.',1;
+    IF NOT EXISTS (SELECT 1 FROM dbo.branches WHERE branch_id=@branch_id AND is_active=1)
+        THROW 53500,N'Chi nhánh tiếp nhận yêu cầu không hợp lệ.',1;
+    IF NULLIF(LTRIM(RTRIM(@patient_code)),'') IS NULL OR @date_of_birth IS NULL
+        THROW 53501,N'Mã bệnh nhân và ngày sinh là bắt buộc.',1;
+    IF @relationship_type NOT IN ('SELF','CHILD','SPOUSE','PARENT','GUARDIAN','OTHER')
+        THROW 53502,N'Quan hệ với bệnh nhân không hợp lệ.',1;
+    IF @relationship_type<>'SELF' AND LEN(LTRIM(RTRIM(COALESCE(@request_note,N''))))<3
+        THROW 53503,N'Yêu cầu liên kết người thân phải có ghi chú xác minh.',1;
+    IF @expires_at_utc<=DATEADD(MINUTE,5,SYSUTCDATETIME())
+        THROW 53504,N'Thời hạn yêu cầu liên kết không hợp lệ.',1;
+    IF @max_requests_per_day NOT BETWEEN 1 AND 20
+        THROW 53523,N'Giới hạn yêu cầu liên kết không hợp lệ.',1;
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        DECLARE @lock_result int,@lock_resource nvarchar(255)=CONCAT(N'patient-link-request:user:',@actor_user_id);
+        EXEC @lock_result=sys.sp_getapplock
+            @Resource=@lock_resource,
+            @LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000;
+        IF @lock_result<0 THROW 53505,N'Không thể khóa luồng yêu cầu liên kết.',1;
+
+        DECLARE @existing_hash binary(32);
+        SELECT @request_public_id=public_id,@existing_hash=request_hash
+        FROM dbo.patient_access_requests WITH (UPDLOCK,HOLDLOCK)
+        WHERE requester_user_id=@actor_user_id AND idempotency_key=@idempotency_key;
+        IF @request_public_id IS NOT NULL
+        BEGIN
+            IF @existing_hash<>@request_hash
+                THROW 53506,N'Idempotency key đã được dùng cho nội dung khác.',1;
+            COMMIT TRANSACTION;
+            RETURN;
+        END;
+
+        IF (SELECT COUNT_BIG(*) FROM dbo.patient_access_requests WITH (UPDLOCK,HOLDLOCK)
+            WHERE requester_user_id=@actor_user_id
+              AND created_at_utc>=DATEADD(HOUR,-24,SYSUTCDATETIME()))>=@max_requests_per_day
+            THROW 53507,N'Đã vượt giới hạn yêu cầu liên kết trong ngày.',1;
+
+        DECLARE @normalized_code varchar(30)=UPPER(LTRIM(RTRIM(@patient_code))),@patient_id bigint;
+        SELECT @patient_id=patient_id
+        FROM dbo.v_auth_patient_reference_v1
+        WHERE patient_code=@normalized_code AND date_of_birth=@date_of_birth AND status='ACTIVE';
+
+        DECLARE @visible_chars int=IIF(LEN(@normalized_code)>4,4,LEN(@normalized_code));
+        DECLARE @patient_reference_mask varchar(30)=CONCAT(
+            REPLICATE('*',LEN(@normalized_code)-@visible_chars),RIGHT(@normalized_code,@visible_chars));
+        SET @request_public_id=NEWID();
+        INSERT dbo.patient_access_requests
+            (public_id,requester_user_id,branch_id,patient_id,patient_reference_mask,
+             relationship_type,request_note,idempotency_key,request_hash,expires_at_utc)
+        VALUES
+            (@request_public_id,@actor_user_id,@branch_id,@patient_id,@patient_reference_mask,
+             @relationship_type,NULLIF(LTRIM(RTRIM(@request_note)),N''),@idempotency_key,
+             @request_hash,@expires_at_utc);
+        SET @created=1;
+
+        DECLARE @request_entity_id varchar(100)=CONVERT(varchar(36),@request_public_id);
+        DECLARE @request_audit_json nvarchar(max)=CONCAT(
+            N'{"relationship":"',@relationship_type,N'","branchId":',@branch_id,N'}');
+        EXEC dbo.sp_write_audit @actor_user_id=@actor_user_id,@branch_id=@branch_id,
+            @action_code='PATIENT_LINK_REQUESTED',@entity_type='PATIENT_ACCESS_REQUEST',
+            @entity_id=@request_entity_id,@new_values_json=@request_audit_json;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_auth_get_patient_access
+    @actor_user_id bigint
+AS
+BEGIN
+    SET NOCOUNT ON;
+    EXEC dbo.sp_assert_permission @actor_user_id,'APPOINTMENTS_SELF',NULL;
+    IF NOT EXISTS
+    (
+        SELECT 1 FROM dbo.user_roles ur
+        JOIN dbo.roles role ON role.role_id=ur.role_id AND role.role_code='PATIENT' AND role.is_active=1
+        WHERE ur.user_id=@actor_user_id AND ur.is_active=1
+          AND ur.valid_from_utc<=SYSUTCDATETIME()
+          AND (ur.valid_to_utc IS NULL OR ur.valid_to_utc>SYSUTCDATETIME())
+    ) THROW 51002,N'Chức năng chỉ dành cho tài khoản bệnh nhân.',1;
+
+    SELECT
+        CONVERT(varchar(36),a.public_id) AS public_id,
+        CONVERT(varchar(36),p.public_id) AS patient_public_id,
+        p.patient_code,p.full_name,p.date_of_birth,a.relationship_type,a.status,
+        a.is_booking_allowed,
+        CONVERT(varchar(20),IIF(a.user_id=@actor_user_id,'OWN','DELEGATED')) AS access_kind,
+        CONVERT(varchar(36),u.public_id) AS linked_user_public_id,
+        u.display_name AS linked_user_display_name,
+        CONVERT(varchar(36),b.public_id) AS verified_branch_public_id,
+        b.branch_name AS verified_branch_name,
+        a.verified_at_utc,
+        CONVERT(bit,IIF(a.relationship_type<>'SELF' AND
+          (a.user_id=@actor_user_id OR EXISTS
+          (SELECT 1 FROM dbo.user_patient_access owner_access
+           WHERE owner_access.user_id=@actor_user_id AND owner_access.patient_id=a.patient_id
+             AND owner_access.relationship_type='SELF' AND owner_access.status='ACTIVE')),1,0)) AS can_revoke,
+        a.row_ver
+    FROM dbo.user_patient_access a
+    JOIN dbo.v_auth_patient_reference_v1 p ON p.patient_id=a.patient_id AND p.status='ACTIVE'
+    JOIN dbo.users u ON u.user_id=a.user_id AND u.deleted_at_utc IS NULL
+    LEFT JOIN dbo.branches b ON b.branch_id=a.verified_branch_id
+    WHERE a.status='ACTIVE' AND
+      (a.user_id=@actor_user_id OR EXISTS
+       (SELECT 1 FROM dbo.user_patient_access owner_access
+        WHERE owner_access.user_id=@actor_user_id AND owner_access.patient_id=a.patient_id
+          AND owner_access.relationship_type='SELF' AND owner_access.status='ACTIVE'))
+    ORDER BY IIF(a.user_id=@actor_user_id,0,1),p.full_name,u.display_name;
+
+    SELECT
+        CONVERT(varchar(36),r.public_id) AS public_id,
+        CONVERT(varchar(36),b.public_id) AS branch_public_id,b.branch_code,b.branch_name,
+        r.patient_reference_mask,r.relationship_type,r.request_note,
+        CONVERT(varchar(20),CASE WHEN r.status='PENDING' AND r.expires_at_utc<=SYSUTCDATETIME()
+            THEN 'EXPIRED' ELSE r.status END) AS status,
+        r.decision_reason,r.created_at_utc,r.expires_at_utc,r.decided_at_utc,
+        CONVERT(varchar(36),p.public_id) AS patient_public_id,p.patient_code,p.full_name,
+        r.row_ver
+    FROM dbo.patient_access_requests r
+    JOIN dbo.branches b ON b.branch_id=r.branch_id
+    LEFT JOIN dbo.v_auth_patient_reference_v1 p ON p.patient_id=r.patient_id AND r.status='APPROVED'
+    WHERE r.requester_user_id=@actor_user_id
+    ORDER BY r.created_at_utc DESC;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_auth_cancel_patient_link_request
+    @actor_user_id bigint,
+    @request_public_id uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    EXEC dbo.sp_assert_permission @actor_user_id,'APPOINTMENTS_SELF',NULL;
+    IF NOT EXISTS
+    (
+        SELECT 1 FROM dbo.user_roles ur
+        JOIN dbo.roles role ON role.role_id=ur.role_id AND role.role_code='PATIENT' AND role.is_active=1
+        WHERE ur.user_id=@actor_user_id AND ur.is_active=1
+          AND ur.valid_from_utc<=SYSUTCDATETIME()
+          AND (ur.valid_to_utc IS NULL OR ur.valid_to_utc>SYSUTCDATETIME())
+    ) THROW 51002,N'Chức năng chỉ dành cho tài khoản bệnh nhân.',1;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        DECLARE @request_id bigint,@status varchar(20),@branch_id bigint;
+        SELECT @request_id=patient_access_request_id,@status=status,@branch_id=branch_id
+        FROM dbo.patient_access_requests WITH (UPDLOCK,HOLDLOCK)
+        WHERE public_id=@request_public_id AND requester_user_id=@actor_user_id;
+        IF @request_id IS NULL THROW 53508,N'Không tìm thấy yêu cầu liên kết.',1;
+        IF @status='CANCELLED' BEGIN COMMIT TRANSACTION; RETURN; END;
+        IF @status<>'PENDING' THROW 53509,N'Yêu cầu đã được xử lý nên không thể hủy.',1;
+        UPDATE dbo.patient_access_requests
+           SET status='CANCELLED',cancelled_at_utc=SYSUTCDATETIME()
+         WHERE patient_access_request_id=@request_id;
+        DECLARE @entity_id varchar(100)=CONVERT(varchar(36),@request_public_id);
+        EXEC dbo.sp_write_audit @actor_user_id=@actor_user_id,@branch_id=@branch_id,
+            @action_code='PATIENT_LINK_REQUEST_CANCELLED',@entity_type='PATIENT_ACCESS_REQUEST',
+            @entity_id=@entity_id,@new_values_json=N'{"status":"CANCELLED"}';
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_auth_decide_patient_link_request
+    @actor_user_id bigint,
+    @request_public_id uniqueidentifier,
+    @decision varchar(10),
+    @reason nvarchar(500),
+    @expected_row_ver binary(8),
+    @link_public_id uniqueidentifier OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    SET @link_public_id=NULL;
+    IF @decision NOT IN ('APPROVED','REJECTED')
+        THROW 53510,N'Quyết định yêu cầu liên kết không hợp lệ.',1;
+    IF LEN(LTRIM(RTRIM(COALESCE(@reason,N''))))<3
+        THROW 53511,N'Bắt buộc nhập căn cứ duyệt hoặc lý do từ chối.',1;
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        DECLARE @request_id bigint,@requester_user_id bigint,@branch_id bigint,@patient_id bigint,
+                @relationship_type varchar(20),@status varchar(20),@expires_at_utc datetime2(3),
+                @actual_row_ver binary(8);
+        SELECT @request_id=patient_access_request_id,@requester_user_id=requester_user_id,
+               @branch_id=branch_id,@patient_id=patient_id,@relationship_type=relationship_type,
+               @status=status,@expires_at_utc=expires_at_utc,@actual_row_ver=row_ver
+        FROM dbo.patient_access_requests WITH (UPDLOCK,HOLDLOCK)
+        WHERE public_id=@request_public_id;
+        IF @request_id IS NULL OR @patient_id IS NULL
+            THROW 53512,N'Không tìm thấy yêu cầu liên kết có thể xử lý.',1;
+        EXEC dbo.sp_assert_permission @actor_user_id,'PATIENT_PORTAL_LINK_MANAGE',@branch_id;
+        IF @actual_row_ver<>@expected_row_ver
+            THROW 53513,N'Yêu cầu đã được người khác cập nhật.',1;
+        IF @status<>'PENDING' OR @expires_at_utc<=SYSUTCDATETIME()
+            THROW 53514,N'Yêu cầu không còn ở trạng thái chờ xử lý.',1;
+        IF NOT EXISTS (SELECT 1 FROM dbo.v_auth_patient_reference_v1 WHERE patient_id=@patient_id AND status='ACTIVE')
+            THROW 53515,N'Hồ sơ bệnh nhân không còn hoạt động.',1;
+        IF NOT EXISTS
+        (
+            SELECT 1 FROM dbo.users u
+            JOIN dbo.user_roles ur ON ur.user_id=u.user_id AND ur.is_active=1
+              AND ur.valid_from_utc<=SYSUTCDATETIME()
+              AND (ur.valid_to_utc IS NULL OR ur.valid_to_utc>SYSUTCDATETIME())
+            JOIN dbo.roles role ON role.role_id=ur.role_id AND role.role_code='PATIENT' AND role.is_active=1
+            WHERE u.user_id=@requester_user_id AND u.status='ACTIVE' AND u.deleted_at_utc IS NULL
+              AND (u.locked_until_utc IS NULL OR u.locked_until_utc<=SYSUTCDATETIME())
+        ) THROW 53516,N'Tài khoản yêu cầu không còn đủ điều kiện.',1;
+
+        IF @decision='APPROVED'
+        BEGIN
+            DECLARE @link_id bigint,@link_status varchar(20),@existing_relationship varchar(20);
+            SELECT @link_id=user_patient_access_id,@link_public_id=public_id,
+                   @link_status=status,@existing_relationship=relationship_type
+            FROM dbo.user_patient_access WITH (UPDLOCK,HOLDLOCK)
+            WHERE user_id=@requester_user_id AND patient_id=@patient_id;
+            IF @link_id IS NOT NULL AND @link_status='ACTIVE' AND @existing_relationship<>@relationship_type
+                THROW 53517,N'Tài khoản đã có một quan hệ khác với hồ sơ này.',1;
+            IF @link_id IS NULL
+            BEGIN
+                SET @link_public_id=NEWID();
+                INSERT dbo.user_patient_access
+                    (public_id,user_id,patient_id,relationship_type,status,is_booking_allowed,
+                     verified_by_user_id,verified_branch_id,verified_at_utc)
+                VALUES
+                    (@link_public_id,@requester_user_id,@patient_id,@relationship_type,'ACTIVE',1,
+                     @actor_user_id,@branch_id,SYSUTCDATETIME());
+            END
+            ELSE IF @link_status<>'ACTIVE'
+            BEGIN
+                UPDATE dbo.user_patient_access
+                   SET relationship_type=@relationship_type,status='ACTIVE',is_booking_allowed=1,
+                       verified_by_user_id=@actor_user_id,verified_branch_id=@branch_id,
+                       verified_at_utc=SYSUTCDATETIME(),revoked_by_user_id=NULL,
+                       revoked_at_utc=NULL,revocation_reason=NULL
+                 WHERE user_patient_access_id=@link_id;
+            END;
+        END;
+
+        UPDATE dbo.patient_access_requests
+           SET status=@decision,decision_reason=LTRIM(RTRIM(@reason)),
+               decided_by_user_id=@actor_user_id,decided_at_utc=SYSUTCDATETIME()
+         WHERE patient_access_request_id=@request_id AND row_ver=@expected_row_ver;
+        IF @@ROWCOUNT<>1 THROW 53513,N'Yêu cầu đã được người khác cập nhật.',1;
+
+        DECLARE @decision_entity_id varchar(100)=CONVERT(varchar(36),@request_public_id);
+        DECLARE @decision_audit_json nvarchar(max)=CONCAT(
+            N'{"status":"',@decision,N'","relationship":"',@relationship_type,N'"}');
+        EXEC dbo.sp_write_audit @actor_user_id=@actor_user_id,@branch_id=@branch_id,
+            @action_code='PATIENT_LINK_REQUEST_DECIDED',@entity_type='PATIENT_ACCESS_REQUEST',
+            @entity_id=@decision_entity_id,@new_values_json=@decision_audit_json;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_auth_revoke_patient_link
+    @actor_user_id bigint,
+    @link_public_id uniqueidentifier,
+    @reason nvarchar(500)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    EXEC dbo.sp_assert_actor @actor_user_id;
+    IF LEN(LTRIM(RTRIM(COALESCE(@reason,N''))))<3
+        THROW 53518,N'Bắt buộc nhập lý do thu hồi quyền truy cập.',1;
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        DECLARE @link_id bigint,@target_user_id bigint,@patient_id bigint,@relationship_type varchar(20),
+                @status varchar(20),@verified_branch_id bigint;
+        SELECT @link_id=user_patient_access_id,@target_user_id=user_id,@patient_id=patient_id,
+               @relationship_type=relationship_type,@status=status,@verified_branch_id=verified_branch_id
+        FROM dbo.user_patient_access WITH (UPDLOCK,HOLDLOCK)
+        WHERE public_id=@link_public_id;
+        IF @link_id IS NULL THROW 53519,N'Không tìm thấy quyền truy cập hồ sơ.',1;
+        IF @status='REVOKED' BEGIN COMMIT TRANSACTION; RETURN; END;
+        IF @status<>'ACTIVE' THROW 53520,N'Quyền truy cập không còn hoạt động.',1;
+
+        DECLARE @is_own_non_self bit=IIF(@target_user_id=@actor_user_id AND @relationship_type<>'SELF',1,0);
+        DECLARE @is_self_owner bit=IIF(@relationship_type<>'SELF' AND EXISTS
+        (
+            SELECT 1 FROM dbo.user_patient_access owner_access
+            WHERE owner_access.user_id=@actor_user_id AND owner_access.patient_id=@patient_id
+              AND owner_access.relationship_type='SELF' AND owner_access.status='ACTIVE'
+        ),1,0);
+        DECLARE @is_staff_allowed bit=IIF(EXISTS
+        (
+            SELECT 1
+            FROM dbo.users u
+            JOIN dbo.user_roles ur ON ur.user_id=u.user_id AND ur.is_active=1
+              AND ur.valid_from_utc<=SYSUTCDATETIME()
+              AND (ur.valid_to_utc IS NULL OR ur.valid_to_utc>SYSUTCDATETIME())
+            JOIN dbo.roles role ON role.role_id=ur.role_id AND role.is_active=1
+            LEFT JOIN dbo.role_permissions rp ON rp.role_id=role.role_id
+            LEFT JOIN dbo.permissions permission ON permission.permission_id=rp.permission_id
+            WHERE u.user_id=@actor_user_id AND u.status='ACTIVE' AND u.deleted_at_utc IS NULL
+              AND (u.locked_until_utc IS NULL OR u.locked_until_utc<=SYSUTCDATETIME())
+              AND (ur.branch_id IS NULL OR ur.branch_id=@verified_branch_id)
+              AND (role.role_code='ADMIN' OR permission.permission_code='PATIENT_PORTAL_LINK_MANAGE')
+        ),1,0);
+        IF @is_own_non_self=0 AND @is_self_owner=0 AND @is_staff_allowed=0
+            THROW 51002,N'Bạn không có quyền thu hồi liên kết này.',1;
+
+        UPDATE dbo.user_patient_access
+           SET status='REVOKED',is_booking_allowed=0,revoked_by_user_id=@actor_user_id,
+               revoked_at_utc=SYSUTCDATETIME(),revocation_reason=LTRIM(RTRIM(@reason))
+         WHERE user_patient_access_id=@link_id;
+        DECLARE @revoke_entity_id varchar(100)=CONVERT(varchar(36),@link_public_id);
+        DECLARE @revoke_audit_json nvarchar(max)=CONCAT(
+            N'{"relationship":"',@relationship_type,N'","status":"REVOKED"}');
+        EXEC dbo.sp_write_audit @actor_user_id=@actor_user_id,@branch_id=@verified_branch_id,
+            @action_code='PATIENT_LINK_REVOKED',@entity_type='PATIENT_ACCESS',
+            @entity_id=@revoke_entity_id,@new_values_json=@revoke_audit_json;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_auth_list_patient_link_requests
+    @actor_user_id bigint,
+    @branch_id bigint,
+    @status varchar(20) = NULL,
+    @offset int = 0,
+    @page_size int = 20
+AS
+BEGIN
+    SET NOCOUNT ON;
+    EXEC dbo.sp_assert_permission @actor_user_id,'PATIENT_PORTAL_LINK_MANAGE',@branch_id;
+    IF @status IS NOT NULL AND @status NOT IN ('PENDING','APPROVED','REJECTED','CANCELLED','EXPIRED')
+        THROW 53521,N'Trạng thái lọc yêu cầu không hợp lệ.',1;
+    IF @offset<0 OR @page_size NOT BETWEEN 1 AND 100
+        THROW 53522,N'Tham số phân trang không hợp lệ.',1;
+
+    ;WITH request_queue AS
+    (
+        SELECT r.*,
+            CONVERT(varchar(20),CASE WHEN r.status='PENDING' AND r.expires_at_utc<=SYSUTCDATETIME()
+                THEN 'EXPIRED' ELSE r.status END) AS effective_status
+        FROM dbo.patient_access_requests r
+        WHERE r.branch_id=@branch_id AND r.patient_id IS NOT NULL
+    )
+    SELECT COUNT_BIG(*) OVER() AS total_count,
+        CONVERT(varchar(36),r.public_id) AS public_id,
+        CONVERT(varchar(36),b.public_id) AS branch_public_id,b.branch_code,b.branch_name,
+        CONVERT(varchar(36),u.public_id) AS requester_public_id,u.display_name AS requester_display_name,
+        u.email AS requester_email,u.phone AS requester_phone,
+        CONVERT(varchar(36),p.public_id) AS patient_public_id,p.patient_code,
+        p.full_name AS patient_full_name,p.date_of_birth,
+        r.patient_reference_mask,r.relationship_type,r.request_note,r.effective_status AS status,
+        r.decision_reason,r.created_at_utc,r.expires_at_utc,r.decided_at_utc,r.row_ver
+    FROM request_queue r
+    JOIN dbo.branches b ON b.branch_id=r.branch_id
+    JOIN dbo.users u ON u.user_id=r.requester_user_id
+    JOIN dbo.v_auth_patient_reference_v1 p ON p.patient_id=r.patient_id
+    WHERE @status IS NULL OR r.effective_status=@status
+    ORDER BY IIF(r.effective_status='PENDING',0,1),r.created_at_utc
+    OFFSET @offset ROWS FETCH NEXT @page_size ROWS ONLY;
 END;
 GO
 
@@ -5297,6 +5810,10 @@ BEGIN
     SET XACT_ABORT ON;
     EXEC dbo.sp_assert_permission @actor_user_id, 'PATIENTS_MANAGE', @branch_id;
 
+    -- Liên kết portal thuộc Auth Service; Clinic phải gọi workflow riêng sau khi tạo patient.
+    IF @portal_user_id IS NOT NULL
+        THROW 53139, N'Không tạo liên kết portal từ lệnh tạo bệnh nhân.', 1;
+
     DECLARE @business_date date;
     EXEC dbo.sp_get_branch_business_date @branch_id, NULL, @business_date OUTPUT;
     IF @date_of_birth > @business_date
@@ -5315,18 +5832,6 @@ BEGIN
             (@patient_code, @full_name, @date_of_birth, @gender, @national_id,
              @health_insurance_no, @phone, @email, @address_line, @province, @actor_user_id);
         SET @patient_id = SCOPE_IDENTITY();
-
-        IF @portal_user_id IS NOT NULL
-        BEGIN
-            IF NOT EXISTS (SELECT 1 FROM dbo.users WHERE user_id = @portal_user_id AND status = 'ACTIVE')
-                THROW 53014, N'Tài khoản cổng bệnh nhân không hợp lệ.', 1;
-            INSERT dbo.user_patient_access
-                (user_id, patient_id, relationship_type, status, is_booking_allowed,
-                 verified_by_user_id, verified_at_utc)
-            VALUES
-                (@portal_user_id, @patient_id, @relationship_type, 'ACTIVE', 1,
-                 @actor_user_id, SYSUTCDATETIME());
-        END;
 
         DECLARE @patient_entity_id varchar(100) = CONVERT(varchar(100), @patient_id);
         DECLARE @patient_audit_json nvarchar(max) = CONCAT(N'{"patient_code":"', @patient_code, N'"}');
@@ -5376,10 +5881,10 @@ BEGIN
 
         INSERT dbo.user_patient_access
             (user_id, patient_id, relationship_type, status, is_booking_allowed,
-             verified_by_user_id, verified_at_utc)
+             verified_by_user_id, verified_branch_id, verified_at_utc)
         VALUES
             (@user_id, @patient_id, @relationship_type, 'ACTIVE', 1,
-             @actor_user_id, SYSUTCDATETIME());
+             @actor_user_id, @branch_id, SYSUTCDATETIME());
 
         DECLARE @portal_entity_id varchar(100) = CONVERT(varchar(100), @user_id);
         DECLARE @portal_audit_json nvarchar(max) = CONCAT(N'{"patient_id":', @patient_id, N'}');
@@ -5420,10 +5925,10 @@ BEGIN
 
         INSERT dbo.user_patient_access
             (user_id, patient_id, relationship_type, status, is_booking_allowed,
-             verified_by_user_id, verified_at_utc)
+             verified_by_user_id, verified_branch_id, verified_at_utc)
         VALUES
             (@portal_user_id, @patient_id, @relationship_type, 'ACTIVE',
-             @is_booking_allowed, @actor_user_id, SYSUTCDATETIME());
+             @is_booking_allowed, @actor_user_id, @branch_id, SYSUTCDATETIME());
 
         DECLARE @link_entity_id varchar(100) = CONVERT(varchar(100), @patient_id);
         DECLARE @link_audit_json nvarchar(max) =
@@ -8207,12 +8712,21 @@ GRANT EXECUTE ON OBJECT::dbo.sp_auth_change_password TO auth_core_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_auth_create_patient_registration TO auth_core_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_auth_cancel_patient_registration TO auth_core_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_auth_verify_patient_registration TO auth_core_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_auth_request_patient_link TO auth_core_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_auth_get_patient_access TO auth_core_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_auth_cancel_patient_link_request TO auth_core_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_auth_decide_patient_link_request TO auth_core_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_auth_revoke_patient_link TO auth_core_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_auth_list_patient_link_requests TO auth_core_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_create_staff_account TO auth_core_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_update_staff_account TO auth_core_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_set_staff_account_status TO auth_core_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_unlock_staff_account TO auth_core_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_grant_user_role TO auth_core_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_revoke_user_role TO auth_core_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_create_patient_portal_account TO auth_core_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_link_user_patient TO auth_core_executor;
+GRANT SELECT ON OBJECT::dbo.v_auth_patient_reference_v1 TO auth_core_executor;
 GRANT SELECT ON OBJECT::dbo.users TO auth_core_executor;
 GRANT SELECT ON OBJECT::dbo.user_roles TO auth_core_executor;
 GRANT SELECT ON OBJECT::dbo.roles TO auth_core_executor;
@@ -8234,6 +8748,12 @@ REVOKE EXECUTE ON OBJECT::dbo.sp_auth_change_password FROM clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_auth_create_patient_registration FROM clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_auth_cancel_patient_registration FROM clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_auth_verify_patient_registration FROM clinic_api_executor;
+REVOKE EXECUTE ON OBJECT::dbo.sp_auth_request_patient_link FROM clinic_api_executor;
+REVOKE EXECUTE ON OBJECT::dbo.sp_auth_get_patient_access FROM clinic_api_executor;
+REVOKE EXECUTE ON OBJECT::dbo.sp_auth_cancel_patient_link_request FROM clinic_api_executor;
+REVOKE EXECUTE ON OBJECT::dbo.sp_auth_decide_patient_link_request FROM clinic_api_executor;
+REVOKE EXECUTE ON OBJECT::dbo.sp_auth_revoke_patient_link FROM clinic_api_executor;
+REVOKE EXECUTE ON OBJECT::dbo.sp_auth_list_patient_link_requests FROM clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_create_room TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_create_service TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_assign_doctor_service TO clinic_api_executor;
@@ -8241,8 +8761,8 @@ GRANT EXECUTE ON OBJECT::dbo.sp_create_medicine_batch TO clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_grant_user_role FROM clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_revoke_user_role FROM clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_create_patient TO clinic_api_executor;
-GRANT EXECUTE ON OBJECT::dbo.sp_create_patient_portal_account TO clinic_api_executor;
-GRANT EXECUTE ON OBJECT::dbo.sp_link_user_patient TO clinic_api_executor;
+REVOKE EXECUTE ON OBJECT::dbo.sp_create_patient_portal_account FROM clinic_api_executor;
+REVOKE EXECUTE ON OBJECT::dbo.sp_link_user_patient FROM clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_create_doctor_working_schedule TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_generate_doctor_slots TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_book_appointment TO clinic_api_executor;

@@ -20,6 +20,7 @@ export type RootStackParamList = {
   Login: { identifier?: string } | undefined;
   Register: undefined;
   PatientHome: undefined;
+  PatientProfiles: undefined;
   Booking: undefined;
 };
 
@@ -253,7 +254,8 @@ export function PatientHomeScreen({ user, onLogout, navigation }: {
   return <SafeAreaView style={styles.screen}><View style={styles.hero}>
     <Text style={styles.eyebrow}>TÀI KHOẢN ĐÃ XÁC MINH</Text>
     <Text style={styles.heading}>Xin chào, {user.displayName}</Text>
-    <Text style={styles.body}>Bạn đã đăng nhập bằng tài khoản bệnh nhân và có thể tiếp tục đến luồng đặt lịch.</Text>
+    <Text style={styles.body}>Quản lý các hồ sơ đã được xác minh trước khi đặt lịch cho bản thân hoặc người thân.</Text>
+    <SubmitButton label="Hồ sơ được ủy quyền" loading={false} onPress={() => navigation.navigate('PatientProfiles')} />
     <SubmitButton label="Đặt lịch khám" loading={false} onPress={() => navigation.navigate('Booking')} />
     <Pressable disabled={loggingOut} onPress={async () => {
       setLoggingOut(true);

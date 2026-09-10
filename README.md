@@ -94,11 +94,21 @@ AUTH_OTP_HASH_SECRET=replace-with-at-least-32-random-characters
 AUTH_OTP_DELIVERY_MODE=webhook
 AUTH_OTP_WEBHOOK_URL=https://notification.example.com/auth-otp
 AUTH_OTP_WEBHOOK_BEARER_TOKEN=replace-with-a-long-random-secret
+PATIENT_LINK_REQUEST_TTL_DAYS=7
+PATIENT_LINK_MAX_REQUESTS_PER_DAY=5
 ```
 
 Webhook OTP nhận `type=AUTH_OTP`, `channel`, `recipient`, `displayName`, `otp` và
 `expiresAtUtc`. OTP mặc định hết hạn sau 10 phút, tối đa năm lần thử và ba yêu cầu
 mỗi contact trong một giờ.
+
+Sau khi đăng nhập, bệnh nhân mở **Hồ sơ được ủy quyền** để xem hồ sơ có thể đặt
+lịch, gửi yêu cầu liên kết hồ sơ cũ/người thân bằng mã bệnh nhân + ngày sinh,
+hủy yêu cầu đang chờ hoặc thu hồi quyền không còn dùng. API luôn tiếp nhận yêu
+cầu theo cùng một cách dù thông tin có khớp hay không; chỉ yêu cầu khớp mới vào
+hàng đợi nhân viên. Lễ tân/Manager có permission `PATIENT_PORTAL_LINK_MANAGE`
+mở **Liên kết hồ sơ** trên Admin Web, đối chiếu giấy tờ rồi duyệt hoặc từ chối.
+Yêu cầu mặc định hết hạn sau 7 ngày và tối đa 5 yêu cầu mỗi tài khoản trong 24 giờ.
 
 Nếu SQL Server local chưa bật TCP/IP và bạn dùng Windows Authentication, đặt
 `SQL_SERVER=np:\\.\pipe\sql\query` trong `.env`. Xem thêm [be/README.md](./be/README.md).
@@ -121,6 +131,7 @@ sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\s
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\staff-safety.test.sql
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\password-lifecycle.test.sql
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\patient-registration.test.sql
+sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\patient-link.test.sql
 ```
 
 Chi tiết nghiệp vụ và thứ tự phát triển nằm trong [PROJECT_PLAN.md](./PROJECT_PLAN.md).

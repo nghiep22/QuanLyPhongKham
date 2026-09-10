@@ -98,19 +98,42 @@ Phạm vi đã hoàn thành:
   logout, refresh phiên và lưu access/refresh token bằng Expo SecureStore.
 - OpenAPI/generated client đã đồng bộ hai operation patient registration.
 
+## DONE — Slice 06: Patient Portal Linking
+
+Phạm vi đã hoàn thành:
+
+- Bệnh nhân xem toàn bộ hồ sơ đã được ủy quyền và các tài khoản người thân đang
+  được chia sẻ từ hồ sơ `SELF`; chỉ link `ACTIVE` mới xuất hiện để dùng đặt lịch.
+- Bệnh nhân gửi yêu cầu claim hồ sơ có sẵn bằng mã bệnh nhân, ngày sinh, quan hệ
+  và chi nhánh đối chiếu; liên kết người thân bắt buộc có ghi chú giấy tờ.
+- `Idempotency-Key` + request HMAC chống retry trùng/thay payload; giới hạn mặc
+  định 5 yêu cầu/tài khoản/24 giờ và thời hạn chờ 7 ngày.
+- Yêu cầu không khớp vẫn trả 202 và lưu decoy không có `patient_id`; decoy không
+  bao giờ xuất hiện trong hàng đợi nhân viên, tránh dò tồn tại hồ sơ.
+- Permission `PATIENT_PORTAL_LINK_MANAGE` tách riêng cho Manager/Receptionist.
+  Nhân viên chỉ thấy và xử lý yêu cầu tại chi nhánh có scope hiệu lực.
+- Duyệt/từ chối dùng `rowversion` để chống hai nhân viên xử lý đồng thời. Duyệt
+  kích hoạt hoặc phục hồi link nguyên tử; mọi quyết định và thu hồi đều có audit.
+- Bệnh nhân có thể hủy request đang chờ, tự thu hồi link người thân của mình hoặc
+  thu hồi người được chia sẻ từ hồ sơ `SELF`; không thể tự xóa link `SELF` chính.
+- `sp_create_patient` không còn được ghi `user_patient_access`; portal command
+  cũ và mới chỉ cấp cho `auth_core_executor`, Clinic bị thu hồi quyền thực thi.
+- Mobile có màn quản lý hồ sơ/yêu cầu/thu hồi; Admin Web có hàng đợi lọc theo
+  chi nhánh/trạng thái và form duyệt/từ chối; OpenAPI đồng bộ 9 operation.
+
 ### Bằng chứng xác minh local toàn bộ
 
 | Kiểm tra | Kết quả |
 |---|---|
-| Baseline SQL chạy lại idempotent | Đạt; 68 bảng, 12 view, 72 procedure, 29 trigger |
-| SQL auth session/staff RBAC/staff safety/password lifecycle/patient registration regression | PASS/PASS/PASS/PASS/PASS; rollback sạch, 0 user/patient/challenge test |
+| Baseline SQL chạy lại idempotent | Đạt; 69 bảng, 13 view, 78 procedure, 29 trigger |
+| SQL auth session/staff RBAC/staff safety/password lifecycle/patient registration/patient link regression | PASS/PASS/PASS/PASS/PASS/PASS; rollback sạch |
 | npm run openapi:check | Đạt; contract và generated code đồng bộ |
 | npm run lint | Đạt, không cảnh báo |
 | npm run typecheck | Đạt |
-| npm test | 33 test đạt (Auth 27, Mobile 3, Clinic 3) |
+| npm test | 40 test đạt (Auth 34, Mobile 3, Clinic 3) |
 | npm run build | Đạt; .NET 0 warning/0 error |
 | npm run doctor:mobile | 21/21 |
-| Gateway → Auth → SQL smoke test | Registration thiếu idempotency key trả 400; challenge lạ trả generic OTP 400; cả hai giữ request ID và `Cache-Control: no-store` |
+| Gateway → Auth → SQL smoke test | Registration thiếu idempotency key trả 400; challenge lạ trả generic OTP 400; ba route patient-access mới đi đúng Auth và trả 401 + request ID + `Cache-Control: no-store` khi thiếu token |
 | npm audit --omit=dev --audit-level=high | Đạt; 0 high/critical. Còn 17 moderate từ dependency bắc cầu Expo/React Navigation, chưa có bản sửa không breaking |
 
 ## Chưa hoàn thành
@@ -119,5 +142,4 @@ Phạm vi đã hoàn thành:
 - Lần chạy GitHub Actions và branch protection chỉ xác minh được sau khi push.
 - Theo dõi bản vá upstream cho 17 cảnh báo moderate bắc cầu Expo/React Navigation;
   không dùng `npm audit fix --force` vì công cụ đề xuất hạ Expo xuống bản breaking.
-- Phần còn lại của Phase 2: claim/duyệt/thu hồi liên kết hồ sơ cũ và người thân,
-  cùng các mục P1 như MFA/lịch sử session.
+- Các mục Auth P1 như MFA, quản lý permission động và lịch sử session.

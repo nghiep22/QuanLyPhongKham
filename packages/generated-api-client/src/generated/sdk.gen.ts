@@ -2,7 +2,7 @@
 
 import { client } from './client.gen.js';
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client/index.js';
-import type { ChangePasswordData, ChangePasswordErrors, ChangePasswordResponses, CreateStaffData, CreateStaffErrors, CreateStaffResponses, GetAuthJwksData, GetAuthJwksResponses, GetLivenessData, GetLivenessResponses, GetReadinessData, GetReadinessErrors, GetReadinessResponses, GetStaffData, GetStaffErrors, GetStaffReferenceDataData, GetStaffReferenceDataErrors, GetStaffReferenceDataResponses, GetStaffResponses, GrantStaffRoleData, GrantStaffRoleErrors, GrantStaffRoleResponses, ListStaffData, ListStaffErrors, ListStaffResponses, LoginData, LoginErrors, LoginResponses, LogoutAllData2, LogoutAllErrors, LogoutAllResponses, LogoutData2, LogoutErrors, LogoutResponses, RefreshSessionData, RefreshSessionErrors, RefreshSessionResponses, RequestPasswordResetData, RequestPasswordResetErrors, RequestPasswordResetResponses, RequestPatientRegistrationData, RequestPatientRegistrationErrors, RequestPatientRegistrationResponses, ResetPasswordData, ResetPasswordErrors, ResetPasswordResponses, RevokeStaffRoleData, RevokeStaffRoleErrors, RevokeStaffRoleResponses, SetStaffAccountStatusData, SetStaffAccountStatusErrors, SetStaffAccountStatusResponses, UnlockStaffAccountData, UnlockStaffAccountErrors, UnlockStaffAccountResponses, UpdateStaffData, UpdateStaffErrors, UpdateStaffResponses, VerifyPatientRegistrationData, VerifyPatientRegistrationErrors, VerifyPatientRegistrationResponses } from './types.gen.js';
+import type { CancelPatientLinkRequestData, CancelPatientLinkRequestErrors, CancelPatientLinkRequestResponses, ChangePasswordData, ChangePasswordErrors, ChangePasswordResponses, CreateStaffData, CreateStaffErrors, CreateStaffResponses, DecidePatientLinkRequestData, DecidePatientLinkRequestErrors, DecidePatientLinkRequestResponses, GetAuthJwksData, GetAuthJwksResponses, GetLivenessData, GetLivenessResponses, GetManagedPatientLinkReferenceDataData, GetManagedPatientLinkReferenceDataErrors, GetManagedPatientLinkReferenceDataResponses, GetPatientAccessData, GetPatientAccessErrors, GetPatientAccessResponses, GetPatientLinkReferenceDataData, GetPatientLinkReferenceDataErrors, GetPatientLinkReferenceDataResponses, GetReadinessData, GetReadinessErrors, GetReadinessResponses, GetStaffData, GetStaffErrors, GetStaffReferenceDataData, GetStaffReferenceDataErrors, GetStaffReferenceDataResponses, GetStaffResponses, GrantStaffRoleData, GrantStaffRoleErrors, GrantStaffRoleResponses, ListPatientLinkRequestsData, ListPatientLinkRequestsErrors, ListPatientLinkRequestsResponses, ListStaffData, ListStaffErrors, ListStaffResponses, LoginData, LoginErrors, LoginResponses, LogoutAllData2, LogoutAllErrors, LogoutAllResponses, LogoutData2, LogoutErrors, LogoutResponses, RefreshSessionData, RefreshSessionErrors, RefreshSessionResponses, RequestPasswordResetData, RequestPasswordResetErrors, RequestPasswordResetResponses, RequestPatientLinkData, RequestPatientLinkErrors, RequestPatientLinkResponses, RequestPatientRegistrationData, RequestPatientRegistrationErrors, RequestPatientRegistrationResponses, ResetPasswordData, ResetPasswordErrors, ResetPasswordResponses, RevokeOwnPatientLinkData, RevokeOwnPatientLinkErrors, RevokeOwnPatientLinkResponses, RevokePatientLinkAsStaffData, RevokePatientLinkAsStaffErrors, RevokePatientLinkAsStaffResponses, RevokeStaffRoleData, RevokeStaffRoleErrors, RevokeStaffRoleResponses, SetStaffAccountStatusData, SetStaffAccountStatusErrors, SetStaffAccountStatusResponses, UnlockStaffAccountData, UnlockStaffAccountErrors, UnlockStaffAccountResponses, UpdateStaffData, UpdateStaffErrors, UpdateStaffResponses, VerifyPatientRegistrationData, VerifyPatientRegistrationErrors, VerifyPatientRegistrationResponses } from './types.gen.js';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -140,6 +140,105 @@ export const requestPatientRegistration = <ThrowOnError extends boolean = false>
  */
 export const verifyPatientRegistration = <ThrowOnError extends boolean = false>(options: Options<VerifyPatientRegistrationData, ThrowOnError>): RequestResult<VerifyPatientRegistrationResponses, VerifyPatientRegistrationErrors, ThrowOnError> => (options.client ?? client).post<VerifyPatientRegistrationResponses, VerifyPatientRegistrationErrors, ThrowOnError>({
     url: '/api/v1/auth/patient-registration/verify',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List active branches that can receive a patient-link request
+ */
+export const getPatientLinkReferenceData = <ThrowOnError extends boolean = false>(options?: Options<GetPatientLinkReferenceDataData, ThrowOnError>): RequestResult<GetPatientLinkReferenceDataResponses, GetPatientLinkReferenceDataErrors, ThrowOnError> => (options?.client ?? client).get<GetPatientLinkReferenceDataResponses, GetPatientLinkReferenceDataErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/patient-access/reference-data',
+    ...options
+});
+
+/**
+ * List accessible patient profiles, delegated users, and the caller's link requests
+ */
+export const getPatientAccess = <ThrowOnError extends boolean = false>(options?: Options<GetPatientAccessData, ThrowOnError>): RequestResult<GetPatientAccessResponses, GetPatientAccessErrors, ThrowOnError> => (options?.client ?? client).get<GetPatientAccessResponses, GetPatientAccessErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/patient-access',
+    ...options
+});
+
+/**
+ * Request access to an existing patient profile
+ *
+ * A request that does not match a patient is accepted as a decoy and never appears in the staff queue.
+ */
+export const requestPatientLink = <ThrowOnError extends boolean = false>(options: Options<RequestPatientLinkData, ThrowOnError>): RequestResult<RequestPatientLinkResponses, RequestPatientLinkErrors, ThrowOnError> => (options.client ?? client).post<RequestPatientLinkResponses, RequestPatientLinkErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/patient-access/requests',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Cancel the authenticated patient's pending link request
+ */
+export const cancelPatientLinkRequest = <ThrowOnError extends boolean = false>(options: Options<CancelPatientLinkRequestData, ThrowOnError>): RequestResult<CancelPatientLinkRequestResponses, CancelPatientLinkRequestErrors, ThrowOnError> => (options.client ?? client).delete<CancelPatientLinkRequestResponses, CancelPatientLinkRequestErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/patient-access/requests/{requestId}',
+    ...options
+});
+
+/**
+ * Revoke the caller's non-SELF link or delegated access to the caller's SELF profile
+ */
+export const revokeOwnPatientLink = <ThrowOnError extends boolean = false>(options: Options<RevokeOwnPatientLinkData, ThrowOnError>): RequestResult<RevokeOwnPatientLinkResponses, RevokeOwnPatientLinkErrors, ThrowOnError> => (options.client ?? client).delete<RevokeOwnPatientLinkResponses, RevokeOwnPatientLinkErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/patient-access/links/{linkId}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List branches where the staff member may manage patient portal links
+ */
+export const getManagedPatientLinkReferenceData = <ThrowOnError extends boolean = false>(options?: Options<GetManagedPatientLinkReferenceDataData, ThrowOnError>): RequestResult<GetManagedPatientLinkReferenceDataResponses, GetManagedPatientLinkReferenceDataErrors, ThrowOnError> => (options?.client ?? client).get<GetManagedPatientLinkReferenceDataResponses, GetManagedPatientLinkReferenceDataErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/patient-link-requests/reference-data',
+    ...options
+});
+
+/**
+ * List matched patient-link requests in one authorized branch
+ */
+export const listPatientLinkRequests = <ThrowOnError extends boolean = false>(options: Options<ListPatientLinkRequestsData, ThrowOnError>): RequestResult<ListPatientLinkRequestsResponses, ListPatientLinkRequestsErrors, ThrowOnError> => (options.client ?? client).get<ListPatientLinkRequestsResponses, ListPatientLinkRequestsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/patient-link-requests',
+    ...options
+});
+
+/**
+ * Approve or reject a pending patient-link request with optimistic concurrency
+ */
+export const decidePatientLinkRequest = <ThrowOnError extends boolean = false>(options: Options<DecidePatientLinkRequestData, ThrowOnError>): RequestResult<DecidePatientLinkRequestResponses, DecidePatientLinkRequestErrors, ThrowOnError> => (options.client ?? client).post<DecidePatientLinkRequestResponses, DecidePatientLinkRequestErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/patient-link-requests/{requestId}/decision',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Revoke a patient portal link as authorized staff
+ */
+export const revokePatientLinkAsStaff = <ThrowOnError extends boolean = false>(options: Options<RevokePatientLinkAsStaffData, ThrowOnError>): RequestResult<RevokePatientLinkAsStaffResponses, RevokePatientLinkAsStaffErrors, ThrowOnError> => (options.client ?? client).delete<RevokePatientLinkAsStaffResponses, RevokePatientLinkAsStaffErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/patient-links/{linkId}',
     ...options,
     headers: {
         'Content-Type': 'application/json',

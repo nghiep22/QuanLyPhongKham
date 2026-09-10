@@ -6,6 +6,12 @@ import { pinoHttp } from 'pino-http';
 import { env } from './config.js';
 import { probeDatabase } from './infrastructure/database/sql-database.js';
 import { AuthService, createAuthRouter, SqlAuthRepository } from './modules/auth/index.js';
+import {
+  createPatientAccessAdminRouter,
+  createPatientAccessRouter,
+  PatientAccessService,
+  SqlPatientAccessRepository,
+} from './modules/patient-access/index.js';
 import { createWorkforceRouter, SqlWorkforceRepository, WorkforceService } from './modules/workforce/index.js';
 import { errorHandler, HttpError, notFoundHandler } from './shared/http/errors.js';
 import { requestContext } from './shared/http/request-context.js';
@@ -15,6 +21,7 @@ export type AppDependencies = {
   databaseProbe?: DatabaseProbe;
   authService?: AuthService;
   workforceService?: WorkforceService;
+  patientAccessService?: PatientAccessService;
 };
 
 export function createApp(dependencies: AppDependencies = {}) {
@@ -22,6 +29,8 @@ export function createApp(dependencies: AppDependencies = {}) {
   const databaseProbe = dependencies.databaseProbe ?? probeDatabase;
   const authService = dependencies.authService ?? new AuthService(new SqlAuthRepository());
   const workforceService = dependencies.workforceService ?? new WorkforceService(new SqlWorkforceRepository());
+  const patientAccessService = dependencies.patientAccessService
+    ?? new PatientAccessService(new SqlPatientAccessRepository());
 
   app.disable('x-powered-by');
   app.set('trust proxy', 'loopback');
@@ -79,6 +88,8 @@ export function createApp(dependencies: AppDependencies = {}) {
   });
   app.use('/api/v1/auth', createAuthRouter(authService));
   app.use('/api/v1/admin', createWorkforceRouter(authService, workforceService));
+  app.use('/api/v1/patient-access', createPatientAccessRouter(authService, patientAccessService));
+  app.use('/api/v1/admin', createPatientAccessAdminRouter(authService, patientAccessService));
 
   app.use(notFoundHandler);
   app.use(errorHandler);

@@ -25,15 +25,15 @@ Tài liệu này không thay thế đặc tả chi tiết của từng màn hìn
 |---|---|
 | Thư mục `fe/` và `be/` | Đã tạo |
 | SQL Server `quan_ly_phong_kham.sql` | Baseline candidate: đã có luồng lõi, còn gap/defect P0 tại mục 8.12 |
-| Database objects | 68 bảng, 12 view, 72 stored procedure, 29 trigger |
-| Kiểm thử database | Baseline idempotent; regression session, staff/RBAC, bảo vệ Admin, password lifecycle và patient registration đều đạt; chưa coi production-ready trước khi hoàn tất mọi ca P0 |
+| Database objects | 69 bảng, 13 view, 78 stored procedure, 29 trigger |
+| Kiểm thử database | Baseline idempotent; 6 regression suite cho session, staff/RBAC, bảo vệ Admin, password lifecycle, patient registration và portal link đều đạt; chưa coi production-ready trước khi hoàn tất mọi ca P0 |
 | Gateway | Đã scaffold; live/ready, request ID và route Auth/Clinic hoạt động |
-| Auth Service | Slice 05 hoàn tất: auth/session, workforce/RBAC, password lifecycle và self-registration bằng OTP |
+| Auth Service | Slice 06 hoàn tất: auth/session, workforce/RBAC, OTP và yêu cầu/duyệt/thu hồi patient portal link |
 | Clinic Service | Đã scaffold; logger, error envelope, SQL pool/runner và health hoạt động |
 | Scheduler Worker | Đã scaffold; process lifecycle và health hoạt động |
-| Admin Web | Đã có đăng nhập/protected session, Nhân sự và các màn đổi/quên/đặt lại mật khẩu |
-| Mobile | Đã có đăng ký/xác minh OTP, đăng nhập, SecureStore và khôi phục phiên bệnh nhân |
-| OpenAPI contract | OpenAPI 3.1 đã mô tả health, Auth, password lifecycle, patient registration và chín operation Workforce/RBAC; lint và generated types/fetch SDK hoạt động |
+| Admin Web | Đã có đăng nhập/protected session, Nhân sự, password lifecycle và màn duyệt liên kết hồ sơ |
+| Mobile | Đã có đăng ký/OTP, đăng nhập, SecureStore, danh sách hồ sơ, yêu cầu/hủy/thu hồi liên kết |
+| OpenAPI contract | OpenAPI 3.1 đã mô tả health, Auth, Workforce/RBAC và toàn bộ 9 operation patient portal link; lint và generated types/fetch SDK hoạt động |
 
 Trong Phase 0, sửa các defect P0 ngay trên baseline candidate, chạy lại toàn bộ test rồi mới chuyển đúng một lần sang `be/database/baseline/001_initial.sql` và ghi checksum. Sau khi baseline đã dùng ở môi trường chung hoặc production, không sửa ngược; mọi thay đổi phải đi qua migration mới.
 
@@ -116,24 +116,24 @@ Hai service dùng chung một SQL Server trong giai đoạn đầu, nhưng **kh�
 | Reporting/Audit reader | Clinic Service dùng pool read-only riêng để gọi read procedure đã kiểm tra permission/branch scope | Không dùng `clinic_core_executor`, không cấp broad table/view SELECT |
 
 - Một command/procedure chỉ có một service làm chủ. Service khác cần dữ liệu phải dùng read view/procedure có version hoặc internal API; không import repository xuyên service.
-- `user_patient_access` thuộc Auth. Migration P0 phải bỏ nhánh ghi bảng này khỏi `sp_create_patient`; `sp_create_patient_portal_account` và `sp_link_user_patient` thuộc Auth, còn Clinic chỉ đọc liên kết qua contract đã cấp quyền.
+- `user_patient_access` thuộc Auth. Slice 06 đã bỏ nhánh ghi bảng này khỏi `sp_create_patient`; `sp_create_patient_portal_account`, `sp_link_user_patient` và các `sp_auth_*patient_link*` chỉ cấp cho Auth, còn Clinic chỉ đọc liên kết qua contract đã cấp quyền.
 - `sp_auth_verify_patient_registration` là transaction boundary ngoại lệ của workflow onboarding trong shared SQL baseline: chỉ được tạo mới đồng thời user PATIENT, patient và SELF link sau OTP; không được dùng để claim/cập nhật hồ sơ có sẵn. Nếu tách database, thay transaction này bằng orchestration idempotent Auth → Clinic → Auth có trạng thái và bước bù.
 - Cross-service read contract phải đủ hai chiều: Clinic đọc principal/doctor/patient-access của Auth; Auth đọc reference tối thiểu về branch/specialty/service/patient của Clinic để validate staff assignment và portal link. Chỉ dùng versioned view/read procedure có caller `GRANT` rõ, không đọc bảng owner trực tiếp.
 - Outbox là ngoại lệ có chủ sở hữu theo thao tác: Auth/Clinic chỉ **append** event trong transaction domain; Worker chỉ **claim/publish/mark retry/dead-letter**. Notification delivery thuộc Worker. Audit chỉ append qua `sp_write_audit` từ command owner.
-- Tạo `be/database/ownership.yml` ánh xạ toàn bộ bảng/view và 72 procedure hiện có sang owner/caller; CI từ chối procedure chưa được khai báo hoặc `GRANT` vượt quyền.
+- Tạo `be/database/ownership.yml` ánh xạ toàn bộ bảng/view và 78 procedure hiện có sang owner/caller; CI từ chối procedure chưa được khai báo hoặc `GRANT` vượt quyền.
 - `clinic-service` có thể xác thực JWT cục bộ bằng public key/JWKS và kiểm tra token version theo cơ chế đã chốt; không gọi Auth cho từng request.
 - Nếu một use case mới buộc ghi xuyên hai ownership, ưu tiên chuyển command trọn vẹn về một owner hoặc dùng orchestration có idempotency/outbox và bước bù; không giả định transaction phân tán.
 - Mỗi service có database login riêng. CI kiểm tra Auth không `EXECUTE` được procedure Clinic và ngược lại.
 - `/api/v1/reports/*` và `/api/v1/audit/*` vẫn do Clinic phục vụ nhưng dùng connection pool `clinic_report_reader`; principal/permission lấy từ token đã xác minh và `SESSION_CONTEXT`, dữ liệu trả về luôn scope tại read procedure.
 
-### 4.4 Phân nhóm ownership cho 72 procedure hiện có
+### 4.4 Phân nhóm ownership cho 78 procedure hiện có
 
 Bảng này là inventory khởi tạo cho `be/database/ownership.yml`. “Owner” là nơi được phép thay đổi logic; caller thực tế còn phải được giới hạn bằng `GRANT`.
 
 | Nhóm/owner | Số lượng | Procedure |
 |---|---:|---|
 | Database Platform — internal helper | 5 | `sp_assert_actor`, `sp_assert_permission`, `sp_write_audit`, `sp_next_document_number`, `sp_get_branch_business_date` |
-| Auth Service — auth/password/onboarding command | 12 | `sp_auth_record_login_failure`, `sp_auth_create_session`, `sp_auth_rotate_session`, `sp_auth_revoke_session`, `sp_auth_revoke_all_sessions`, `sp_auth_create_password_reset`, `sp_auth_cancel_password_reset`, `sp_auth_consume_password_reset`, `sp_auth_change_password`, `sp_auth_create_patient_registration`, `sp_auth_cancel_patient_registration`, `sp_auth_verify_patient_registration` |
+| Auth Service — auth/password/onboarding command | 18 | `sp_auth_record_login_failure`, `sp_auth_create_session`, `sp_auth_rotate_session`, `sp_auth_revoke_session`, `sp_auth_revoke_all_sessions`, `sp_auth_create_password_reset`, `sp_auth_cancel_password_reset`, `sp_auth_consume_password_reset`, `sp_auth_change_password`, `sp_auth_create_patient_registration`, `sp_auth_cancel_patient_registration`, `sp_auth_verify_patient_registration`, `sp_auth_request_patient_link`, `sp_auth_get_patient_access`, `sp_auth_cancel_patient_link_request`, `sp_auth_decide_patient_link_request`, `sp_auth_revoke_patient_link`, `sp_auth_list_patient_link_requests` |
 | Auth Service — workforce/public command | 10 | `sp_bootstrap_first_admin`, `sp_create_staff_account`, `sp_update_staff_account`, `sp_set_staff_account_status`, `sp_unlock_staff_account`, `sp_grant_user_role`, `sp_revoke_user_role`, `sp_create_patient_portal_account`, `sp_link_user_patient`, `sp_assign_doctor_service` |
 | Clinic — internal helper | 2 | `sp_assert_appointment_access`, `sp_allocate_queue_ticket_internal` |
 | Clinic — organization/catalog | 3 | `sp_create_room`, `sp_create_service`, `sp_create_medicine_batch` |
@@ -149,7 +149,7 @@ Quy tắc caller đặc biệt:
 - Năm Database Platform helper và hai Clinic internal helper không được `GRANT EXECUTE` trực tiếp cho API/Worker.
 - `sp_bootstrap_first_admin` chỉ dành cho setup/DBA, bị khóa sau bootstrap.
 - Worker là caller runtime của command hết hạn hold; sinh slot tự động phải qua system wrapper riêng sau khi sửa P0, không dùng actor Admin giả.
-- Trước khi tách role database, sửa `sp_create_patient` để không còn ghi `user_patient_access`; nếu không, ownership ở bảng trên chưa có hiệu lực.
+- `sp_create_patient` đã bị chặn nếu caller cố tạo portal link; mọi liên kết phải đi qua command do Auth sở hữu.
 
 ## 5. Công nghệ mục tiêu
 
@@ -462,9 +462,9 @@ Quy ước ưu tiên:
 | SEC-13 | Bệnh nhân tự đăng ký, xác minh OTP và yêu cầu liên kết hồ sơ an toàn | Guest/Patient/Receptionist | MVP |
 | SEC-14 | Bảo vệ Admin toàn cục cuối cùng và kiểm soát tự thu hồi quyền | System Admin | MVP |
 
-Tiến độ đến Slice 05: SEC-01–SEC-08, SEC-14 và phần self-registration/OTP/tạo
-liên kết SELF mới của SEC-13 đã hoàn thành. Claim hồ sơ đã tồn tại và quan hệ
-người thân/người giám hộ còn lại trong SEC-10/SEC-13; SEC-09, SEC-11 và SEC-12 là P1.
+Tiến độ đến Slice 06: SEC-01–SEC-08, SEC-10, SEC-14 và SEC-13 đã hoàn thành ở
+mức MVP, gồm self-registration/OTP, claim hồ sơ cũ, duyệt/thu hồi quan hệ người
+thân/người giám hộ. SEC-09, SEC-11 và SEC-12 là P1.
 
 ### 8.2 Chi nhánh, nhân sự và danh mục
 
@@ -654,15 +654,15 @@ Trong bảng này, **P0** nghĩa là phải chốt thiết kế trước và ho�
 | P0 | Login, refresh rotation, logout, đổi/reset mật khẩu, khóa/mở tài khoản | **Sẵn** | API + procedure/query và negative/security test đã đạt qua Slice 02–04 |
 | P0 | `tokenVersion`/security stamp, reset token và OTP challenge dùng một lần | **Sẵn** | Token version, reset token và OTP HMAC hash có TTL/attempt limit/chống replay đã đạt qua Slice 02–05 |
 | P0 | Last-admin và self-revoke guard | **Sẵn** | Không thu hồi/vô hiệu hóa Admin toàn cục hoạt động cuối cùng; thao tác tự hạ quyền nhạy cảm bị chặn |
-| P0 | Patient self-registration và xác minh OTP/liên kết hồ sơ | **Một phần** | Tạo hồ sơ mới + SELF link đã an toàn; còn claim hồ sơ cũ/người giám hộ và quy trình duyệt ngoại lệ |
+| P0 | Patient self-registration và xác minh OTP/liên kết hồ sơ | **Sẵn** | Tạo hồ sơ mới + SELF link, claim hồ sơ cũ/người giám hộ, duyệt/hủy/thu hồi và chống enumeration/concurrency đã đạt qua Slice 05–06 |
 | P0 | `publicId` UUID cho mọi aggregate xuất hiện trong URL/event công khai | Mới | Ít nhất branch, doctor, service, slot, patient, appointment, encounter, prescription, invoice hoàn tất trước OpenAPI v1 |
-| P0 | Ownership manifest và tách command chạm chéo service | Có defect | `sp_create_patient` không còn ghi `user_patient_access`; đủ owner/caller/`GRANT` cho 72 procedure |
+| P0 | Ownership manifest và tách command chạm chéo service | **Một phần** | `sp_create_patient` đã không còn ghi `user_patient_access`, portal command chỉ cấp Auth; còn tạo manifest đủ owner/caller/`GRANT` cho 78 procedure |
 | P0 | Read model cho user, nhân viên, danh mục, bệnh nhân, lịch, encounter, đơn và hóa đơn | Khung | Mỗi màn hình có query phân trang, filter, branch scope và `GRANT` |
 | P0 | Cross-service read contract hai chiều | Mới | Clinic đọc principal/doctor/patient-access; Auth đọc active branch/specialty/service/patient reference; cột tối thiểu, version và `GRANT` rõ |
 | P0 | Chính sách đọc hồ sơ và công bố kết quả | Có defect | Staff theo care relationship; Patient theo link; Receptionist không đọc lâm sàng; result có `releasedToPatient` |
 | P0 | Update/deactivate master data, nhân viên và bác sĩ | Khung | Không hard delete; có `rowversion`, audit và conflict test |
 | P0 | Cập nhật patient, liên hệ, dị ứng, bệnh nền, bảo hiểm và portal link | Khung | Có permission/patient scope và lịch sử thay đổi |
-| P0 | Permission chuyên biệt cho sinh hiệu, chốt kết quả và quản lý portal link | Khung | LAB_TECH không ghi sinh hiệu; NURSE không chốt result; Receptionist không cần `USERS_MANAGE` rộng |
+| P0 | Permission chuyên biệt cho sinh hiệu, chốt kết quả và quản lý portal link | **Một phần** | `PATIENT_PORTAL_LINK_MANAGE` đã tách cho Manager/Receptionist; còn tách permission sinh hiệu và chốt result |
 | P0 | Một nguồn kiểm tra role assignment hiệu lực | Có defect | Mọi custom authz đều kiểm tra role active, assignment active, `validFrom/validTo` và branch; không né hạn hủy bằng role hết hiệu lực |
 | P0 | Permission và command danh mục dược | Khung | Pharmacist quản lý batch/location/supplier cần thiết mà không có `MASTER_DATA_MANAGE` toàn cục |
 | P0 | Phạm vi danh mục và giá theo chi nhánh | Có defect thiết kế | Global catalog có quyền riêng; availability/giá hiệu lực theo branch và invoice giữ snapshot |
@@ -1155,12 +1155,13 @@ Health readiness phải kiểm tra dependency cần thiết nhưng có timeout n
 | Slice 03 — Workforce & Branch-scoped RBAC | **DONE** | 2026-09-10 | SEC-05/07/08/14 và ADM-05/06: quản trị nhân viên/bác sĩ, trạng thái + mở khóa, role có scope/thời hạn, session revocation, last-Admin guard; ETag/If-Match; Gateway/OpenAPI/generated client/Admin Web; 3 SQL regression + 21 application test đạt. |
 | Slice 04 — Password Lifecycle & Recovery | **DONE** | 2026-09-10 | SEC-06: đổi mật khẩu có xác minh hiện tại; reset token 256-bit dùng một lần/TTL/rate limit; chống enumeration/replay; webhook delivery an toàn; thu hồi mọi session; ba màn Admin Web; SQL regression + tổng 26 application test đạt. |
 | Slice 05 — Patient Self-registration & OTP | **DONE** | 2026-09-10 | SEC-13 phần hồ sơ mới: đăng ký email/SMS có idempotency; OTP HMAC 6 số dùng một lần/TTL/attempt/rate limit; chống enumeration/replay; tạo nguyên tử PATIENT + patient public ID + SELF link; webhook production; Mobile đăng ký/đăng nhập/SecureStore; 5 SQL regression + 33 application test đạt. |
+| Slice 06 — Patient Portal Linking | **DONE** | 2026-09-10 | SEC-10/SEC-13 và PAT-08/09: patient gửi/hủy/theo dõi yêu cầu claim hồ sơ cũ/người thân; decoy chống enumeration; nhân viên duyệt/từ chối theo chi nhánh bằng permission riêng + rowversion; kích hoạt/thu hồi link có audit; Mobile và Admin Web hoàn chỉnh; 6 SQL regression + 40 application test đạt. |
 
-Phase 1 và Slice 02–05 đã hoàn thành về source code và kiểm thử local. Các
+Phase 1 và Slice 02–06 đã hoàn thành về source code và kiểm thử local. Phase 2
+đã đạt luồng MVP về source code và kiểm thử local. Các
 dependency Auth/Workforce P0 gồm public ID, token version, session metadata,
 password lifecycle, branch-scoped authorization và database role tối thiểu đã được xử lý. Phase 0
-baseline freeze tổng thể và phần claim/duyệt liên kết patient portal của Phase 2 vẫn mở; lần chạy
-CI/branch protection được xác minh sau khi push.
+baseline freeze tổng thể vẫn mở; lần chạy CI/branch protection được xác minh sau khi push.
 
 ### 17.2 Thứ tự ưu tiên trong mỗi phase
 
@@ -1250,7 +1251,7 @@ Mọi phát hiện lệch tài liệu phải được sửa trong cùng pull req
 - [ ] Khởi tạo Git và branch protection.
 - [x] Tạo npm workspace/orchestrator ở root.
 - [ ] Tạo đúng cấu trúc thư mục mục 6.
-- [ ] Tạo và kiểm tra `be/database/ownership.yml` cho mọi bảng/view/72 procedure và database role.
+- [ ] Tạo và kiểm tra `be/database/ownership.yml` cho mọi bảng/view/78 procedure và database role.
 - [ ] Sửa nhóm P0 ảnh hưởng baseline/foundation được nêu dưới mục 8.12; tạo owner/milestone cho mọi P0 còn lại trước phase domain tương ứng.
 - [ ] Chạy clean install, workflow, negative, concurrency, signature-recompute và `DBCC CHECKDB`; tất cả đạt mới freeze.
 - [ ] Chuyển SQL đã sửa vào `be/database/baseline/001_initial.sql` và ghi checksum.

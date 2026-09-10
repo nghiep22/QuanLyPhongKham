@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Private Clinic API
-  version: 0.2.0
+  version: 0.3.0
   description: Public contract for the private clinic management system.
 servers:
   - url: http://localhost:5000
@@ -253,6 +253,251 @@ paths:
                 $ref: '#/components/schemas/PatientRegistrationCompletedResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
+  /api/v1/patient-access/reference-data:
+    get:
+      operationId: getPatientLinkReferenceData
+      summary: List active branches that can receive a patient-link request
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Branch choices for an authenticated patient.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientLinkReferenceResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/patient-access:
+    get:
+      operationId: getPatientAccess
+      summary: List accessible patient profiles, delegated users, and the caller's link requests
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current portal access and request history.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientAccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/patient-access/requests:
+    post:
+      operationId: requestPatientLink
+      summary: Request access to an existing patient profile
+      description: A request that does not match a patient is accepted as a decoy and never appears in the staff queue.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePatientLinkRequest'
+      responses:
+        '202':
+          description: The request was accepted without revealing whether the patient reference matched.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientLinkRequestAcceptedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/patient-access/requests/{requestId}:
+    delete:
+      operationId: cancelPatientLinkRequest
+      summary: Cancel the authenticated patient's pending link request
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PatientLinkRequestId'
+      responses:
+        '200':
+          description: The pending request was cancelled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientLinkCancelledResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/patient-access/links/{linkId}:
+    delete:
+      operationId: revokeOwnPatientLink
+      summary: Revoke the caller's non-SELF link or delegated access to the caller's SELF profile
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PatientLinkId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatientLinkReasonRequest'
+      responses:
+        '200':
+          description: The link was revoked and can no longer book appointments.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientLinkRevokedResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/admin/patient-link-requests/reference-data:
+    get:
+      operationId: getManagedPatientLinkReferenceData
+      summary: List branches where the staff member may manage patient portal links
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Authorized branch choices.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientLinkReferenceResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/admin/patient-link-requests:
+    get:
+      operationId: listPatientLinkRequests
+      summary: List matched patient-link requests in one authorized branch
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: branchPublicId
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: status
+          schema:
+            $ref: '#/components/schemas/PatientLinkRequestStatus'
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - in: query
+          name: pageSize
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: A page of link requests. Decoy requests are never returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffPatientLinkRequestListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/admin/patient-link-requests/{requestId}/decision:
+    post:
+      operationId: decidePatientLinkRequest
+      summary: Approve or reject a pending patient-link request with optimistic concurrency
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PatientLinkRequestId'
+        - $ref: '#/components/parameters/PatientLinkIfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatientLinkDecisionRequest'
+      responses:
+        '200':
+          description: The request was decided and an approved link was activated atomically.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientLinkDecisionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+  /api/v1/admin/patient-links/{linkId}:
+    delete:
+      operationId: revokePatientLinkAsStaff
+      summary: Revoke a patient portal link as authorized staff
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PatientLinkId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatientLinkReasonRequest'
+      responses:
+        '200':
+          description: The link was revoked with an audit reason.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientLinkRevokedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /api/v1/admin/staff/reference-data:
     get:
       operationId: getStaffReferenceData
@@ -564,10 +809,32 @@ components:
       name: Idempotency-Key
       in: header
       required: true
-      description: UUID that makes retries with the same registration payload return the same challenge.
+      description: UUID that makes retries with the same operation payload return the original result.
       schema:
         type: string
         format: uuid
+    PatientLinkRequestId:
+      name: requestId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    PatientLinkId:
+      name: linkId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    PatientLinkIfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Strong ETag containing the Base64 rowversion of the patient-link request.
+      schema:
+        type: string
+        pattern: '^"[A-Za-z0-9+/]{11}="$'
   headers:
     StaffEtag:
       description: Strong ETag for optimistic concurrency.
@@ -618,6 +885,12 @@ components:
             $ref: '#/components/schemas/ApiErrorResponse'
     ServiceUnavailable:
       description: A required registration dependency is unavailable.
+      content:
+        application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+    TooManyRequests:
+      description: The caller exceeded the request rate limit.
       content:
         application/json:
           schema:
@@ -888,6 +1161,398 @@ components:
           $ref: '#/components/schemas/PatientRegistrationCompletedData'
         meta:
           $ref: '#/components/schemas/ResponseMeta'
+        requestId:
+          $ref: '#/components/schemas/RequestId'
+    PatientRelationship:
+      type: string
+      enum: [SELF, CHILD, SPOUSE, PARENT, GUARDIAN, OTHER]
+    PatientLinkRequestStatus:
+      type: string
+      enum: [PENDING, APPROVED, REJECTED, CANCELLED, EXPIRED]
+    PatientLinkReferenceData:
+      type: object
+      additionalProperties: false
+      required: [branches]
+      properties:
+        branches:
+          type: array
+          items:
+            $ref: '#/components/schemas/BranchReference'
+    PatientLinkReferenceResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data:
+          $ref: '#/components/schemas/PatientLinkReferenceData'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+        requestId:
+          $ref: '#/components/schemas/RequestId'
+    CreatePatientLinkRequest:
+      type: object
+      additionalProperties: false
+      required: [branchPublicId, patientCode, dateOfBirth, relationshipType]
+      properties:
+        branchPublicId:
+          type: string
+          format: uuid
+        patientCode:
+          type: string
+          minLength: 2
+          maxLength: 30
+        dateOfBirth:
+          type: string
+          format: date
+        relationshipType:
+          $ref: '#/components/schemas/PatientRelationship'
+        requestNote:
+          type: string
+          maxLength: 500
+          description: Required for a relationship other than SELF.
+    PatientProfileReference:
+      type: object
+      additionalProperties: false
+      required: [publicId, code, fullName, dateOfBirth]
+      properties:
+        publicId:
+          type: string
+          format: uuid
+        code:
+          type: string
+        fullName:
+          type: string
+        dateOfBirth:
+          type: string
+          format: date
+    PatientLinkUserReference:
+      type: object
+      additionalProperties: false
+      required: [publicId, displayName]
+      properties:
+        publicId:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+    PatientLinkVerifiedBranch:
+      type: object
+      additionalProperties: false
+      required: [publicId, name]
+      properties:
+        publicId:
+          type: string
+          format: uuid
+        name:
+          type: string
+    PatientAccessLink:
+      type: object
+      additionalProperties: false
+      required:
+        - publicId
+        - patient
+        - relationshipType
+        - status
+        - bookingAllowed
+        - accessKind
+        - linkedUser
+        - verifiedBranch
+        - verifiedAtUtc
+        - canRevoke
+        - rowVersion
+      properties:
+        publicId:
+          type: string
+          format: uuid
+        patient:
+          $ref: '#/components/schemas/PatientProfileReference'
+        relationshipType:
+          $ref: '#/components/schemas/PatientRelationship'
+        status:
+          type: string
+          const: ACTIVE
+        bookingAllowed:
+          type: boolean
+        accessKind:
+          type: string
+          enum: [OWN, DELEGATED]
+        linkedUser:
+          $ref: '#/components/schemas/PatientLinkUserReference'
+        verifiedBranch:
+          oneOf:
+            - $ref: '#/components/schemas/PatientLinkVerifiedBranch'
+            - type: 'null'
+        verifiedAtUtc:
+          type: [string, 'null']
+          format: date-time
+        canRevoke:
+          type: boolean
+        rowVersion:
+          type: string
+          pattern: '^[A-Za-z0-9+/]{11}=$'
+    PatientLinkRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - publicId
+        - branch
+        - patientReference
+        - relationshipType
+        - requestNote
+        - status
+        - decisionReason
+        - createdAtUtc
+        - expiresAtUtc
+        - decidedAtUtc
+        - patient
+        - rowVersion
+      properties:
+        publicId:
+          type: string
+          format: uuid
+        branch:
+          $ref: '#/components/schemas/BranchReference'
+        patientReference:
+          type: string
+        relationshipType:
+          $ref: '#/components/schemas/PatientRelationship'
+        requestNote:
+          type: [string, 'null']
+        status:
+          $ref: '#/components/schemas/PatientLinkRequestStatus'
+        decisionReason:
+          type: [string, 'null']
+        createdAtUtc:
+          type: string
+          format: date-time
+        expiresAtUtc:
+          type: string
+          format: date-time
+        decidedAtUtc:
+          type: [string, 'null']
+          format: date-time
+        patient:
+          oneOf:
+            - type: object
+              additionalProperties: false
+              required: [publicId, code, fullName]
+              properties:
+                publicId:
+                  type: string
+                  format: uuid
+                code:
+                  type: string
+                fullName:
+                  type: string
+            - type: 'null'
+        rowVersion:
+          type: string
+          pattern: '^[A-Za-z0-9+/]{11}=$'
+    StaffPatientLinkRequester:
+      type: object
+      additionalProperties: false
+      required: [publicId, displayName, email, phone]
+      properties:
+        publicId:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+        email:
+          type: [string, 'null']
+          format: email
+        phone:
+          type: [string, 'null']
+    StaffPatientLinkRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - publicId
+        - branch
+        - patientReference
+        - relationshipType
+        - requestNote
+        - status
+        - decisionReason
+        - createdAtUtc
+        - expiresAtUtc
+        - decidedAtUtc
+        - patient
+        - requester
+        - rowVersion
+      properties:
+        publicId:
+          type: string
+          format: uuid
+        branch:
+          $ref: '#/components/schemas/BranchReference'
+        patientReference:
+          type: string
+        relationshipType:
+          $ref: '#/components/schemas/PatientRelationship'
+        requestNote:
+          type: [string, 'null']
+        status:
+          $ref: '#/components/schemas/PatientLinkRequestStatus'
+        decisionReason:
+          type: [string, 'null']
+        createdAtUtc:
+          type: string
+          format: date-time
+        expiresAtUtc:
+          type: string
+          format: date-time
+        decidedAtUtc:
+          type: [string, 'null']
+          format: date-time
+        patient:
+          $ref: '#/components/schemas/PatientProfileReference'
+        requester:
+          $ref: '#/components/schemas/StaffPatientLinkRequester'
+        rowVersion:
+          type: string
+          pattern: '^[A-Za-z0-9+/]{11}=$'
+    PatientAccessData:
+      type: object
+      additionalProperties: false
+      required: [links, requests]
+      properties:
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/PatientAccessLink'
+        requests:
+          type: array
+          items:
+            $ref: '#/components/schemas/PatientLinkRequest'
+    PatientAccessResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data:
+          $ref: '#/components/schemas/PatientAccessData'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+        requestId:
+          $ref: '#/components/schemas/RequestId'
+    PatientLinkRequestAcceptedData:
+      type: object
+      additionalProperties: false
+      required: [requestId, status]
+      properties:
+        requestId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          const: PENDING
+    PatientLinkRequestAcceptedResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data:
+          $ref: '#/components/schemas/PatientLinkRequestAcceptedData'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+        requestId:
+          $ref: '#/components/schemas/RequestId'
+    PatientLinkReasonRequest:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 3
+          maxLength: 500
+    PatientLinkCancelledData:
+      type: object
+      additionalProperties: false
+      required: [cancelled]
+      properties:
+        cancelled:
+          type: boolean
+          const: true
+    PatientLinkCancelledResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data:
+          $ref: '#/components/schemas/PatientLinkCancelledData'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+        requestId:
+          $ref: '#/components/schemas/RequestId'
+    PatientLinkRevokedData:
+      type: object
+      additionalProperties: false
+      required: [revoked]
+      properties:
+        revoked:
+          type: boolean
+          const: true
+    PatientLinkRevokedResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data:
+          $ref: '#/components/schemas/PatientLinkRevokedData'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+        requestId:
+          $ref: '#/components/schemas/RequestId'
+    PatientLinkDecisionRequest:
+      type: object
+      additionalProperties: false
+      required: [decision, reason]
+      properties:
+        decision:
+          type: string
+          enum: [APPROVE, REJECT]
+        reason:
+          type: string
+          minLength: 3
+          maxLength: 500
+    PatientLinkDecisionData:
+      type: object
+      additionalProperties: false
+      required: [requestId, status, linkPublicId]
+      properties:
+        requestId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [APPROVED, REJECTED]
+        linkPublicId:
+          type: [string, 'null']
+          format: uuid
+    PatientLinkDecisionResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data:
+          $ref: '#/components/schemas/PatientLinkDecisionData'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+        requestId:
+          $ref: '#/components/schemas/RequestId'
+    StaffPatientLinkRequestListResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/StaffPatientLinkRequest'
+        meta:
+          $ref: '#/components/schemas/PageMeta'
         requestId:
           $ref: '#/components/schemas/RequestId'
     RoleAssignment:

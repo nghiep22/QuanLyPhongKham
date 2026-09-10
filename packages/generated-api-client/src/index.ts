@@ -86,6 +86,58 @@ export function createApiClient(options: ApiClientOptions) {
         { method: 'POST', body: JSON.stringify(body) },
       ),
     },
+    patientAccess: {
+      references: () => request<import('@clinic/generated-api-types').PatientLinkReferenceResponse>(
+        '/api/v1/patient-access/reference-data',
+      ),
+      get: () => request<import('@clinic/generated-api-types').PatientAccessResponse>(
+        '/api/v1/patient-access',
+      ),
+      requestLink: (body: import('@clinic/generated-api-types').CreatePatientLinkRequest, idempotencyKey: string) =>
+        request<import('@clinic/generated-api-types').PatientLinkRequestAcceptedResponse>(
+          '/api/v1/patient-access/requests',
+          { method: 'POST', headers: { 'idempotency-key': idempotencyKey }, body: JSON.stringify(body) },
+        ),
+      cancelRequest: (requestId: string) =>
+        request<import('@clinic/generated-api-types').PatientLinkCancelledResponse>(
+          `/api/v1/patient-access/requests/${encodeURIComponent(requestId)}`,
+          { method: 'DELETE' },
+        ),
+      revokeLink: (linkId: string, body: import('@clinic/generated-api-types').PatientLinkReasonRequest) =>
+        request<import('@clinic/generated-api-types').PatientLinkRevokedResponse>(
+          `/api/v1/patient-access/links/${encodeURIComponent(linkId)}`,
+          { method: 'DELETE', body: JSON.stringify(body) },
+        ),
+    },
+    patientLinkAdmin: {
+      references: () => request<import('@clinic/generated-api-types').PatientLinkReferenceResponse>(
+        '/api/v1/admin/patient-link-requests/reference-data',
+      ),
+      list: (query: {
+        branchPublicId: string;
+        status?: import('@clinic/generated-api-types').PatientLinkRequestStatus;
+        page?: number;
+        pageSize?: number;
+      }) => {
+        const search = new URLSearchParams();
+        Object.entries(query).forEach(([key, value]) => {
+          if (value !== undefined && value !== '') search.set(key, String(value));
+        });
+        return request<import('@clinic/generated-api-types').StaffPatientLinkRequestListResponse>(
+          `/api/v1/admin/patient-link-requests?${search.toString()}`,
+        );
+      },
+      decide: (requestId: string, body: import('@clinic/generated-api-types').PatientLinkDecisionRequest,
+        rowVersion: string) => request<import('@clinic/generated-api-types').PatientLinkDecisionResponse>(
+        `/api/v1/admin/patient-link-requests/${encodeURIComponent(requestId)}/decision`,
+        { method: 'POST', headers: { 'if-match': `"${rowVersion}"` }, body: JSON.stringify(body) },
+      ),
+      revokeLink: (linkId: string, body: import('@clinic/generated-api-types').PatientLinkReasonRequest) =>
+        request<import('@clinic/generated-api-types').PatientLinkRevokedResponse>(
+          `/api/v1/admin/patient-links/${encodeURIComponent(linkId)}`,
+          { method: 'DELETE', body: JSON.stringify(body) },
+        ),
+    },
     staff: {
       references: () =>
         request<import('@clinic/generated-api-types').StaffReferenceResponse>(

@@ -48,6 +48,8 @@ const environmentSchema = z.object({
   AUTH_OTP_DELIVERY_MODE: z.enum(['console', 'webhook']).default('console'),
   AUTH_OTP_WEBHOOK_URL: optionalUrl,
   AUTH_OTP_WEBHOOK_BEARER_TOKEN: optionalSecret,
+  PATIENT_LINK_REQUEST_TTL_DAYS: z.coerce.number().int().min(1).max(30).default(7),
+  PATIENT_LINK_MAX_REQUESTS_PER_DAY: z.coerce.number().int().min(1).max(20).default(5),
   JWT_PRIVATE_KEY_PATH: z.string().default(fileURLToPath(new URL('../../../../.runtime/auth-private.pem', import.meta.url))),
   JWT_PUBLIC_KEY_PATH: z.string().default(fileURLToPath(new URL('../../../../.runtime/auth-public.pem', import.meta.url))),
 }).superRefine((value, context) => {
