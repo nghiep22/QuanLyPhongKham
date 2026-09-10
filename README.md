@@ -48,11 +48,16 @@ npm run dev:mobile
 - Admin Web: `http://localhost:5173`
 - Gateway: `http://localhost:5000`
 - Kiểm tra gateway: `http://localhost:5000/health/live`
+- Kiểm tra toàn bộ dependency: `http://localhost:5000/health/ready`
+
+Nếu SQL Server local chưa bật TCP/IP và bạn dùng Windows Authentication, đặt
+`SQL_SERVER=np:\\.\pipe\sql\query` trong `.env`. Xem thêm [be/README.md](./be/README.md).
 
 ## Kiểm tra trước khi commit
 
 ```powershell
 npm run typecheck
+npm run openapi:check
 npm run build
 npm test
 npm run doctor:mobile

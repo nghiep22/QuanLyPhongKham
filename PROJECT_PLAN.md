@@ -27,13 +27,13 @@ Tài liệu này không thay thế đặc tả chi tiết của từng màn hìn
 | SQL Server `quan_ly_phong_kham.sql` | Baseline candidate: đã có luồng lõi, còn gap/defect P0 tại mục 8.12 |
 | Database objects | 66 bảng, 12 view, 57 stored procedure, 29 trigger |
 | Kiểm thử database | Bộ kiểm thử hiện có đã đạt; chưa coi production-ready trước khi bổ sung ca P0 |
-| Gateway | Chưa scaffold |
-| Auth Service | Chưa scaffold |
-| Clinic Service | Chưa scaffold |
-| Scheduler Worker | Chưa scaffold |
-| Admin Web | Chưa scaffold |
-| Mobile | Chưa scaffold |
-| OpenAPI contract | Chưa tạo |
+| Gateway | Đã scaffold; live/ready, request ID và route Auth/Clinic hoạt động |
+| Auth Service | Đã scaffold; logger, error envelope, SQL pool/runner và health hoạt động |
+| Clinic Service | Đã scaffold; logger, error envelope, SQL pool/runner và health hoạt động |
+| Scheduler Worker | Đã scaffold; process lifecycle và health hoạt động |
+| Admin Web | Đã scaffold React Router, TanStack Query và API client |
+| Mobile | Đã scaffold React Navigation, SecureStore, TanStack Query và API client |
+| OpenAPI contract | Đã có OpenAPI 3.1, lint và generated types/fetch SDK |
 
 Trong Phase 0, sửa các defect P0 ngay trên baseline candidate, chạy lại toàn bộ test rồi mới chuyển đúng một lần sang `be/database/baseline/001_initial.sql` và ghi checksum. Sau khi baseline đã dùng ở môi trường chung hoặc production, không sửa ngược; mọi thay đổi phải đi qua migration mới.
 
@@ -1140,7 +1140,17 @@ Health readiness phải kiểm tra dependency cần thiết nhưng có timeout n
 | 9. Notification & Reports | Outbox worker, reminder, dashboard, export | Hệ thống chủ động và có báo cáo | Retry/dead-letter/report permission đạt |
 | 10. Hardening & Release | Security, performance, backup, monitoring, UAT | Release candidate | UAT, restore drill và release checklist đạt |
 
-### 17.1 Thứ tự ưu tiên trong mỗi phase
+### 17.1 Tiến độ lát cắt
+
+| Lát cắt | Trạng thái | Hoàn thành | Phạm vi/bằng chứng |
+|---|---|---|---|
+| Slice 01 — Platform Foundation | **DONE** | 2026-09-10 | Gateway → Auth/Clinic → SQL readiness; request ID xuyên suốt; standard envelope; OpenAPI lint/codegen; 6 integration test; lint/typecheck/build/Expo Doctor đạt. Chi tiết tại `be/IMPLEMENTATION_STATUS.md`. |
+
+Phase 1 đã hoàn thành về source code và kiểm thử local. Phase 0 baseline freeze vẫn mở;
+không bắt đầu Slice 02 Auth/RBAC trước khi xử lý các dependency P0 về auth schema,
+ownership/database role và public ID. Lần chạy CI/branch protection được xác minh sau khi push.
+
+### 17.2 Thứ tự ưu tiên trong mỗi phase
 
 1. Domain rule và OpenAPI contract.
 2. Database migration/procedure.
@@ -1226,7 +1236,7 @@ Mọi phát hiện lệch tài liệu phải được sửa trong cùng pull req
 ### Phase 0
 
 - [ ] Khởi tạo Git và branch protection.
-- [ ] Tạo npm workspace/orchestrator ở root.
+- [x] Tạo npm workspace/orchestrator ở root.
 - [ ] Tạo đúng cấu trúc thư mục mục 6.
 - [ ] Tạo và kiểm tra `be/database/ownership.yml` cho mọi bảng/view/57 procedure và database role.
 - [ ] Sửa nhóm P0 ảnh hưởng baseline/foundation được nêu dưới mục 8.12; tạo owner/milestone cho mọi P0 còn lại trước phase domain tương ứng.
@@ -1234,7 +1244,7 @@ Mọi phát hiện lệch tài liệu phải được sửa trong cùng pull req
 - [ ] Chuyển SQL đã sửa vào `be/database/baseline/001_initial.sql` và ghi checksum.
 - [ ] Tạo `schema_migrations` và script apply migration.
 - [ ] Tạo `.editorconfig`, ESLint, Prettier, TypeScript strict và naming rules.
-- [ ] Tạo `.env.example`, secret policy và `.gitignore` cho `.runtime/`.
+- [x] Tạo `.env.example`, secret policy và `.gitignore` cho `.runtime/`.
 - [ ] Tạo CI: lint, typecheck, unit, build, OpenAPI lint, SQL clean install, upgrade chain và least-privilege test.
 - [ ] Viết ADR-0001 cho kiến trúc Gateway + Auth + Clinic modular monolith.
 - [ ] Viết ADR-0002 cho OpenAPI-first và generated client.
@@ -1242,16 +1252,16 @@ Mọi phát hiện lệch tài liệu phải được sửa trong cùng pull req
 
 ### Phase 1
 
-- [ ] Scaffold Ocelot Gateway với route `/api/v1/auth/*` và `/api/v1/*`.
-- [ ] Scaffold Auth Service và Clinic Service bằng cùng TypeScript config.
-- [ ] Scaffold Scheduler Worker.
-- [ ] Cài structured logger và request ID end-to-end.
-- [ ] Cài SQL pool, reserved-connection command runner và session-context set/exec/clear helper.
-- [ ] Tạo standard error/result envelope.
-- [ ] Tạo OpenAPI root, lint, `generated-api-types` và `generated-api-client`.
-- [ ] Scaffold Admin Web với router, provider và generated client.
-- [ ] Scaffold Mobile với React Navigation, SecureStore và generated client.
-- [ ] Tạo health endpoints và local launcher scripts.
+- [x] Scaffold Ocelot Gateway với route `/api/v1/auth/*` và `/api/v1/*`.
+- [x] Scaffold Auth Service và Clinic Service bằng cùng TypeScript config.
+- [x] Scaffold Scheduler Worker.
+- [x] Cài structured logger và request ID end-to-end.
+- [x] Cài SQL pool, reserved-connection command runner và session-context set/exec/clear helper.
+- [x] Tạo standard error/result envelope.
+- [x] Tạo OpenAPI root, lint, `generated-api-types` và `generated-api-client`.
+- [x] Scaffold Admin Web với router, provider và generated client.
+- [x] Scaffold Mobile với React Navigation, SecureStore và generated client.
+- [x] Tạo health endpoints và local launcher scripts.
 
 ## 22. Tiêu chí MVP cuối cùng
 

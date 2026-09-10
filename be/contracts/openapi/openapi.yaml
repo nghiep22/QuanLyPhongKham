@@ -2,42 +2,123 @@ openapi: 3.1.0
 info:
   title: Private Clinic API
   version: 0.1.0
-  description: Contract-first API for the private clinic management system.
+  description: Public contract for the private clinic management system.
 servers:
-  - url: http://localhost:5000/api/v1
+  - url: http://localhost:5000
 paths:
   /health/live:
     get:
       operationId: getLiveness
+      summary: Check whether the Gateway process is alive
       responses:
         '200':
-          description: Service is alive.
+          description: Gateway is alive. This check does not depend on SQL Server.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HealthResponse'
+              example:
+                data:
+                  status: ok
+                  service: clinic-gateway
+                meta: {}
+                requestId: 74ed3a7b-d580-448a-8570-22cb2345c6be
+  /health/ready:
+    get:
+      operationId: getReadiness
+      summary: Check Gateway and downstream service readiness
+      responses:
+        '200':
+          description: Gateway and required downstream dependencies are ready.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessResponse'
+        '503':
+          description: At least one required dependency is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
 components:
   schemas:
-    HealthResponse:
+    ResponseMeta:
       type: object
+      additionalProperties: true
+    HealthData:
+      type: object
+      additionalProperties: false
       required: [status, service]
       properties:
         status:
           type: string
+          const: ok
         service:
+          type: string
+    HealthResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data:
+          $ref: '#/components/schemas/HealthData'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+        requestId:
+          type: string
+    DependencyHealth:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [up, down]
+        database:
+          type: string
+    ReadinessData:
+      type: object
+      additionalProperties: false
+      required: [status, service, dependencies]
+      properties:
+        status:
+          type: string
+          const: ready
+        service:
+          type: string
+        dependencies:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/DependencyHealth'
+    ReadinessResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data:
+          $ref: '#/components/schemas/ReadinessData'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+        requestId:
+          type: string
+    ApiErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error, requestId]
+      properties:
+        error:
+          $ref: '#/components/schemas/ApiError'
+        requestId:
           type: string
     ApiError:
       type: object
-      required: [error]
+      additionalProperties: false
+      required: [code, message]
       properties:
-        error:
+        code:
+          type: string
+        message:
+          type: string
+        details:
           type: object
-          required: [code, message]
-          properties:
-            code:
-              type: string
-            message:
-              type: string
-            details:
-              type: object
-              additionalProperties: true
+          additionalProperties: true

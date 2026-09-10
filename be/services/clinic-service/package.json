@@ -7,6 +7,7 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "oxlint src tests",
     "start": "node dist/server.js",
     "test": "vitest run --passWithNoTests"
   },
@@ -15,6 +16,7 @@
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "helmet": "^8.1.0",
+    "msnodesqlv8": "^5.3.0",
     "mssql": "^12.2.0",
     "pino": "^10.1.0",
     "pino-http": "^11.0.0",
@@ -25,6 +27,8 @@
     "@types/express": "^5.0.6",
     "@types/mssql": "^9.1.8",
     "@types/node": "^24.10.4",
+    "@types/supertest": "^7.2.1",
+    "supertest": "^7.2.2",
     "tsx": "^4.21.0",
     "typescript": "~6.0.2",
     "vitest": "^4.0.16"

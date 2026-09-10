@@ -21,9 +21,14 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
+    "openapi:lint": "redocly lint be/contracts/openapi/openapi.yaml",
+    "openapi:generate": "openapi-ts -f openapi-ts.config.ts && openapi-ts -f openapi-client.config.ts",
+    "openapi:check": "npm run openapi:lint && npm run openapi:generate && git diff --exit-code -- packages/generated-api-types/src/generated packages/generated-api-client/src/generated",
     "doctor:mobile": "npx expo-doctor fe/mobile"
   },
   "devDependencies": {
+    "@hey-api/openapi-ts": "^0.99.0",
+    "@redocly/cli": "^2.51.2",
     "concurrently": "^9.2.1",
     "typescript": "~6.0.2"
   },
@@ -33,10 +38,12 @@
   },
   "overrides": {
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "js-yaml": "4.3.2"
   },
   "allowScripts": {
     "argon2@0.44.0": true,
-    "esbuild@0.28.2": true
+    "esbuild@0.28.2": true,
+    "msnodesqlv8@5.3.0": true
   }
 }
