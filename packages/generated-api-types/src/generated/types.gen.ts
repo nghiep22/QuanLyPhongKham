@@ -126,6 +126,166 @@ export type JwksResponse = {
     keys: Array<Jwk>;
 };
 
+export type EmployeeType = 'DOCTOR' | 'NURSE' | 'RECEPTIONIST' | 'PHARMACIST' | 'CASHIER' | 'LAB_TECH' | 'TECHNICIAN' | 'MANAGER' | 'OTHER';
+
+export type EmploymentStatus = 'ACTIVE' | 'ON_LEAVE' | 'SUSPENDED' | 'TERMINATED';
+
+export type AccountStatus = 'ACTIVE' | 'LOCKED' | 'DISABLED' | 'PENDING';
+
+export type Gender = 'MALE' | 'FEMALE' | 'OTHER';
+
+export type BranchReference = {
+    publicId: string;
+    code: string;
+    name: string;
+};
+
+export type RoleReference = {
+    code: string;
+    name: string;
+    scope: 'GLOBAL' | 'BRANCH';
+};
+
+export type SpecialtyReference = {
+    publicId: string;
+    code: string;
+    name: string;
+};
+
+export type StaffReferenceData = {
+    branches: Array<BranchReference>;
+    /**
+     * Empty for actors who can manage users but cannot assign roles.
+     */
+    roles: Array<RoleReference>;
+    specialties: Array<SpecialtyReference>;
+};
+
+export type StaffReferenceResponse = {
+    data: StaffReferenceData;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type StaffRoleAssignment = {
+    publicId: string;
+    code: string;
+    name: string;
+    branch: BranchReference | null;
+    validFromUtc: string;
+    validToUtc: string | null;
+};
+
+export type DoctorProfile = {
+    publicId: string;
+    medicalLicenseNo: string;
+    licenseIssuedDate: string | null;
+    licenseExpiryDate: string | null;
+    academicTitle: string | null;
+    biography: string | null;
+    defaultSlotMinutes: number;
+    acceptsOnlineBooking: boolean;
+    rowVersion: string;
+};
+
+export type Staff = {
+    publicId: string;
+    userPublicId: string;
+    username: string;
+    email: string | null;
+    phone: string | null;
+    accountStatus: AccountStatus;
+    lockedUntilUtc: string | null;
+    employeeCode: string;
+    employeeType: EmployeeType;
+    fullName: string;
+    dateOfBirth: string | null;
+    gender: Gender | null;
+    addressLine: string | null;
+    hireDate: string;
+    employmentStatus: EmploymentStatus;
+    branch: BranchReference;
+    doctor: DoctorProfile | null;
+    roles: Array<StaffRoleAssignment>;
+    rowVersion: string;
+};
+
+export type StaffResponse = {
+    data: Staff;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type PageMeta = {
+    page: number;
+    pageSize: number;
+    total: number;
+};
+
+export type StaffListResponse = {
+    data: Array<Staff>;
+    meta: PageMeta;
+    requestId: RequestId;
+};
+
+export type CreateStaffRequest = {
+    branchPublicId: string;
+    username: string;
+    email?: string;
+    phone?: string;
+    employeeCode: string;
+    employeeType: EmployeeType;
+    fullName: string;
+    dateOfBirth?: string;
+    gender?: Gender;
+    addressLine?: string;
+    hireDate: string;
+    medicalLicenseNo?: string;
+    licenseIssuedDate?: string;
+    licenseExpiryDate?: string;
+    academicTitle?: string;
+    biography?: string;
+    defaultSlotMinutes?: number;
+    acceptsOnlineBooking?: boolean;
+    specialtyPublicId?: string;
+};
+
+export type UpdateStaffRequest = {
+    email?: string;
+    phone?: string;
+    fullName: string;
+    dateOfBirth?: string;
+    gender?: Gender;
+    addressLine?: string;
+    hireDate: string;
+    employmentStatus: EmploymentStatus;
+    terminationDate?: string;
+    medicalLicenseNo?: string;
+    licenseIssuedDate?: string;
+    licenseExpiryDate?: string;
+    academicTitle?: string;
+    biography?: string;
+    defaultSlotMinutes?: number;
+    acceptsOnlineBooking?: boolean;
+};
+
+export type ReasonRequest = {
+    reason: string;
+};
+
+export type SetAccountStatusRequest = ReasonRequest & {
+    status: 'ACTIVE' | 'DISABLED';
+};
+
+export type GrantRoleRequest = {
+    roleCode: string;
+    /**
+     * Required for branch roles and forbidden for ADMIN.
+     */
+    branchPublicId?: string;
+    validToUtc?: string;
+};
+
 export type ApiErrorResponse = {
     error: ApiError;
     requestId: RequestId;
@@ -138,6 +298,38 @@ export type ApiError = {
         [key: string]: unknown;
     };
 };
+
+export type CreateStaffRequestWritable = {
+    branchPublicId: string;
+    username: string;
+    email?: string;
+    phone?: string;
+    temporaryPassword: string;
+    employeeCode: string;
+    employeeType: EmployeeType;
+    fullName: string;
+    dateOfBirth?: string;
+    gender?: Gender;
+    addressLine?: string;
+    hireDate: string;
+    medicalLicenseNo?: string;
+    licenseIssuedDate?: string;
+    licenseExpiryDate?: string;
+    academicTitle?: string;
+    biography?: string;
+    defaultSlotMinutes?: number;
+    acceptsOnlineBooking?: boolean;
+    specialtyPublicId?: string;
+};
+
+export type StaffId = string;
+
+export type UserId = string;
+
+/**
+ * Strong ETag containing the Base64 employee rowversion and optional doctor rowversion.
+ */
+export type IfMatch = string;
 
 export type GetLivenessData = {
     body?: never;
@@ -311,3 +503,370 @@ export type LogoutAllResponses = {
 };
 
 export type LogoutAllResponse2 = LogoutAllResponses[keyof LogoutAllResponses];
+
+export type GetStaffReferenceDataData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/staff/reference-data';
+};
+
+export type GetStaffReferenceDataErrors = {
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+};
+
+export type GetStaffReferenceDataError = GetStaffReferenceDataErrors[keyof GetStaffReferenceDataErrors];
+
+export type GetStaffReferenceDataResponses = {
+    /**
+     * Workforce reference data.
+     */
+    200: StaffReferenceResponse;
+};
+
+export type GetStaffReferenceDataResponse = GetStaffReferenceDataResponses[keyof GetStaffReferenceDataResponses];
+
+export type ListStaffData = {
+    body?: never;
+    path?: never;
+    query?: {
+        query?: string;
+        branchPublicId?: string;
+        employeeType?: EmployeeType;
+        accountStatus?: AccountStatus;
+        page?: number;
+        pageSize?: number;
+    };
+    url: '/api/v1/admin/staff';
+};
+
+export type ListStaffErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+};
+
+export type ListStaffError = ListStaffErrors[keyof ListStaffErrors];
+
+export type ListStaffResponses = {
+    /**
+     * A page of staff accounts.
+     */
+    200: StaffListResponse;
+};
+
+export type ListStaffResponse = ListStaffResponses[keyof ListStaffResponses];
+
+export type CreateStaffData = {
+    body: CreateStaffRequestWritable;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/staff';
+};
+
+export type CreateStaffErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type CreateStaffError = CreateStaffErrors[keyof CreateStaffErrors];
+
+export type CreateStaffResponses = {
+    /**
+     * Staff account created.
+     */
+    201: StaffResponse;
+};
+
+export type CreateStaffResponse = CreateStaffResponses[keyof CreateStaffResponses];
+
+export type GetStaffData = {
+    body?: never;
+    path: {
+        staffId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/staff/{staffId}';
+};
+
+export type GetStaffErrors = {
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+};
+
+export type GetStaffError = GetStaffErrors[keyof GetStaffErrors];
+
+export type GetStaffResponses = {
+    /**
+     * Staff details.
+     */
+    200: StaffResponse;
+};
+
+export type GetStaffResponse = GetStaffResponses[keyof GetStaffResponses];
+
+export type UpdateStaffData = {
+    body: UpdateStaffRequest;
+    headers: {
+        /**
+         * Strong ETag containing the Base64 employee rowversion and optional doctor rowversion.
+         */
+        'If-Match': string;
+    };
+    path: {
+        staffId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/staff/{staffId}';
+};
+
+export type UpdateStaffErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+    /**
+     * The If-Match precondition is required for this update.
+     */
+    428: ApiErrorResponse;
+};
+
+export type UpdateStaffError = UpdateStaffErrors[keyof UpdateStaffErrors];
+
+export type UpdateStaffResponses = {
+    /**
+     * Updated staff details.
+     */
+    200: StaffResponse;
+};
+
+export type UpdateStaffResponse = UpdateStaffResponses[keyof UpdateStaffResponses];
+
+export type SetStaffAccountStatusData = {
+    body: SetAccountStatusRequest;
+    path: {
+        userId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/users/{userId}/status';
+};
+
+export type SetStaffAccountStatusErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type SetStaffAccountStatusError = SetStaffAccountStatusErrors[keyof SetStaffAccountStatusErrors];
+
+export type SetStaffAccountStatusResponses = {
+    /**
+     * Updated staff details.
+     */
+    200: StaffResponse;
+};
+
+export type SetStaffAccountStatusResponse = SetStaffAccountStatusResponses[keyof SetStaffAccountStatusResponses];
+
+export type UnlockStaffAccountData = {
+    body: ReasonRequest;
+    path: {
+        userId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/users/{userId}/unlock';
+};
+
+export type UnlockStaffAccountErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type UnlockStaffAccountError = UnlockStaffAccountErrors[keyof UnlockStaffAccountErrors];
+
+export type UnlockStaffAccountResponses = {
+    /**
+     * Updated staff details.
+     */
+    200: StaffResponse;
+};
+
+export type UnlockStaffAccountResponse = UnlockStaffAccountResponses[keyof UnlockStaffAccountResponses];
+
+export type GrantStaffRoleData = {
+    body: GrantRoleRequest;
+    path: {
+        userId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/users/{userId}/roles';
+};
+
+export type GrantStaffRoleErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type GrantStaffRoleError = GrantStaffRoleErrors[keyof GrantStaffRoleErrors];
+
+export type GrantStaffRoleResponses = {
+    /**
+     * Updated staff details.
+     */
+    200: StaffResponse;
+};
+
+export type GrantStaffRoleResponse = GrantStaffRoleResponses[keyof GrantStaffRoleResponses];
+
+export type RevokeStaffRoleData = {
+    body: ReasonRequest;
+    path: {
+        userId: string;
+        assignmentId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/users/{userId}/roles/{assignmentId}';
+};
+
+export type RevokeStaffRoleErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type RevokeStaffRoleError = RevokeStaffRoleErrors[keyof RevokeStaffRoleErrors];
+
+export type RevokeStaffRoleResponses = {
+    /**
+     * Updated staff details.
+     */
+    200: StaffResponse;
+};
+
+export type RevokeStaffRoleResponse = RevokeStaffRoleResponses[keyof RevokeStaffRoleResponses];

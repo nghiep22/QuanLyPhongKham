@@ -21,6 +21,16 @@
       "Priority": 10
     },
     {
+      "UpstreamPathTemplate": "/api/v1/admin/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS" ],
+      "DownstreamPathTemplate": "/api/v1/admin/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        { "Host": "localhost", "Port": 4001 }
+      ],
+      "Priority": 10
+    },
+    {
       "UpstreamPathTemplate": "/api/v1/{everything}",
       "UpstreamHttpMethod": [ "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS" ],
       "DownstreamPathTemplate": "/api/v1/{everything}",

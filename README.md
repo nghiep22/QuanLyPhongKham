@@ -65,6 +65,11 @@ npm run dev:mobile
 - Kiểm tra toàn bộ dependency: `http://localhost:5000/health/ready`
 - JWKS xác minh access token: `http://localhost:5000/.well-known/jwks.json`
 
+Sau khi đăng nhập bằng Admin hoặc Manager, mở mục **Nhân sự** để tạo/cập nhật
+nhân viên, hồ sơ bác sĩ, khóa/mở tài khoản và quản lý role theo chi nhánh. Manager
+chỉ thao tác trong chi nhánh được phân quyền; quản lý role yêu cầu Admin toàn cục.
+Các cập nhật hồ sơ dùng `ETag`/`If-Match` để không ghi đè thay đổi đồng thời.
+
 Nếu SQL Server local chưa bật TCP/IP và bạn dùng Windows Authentication, đặt
 `SQL_SERVER=np:\\.\pipe\sql\query` trong `.env`. Xem thêm [be/README.md](./be/README.md).
 
@@ -76,6 +81,14 @@ npm run openapi:check
 npm run build
 npm test
 npm run doctor:mobile
+```
+
+Kiểm thử hồi quy SQL Server:
+
+```powershell
+sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\auth-session.test.sql
+sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\staff-rbac.test.sql
+sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\staff-safety.test.sql
 ```
 
 Chi tiết nghiệp vụ và thứ tự phát triển nằm trong [PROJECT_PLAN.md](./PROJECT_PLAN.md).

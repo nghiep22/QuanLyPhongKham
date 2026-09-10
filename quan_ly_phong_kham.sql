@@ -49,6 +49,7 @@ BEGIN
     CREATE TABLE dbo.branches
     (
         branch_id                     bigint IDENTITY(1,1) NOT NULL,
+        public_id                     uniqueidentifier NOT NULL CONSTRAINT DF_branches_public_id DEFAULT NEWSEQUENTIALID(),
         branch_code                   varchar(20) NOT NULL,
         branch_name                   nvarchar(200) NOT NULL,
         medical_license_no            nvarchar(100) NULL,
@@ -73,12 +74,26 @@ BEGIN
             CONSTRAINT DF_branches_updated DEFAULT SYSUTCDATETIME(),
         row_ver                       rowversion NOT NULL,
         CONSTRAINT PK_branches PRIMARY KEY CLUSTERED (branch_id),
+        CONSTRAINT UQ_branches_public_id UNIQUE (public_id),
         CONSTRAINT UQ_branches_code UNIQUE (branch_code),
         CONSTRAINT CK_branches_horizon CHECK (booking_horizon_days BETWEEN 1 AND 365),
         CONSTRAINT CK_branches_hold CHECK (online_hold_minutes BETWEEN 1 AND 120),
         CONSTRAINT CK_branches_cancel CHECK (cancellation_deadline_minutes >= 0)
     );
 END;
+GO
+
+IF COL_LENGTH(N'dbo.branches', N'public_id') IS NULL
+    ALTER TABLE dbo.branches ADD public_id uniqueidentifier NULL;
+IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.branches') AND name=N'public_id' AND is_nullable=1)
+BEGIN
+    EXEC sys.sp_executesql N'UPDATE dbo.branches SET public_id=NEWID() WHERE public_id IS NULL;';
+    EXEC sys.sp_executesql N'ALTER TABLE dbo.branches ALTER COLUMN public_id uniqueidentifier NOT NULL;';
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.default_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.branches') AND name=N'DF_branches_public_id')
+    EXEC sys.sp_executesql N'ALTER TABLE dbo.branches ADD CONSTRAINT DF_branches_public_id DEFAULT NEWSEQUENTIALID() FOR public_id;';
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.branches') AND name=N'UX_branches_public_id')
+    EXEC sys.sp_executesql N'CREATE UNIQUE INDEX UX_branches_public_id ON dbo.branches(public_id);';
 GO
 
 IF OBJECT_ID(N'dbo.rooms', N'U') IS NULL
@@ -111,16 +126,31 @@ BEGIN
     CREATE TABLE dbo.specialties
     (
         specialty_id     bigint IDENTITY(1,1) NOT NULL,
+        public_id         uniqueidentifier NOT NULL CONSTRAINT DF_specialties_public_id DEFAULT NEWSEQUENTIALID(),
         specialty_code   varchar(30) NOT NULL,
         specialty_name   nvarchar(150) NOT NULL,
         description      nvarchar(1000) NULL,
         is_active        bit NOT NULL CONSTRAINT DF_specialties_active DEFAULT (1),
         created_at_utc   datetime2(3) NOT NULL CONSTRAINT DF_specialties_created DEFAULT SYSUTCDATETIME(),
         CONSTRAINT PK_specialties PRIMARY KEY CLUSTERED (specialty_id),
+        CONSTRAINT UQ_specialties_public_id UNIQUE (public_id),
         CONSTRAINT UQ_specialties_code UNIQUE (specialty_code),
         CONSTRAINT UQ_specialties_name UNIQUE (specialty_name)
     );
 END;
+GO
+
+IF COL_LENGTH(N'dbo.specialties', N'public_id') IS NULL
+    ALTER TABLE dbo.specialties ADD public_id uniqueidentifier NULL;
+IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.specialties') AND name=N'public_id' AND is_nullable=1)
+BEGIN
+    EXEC sys.sp_executesql N'UPDATE dbo.specialties SET public_id=NEWID() WHERE public_id IS NULL;';
+    EXEC sys.sp_executesql N'ALTER TABLE dbo.specialties ALTER COLUMN public_id uniqueidentifier NOT NULL;';
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.default_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.specialties') AND name=N'DF_specialties_public_id')
+    EXEC sys.sp_executesql N'ALTER TABLE dbo.specialties ADD CONSTRAINT DF_specialties_public_id DEFAULT NEWSEQUENTIALID() FOR public_id;';
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.specialties') AND name=N'UX_specialties_public_id')
+    EXEC sys.sp_executesql N'CREATE UNIQUE INDEX UX_specialties_public_id ON dbo.specialties(public_id);';
 GO
 
 IF OBJECT_ID(N'dbo.service_categories', N'U') IS NULL
@@ -312,6 +342,7 @@ BEGIN
     CREATE TABLE dbo.user_roles
     (
         user_role_id      bigint IDENTITY(1,1) NOT NULL,
+        public_id         uniqueidentifier NOT NULL CONSTRAINT DF_user_roles_public_id DEFAULT NEWSEQUENTIALID(),
         user_id           bigint NOT NULL,
         role_id           bigint NOT NULL,
         branch_id         bigint NULL,
@@ -321,6 +352,7 @@ BEGIN
         valid_to_utc      datetime2(3) NULL,
         is_active         bit NOT NULL CONSTRAINT DF_user_roles_active DEFAULT (1),
         CONSTRAINT PK_user_roles PRIMARY KEY CLUSTERED (user_role_id),
+        CONSTRAINT UQ_user_roles_public_id UNIQUE (public_id),
         CONSTRAINT FK_user_roles_user FOREIGN KEY (user_id) REFERENCES dbo.users(user_id),
         CONSTRAINT FK_user_roles_role FOREIGN KEY (role_id) REFERENCES dbo.roles(role_id),
         CONSTRAINT FK_user_roles_branch FOREIGN KEY (branch_id) REFERENCES dbo.branches(branch_id),
@@ -328,6 +360,19 @@ BEGIN
         CONSTRAINT CK_user_roles_valid CHECK (valid_to_utc IS NULL OR valid_to_utc > valid_from_utc)
     );
 END;
+GO
+
+IF COL_LENGTH(N'dbo.user_roles', N'public_id') IS NULL
+    ALTER TABLE dbo.user_roles ADD public_id uniqueidentifier NULL;
+IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.user_roles') AND name=N'public_id' AND is_nullable=1)
+BEGIN
+    EXEC sys.sp_executesql N'UPDATE dbo.user_roles SET public_id=NEWID() WHERE public_id IS NULL;';
+    EXEC sys.sp_executesql N'ALTER TABLE dbo.user_roles ALTER COLUMN public_id uniqueidentifier NOT NULL;';
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.default_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.user_roles') AND name=N'DF_user_roles_public_id')
+    EXEC sys.sp_executesql N'ALTER TABLE dbo.user_roles ADD CONSTRAINT DF_user_roles_public_id DEFAULT NEWSEQUENTIALID() FOR public_id;';
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.user_roles') AND name=N'UX_user_roles_public_id')
+    EXEC sys.sp_executesql N'CREATE UNIQUE INDEX UX_user_roles_public_id ON dbo.user_roles(public_id);';
 GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.user_roles') AND name = N'UX_user_roles_global')
@@ -357,6 +402,7 @@ BEGIN
     CREATE TABLE dbo.employees
     (
         employee_id        bigint IDENTITY(1,1) NOT NULL,
+        public_id           uniqueidentifier NOT NULL CONSTRAINT DF_employees_public_id DEFAULT NEWSEQUENTIALID(),
         user_id            bigint NULL,
         primary_branch_id  bigint NOT NULL,
         employee_code      varchar(30) NOT NULL,
@@ -375,6 +421,7 @@ BEGIN
         updated_at_utc     datetime2(3) NOT NULL CONSTRAINT DF_employees_updated DEFAULT SYSUTCDATETIME(),
         row_ver            rowversion NOT NULL,
         CONSTRAINT PK_employees PRIMARY KEY CLUSTERED (employee_id),
+        CONSTRAINT UQ_employees_public_id UNIQUE (public_id),
         CONSTRAINT FK_employees_user FOREIGN KEY (user_id) REFERENCES dbo.users(user_id),
         CONSTRAINT FK_employees_branch FOREIGN KEY (primary_branch_id) REFERENCES dbo.branches(branch_id),
         CONSTRAINT UQ_employees_code UNIQUE (employee_code),
@@ -388,6 +435,19 @@ BEGIN
 END;
 GO
 
+IF COL_LENGTH(N'dbo.employees', N'public_id') IS NULL
+    ALTER TABLE dbo.employees ADD public_id uniqueidentifier NULL;
+IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.employees') AND name=N'public_id' AND is_nullable=1)
+BEGIN
+    EXEC sys.sp_executesql N'UPDATE dbo.employees SET public_id=NEWID() WHERE public_id IS NULL;';
+    EXEC sys.sp_executesql N'ALTER TABLE dbo.employees ALTER COLUMN public_id uniqueidentifier NOT NULL;';
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.default_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.employees') AND name=N'DF_employees_public_id')
+    EXEC sys.sp_executesql N'ALTER TABLE dbo.employees ADD CONSTRAINT DF_employees_public_id DEFAULT NEWSEQUENTIALID() FOR public_id;';
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.employees') AND name=N'UX_employees_public_id')
+    EXEC sys.sp_executesql N'CREATE UNIQUE INDEX UX_employees_public_id ON dbo.employees(public_id);';
+GO
+
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.employees') AND name = N'UX_employees_user')
     CREATE UNIQUE INDEX UX_employees_user ON dbo.employees(user_id) WHERE user_id IS NOT NULL;
 GO
@@ -397,6 +457,7 @@ BEGIN
     CREATE TABLE dbo.doctors
     (
         doctor_id               bigint IDENTITY(1,1) NOT NULL,
+        public_id               uniqueidentifier NOT NULL CONSTRAINT DF_doctors_public_id DEFAULT NEWSEQUENTIALID(),
         employee_id             bigint NOT NULL,
         medical_license_no      nvarchar(100) NOT NULL,
         license_issued_date     date NULL,
@@ -410,6 +471,7 @@ BEGIN
         updated_at_utc          datetime2(3) NOT NULL CONSTRAINT DF_doctors_updated DEFAULT SYSUTCDATETIME(),
         row_ver                 rowversion NOT NULL,
         CONSTRAINT PK_doctors PRIMARY KEY CLUSTERED (doctor_id),
+        CONSTRAINT UQ_doctors_public_id UNIQUE (public_id),
         CONSTRAINT FK_doctors_employee FOREIGN KEY (employee_id) REFERENCES dbo.employees(employee_id),
         CONSTRAINT UQ_doctors_employee UNIQUE (employee_id),
         CONSTRAINT UQ_doctors_license UNIQUE (medical_license_no),
@@ -418,6 +480,19 @@ BEGIN
             (license_expiry_date IS NULL OR license_issued_date IS NULL OR license_expiry_date >= license_issued_date)
     );
 END;
+GO
+
+IF COL_LENGTH(N'dbo.doctors', N'public_id') IS NULL
+    ALTER TABLE dbo.doctors ADD public_id uniqueidentifier NULL;
+IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.doctors') AND name=N'public_id' AND is_nullable=1)
+BEGIN
+    EXEC sys.sp_executesql N'UPDATE dbo.doctors SET public_id=NEWID() WHERE public_id IS NULL;';
+    EXEC sys.sp_executesql N'ALTER TABLE dbo.doctors ALTER COLUMN public_id uniqueidentifier NOT NULL;';
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.default_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.doctors') AND name=N'DF_doctors_public_id')
+    EXEC sys.sp_executesql N'ALTER TABLE dbo.doctors ADD CONSTRAINT DF_doctors_public_id DEFAULT NEWSEQUENTIALID() FOR public_id;';
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.doctors') AND name=N'UX_doctors_public_id')
+    EXEC sys.sp_executesql N'CREATE UNIQUE INDEX UX_doctors_public_id ON dbo.doctors(public_id);';
 GO
 
 IF OBJECT_ID(N'dbo.doctor_branch_assignments', N'U') IS NULL
@@ -3842,8 +3917,14 @@ BEGIN
             UPDATE dbo.users
                SET failed_login_count=@failed,
                    locked_until_utc=COALESCE(@locked_until_utc,locked_until_utc),
+                   token_version=IIF(@locked_until_utc IS NULL,token_version,token_version+1),
                    updated_at_utc=SYSUTCDATETIME()
              WHERE user_id=@user_id;
+            IF @locked_until_utc IS NOT NULL
+                UPDATE dbo.user_sessions
+                   SET revoked_at_utc=COALESCE(revoked_at_utc,SYSUTCDATETIME()),
+                       revocation_reason=COALESCE(revocation_reason,'ACCOUNT_CHANGED')
+                 WHERE user_id=@user_id AND revoked_at_utc IS NULL;
             DECLARE @entity_id varchar(100)=CONVERT(varchar(100),@user_id);
             DECLARE @audit_json nvarchar(max)=CONCAT(N'{"failedCount":',@failed,N',"locked":',
                 IIF(@locked_until_utc IS NULL,N'false',N'true'),N'}');
@@ -4101,9 +4182,15 @@ CREATE OR ALTER PROCEDURE dbo.sp_create_staff_account
     @full_name nvarchar(200),
     @date_of_birth date = NULL,
     @gender varchar(10) = NULL,
+    @address_line nvarchar(300) = NULL,
     @hire_date date,
     @medical_license_no nvarchar(100) = NULL,
+    @license_issued_date date = NULL,
     @license_expiry_date date = NULL,
+    @academic_title nvarchar(100) = NULL,
+    @biography nvarchar(max) = NULL,
+    @default_slot_minutes smallint = 30,
+    @accepts_online_booking bit = 1,
     @specialty_id bigint = NULL,
     @user_id bigint OUTPUT,
     @employee_id bigint OUTPUT,
@@ -4116,11 +4203,22 @@ BEGIN
 
     IF LEN(@password_hash) < 40
         THROW 53002, N'password_hash phải là hash mạnh do backend tạo.', 1;
+    IF NULLIF(LTRIM(RTRIM(@username)),N'') IS NULL OR NULLIF(LTRIM(RTRIM(@employee_code)),'') IS NULL
+       OR NULLIF(LTRIM(RTRIM(@full_name)),N'') IS NULL
+        THROW 53035, N'Tên đăng nhập, mã nhân viên và họ tên là bắt buộc.', 1;
     IF @employee_type NOT IN
        ('DOCTOR','NURSE','RECEPTIONIST','PHARMACIST','CASHIER','LAB_TECH','TECHNICIAN','MANAGER','OTHER')
         THROW 53003, N'Loại nhân viên không hợp lệ.', 1;
     IF @employee_type = 'DOCTOR' AND @medical_license_no IS NULL
         THROW 53004, N'Bác sĩ bắt buộc có số chứng chỉ hành nghề.', 1;
+    IF @date_of_birth IS NOT NULL AND @date_of_birth>=CONVERT(date,SYSUTCDATETIME())
+        THROW 53036, N'Ngày sinh phải ở trong quá khứ.',1;
+    IF @hire_date>DATEADD(day,31,CONVERT(date,SYSUTCDATETIME()))
+        THROW 53037, N'Ngày vào làm không được quá 31 ngày trong tương lai.',1;
+    IF @employee_type='DOCTOR' AND (@default_slot_minutes NOT BETWEEN 5 AND 240
+       OR (@license_expiry_date IS NOT NULL AND @license_issued_date IS NOT NULL
+           AND @license_expiry_date<@license_issued_date))
+        THROW 53038, N'Thông tin hành nghề bác sĩ không hợp lệ.',1;
 
     DECLARE @role_code varchar(50) =
         CASE @employee_type
@@ -4149,10 +4247,10 @@ BEGIN
 
         INSERT dbo.employees
             (user_id, primary_branch_id, employee_code, employee_type, full_name,
-             date_of_birth, gender, phone, email, hire_date, employment_status, is_active)
+             date_of_birth, gender, phone, email, address_line, hire_date, employment_status, is_active)
         VALUES
             (@user_id, @branch_id, @employee_code, @employee_type, @full_name,
-             @date_of_birth, @gender, @phone, @email, @hire_date, 'ACTIVE', 1);
+             @date_of_birth, @gender, @phone, @email, @address_line, @hire_date, 'ACTIVE', 1);
         SET @employee_id = SCOPE_IDENTITY();
 
         IF @role_code IS NOT NULL
@@ -4166,8 +4264,10 @@ BEGIN
         IF @employee_type = 'DOCTOR'
         BEGIN
             INSERT dbo.doctors
-                (employee_id, medical_license_no, license_expiry_date, is_active)
-            VALUES (@employee_id, @medical_license_no, @license_expiry_date, 1);
+                (employee_id, medical_license_no, license_issued_date, license_expiry_date,
+                 academic_title, biography, default_slot_minutes, accepts_online_booking, is_active)
+            VALUES (@employee_id, @medical_license_no, @license_issued_date, @license_expiry_date,
+                    @academic_title, @biography, @default_slot_minutes, @accepts_online_booking, 1);
             SET @doctor_id = SCOPE_IDENTITY();
 
             DECLARE @business_date date;
@@ -4206,6 +4306,285 @@ BEGIN
 END;
 GO
 
+CREATE OR ALTER PROCEDURE dbo.sp_update_staff_account
+    @actor_user_id bigint,
+    @target_user_id bigint,
+    @email varchar(254)=NULL,
+    @phone varchar(20)=NULL,
+    @full_name nvarchar(200),
+    @date_of_birth date=NULL,
+    @gender varchar(10)=NULL,
+    @address_line nvarchar(300)=NULL,
+    @hire_date date,
+    @employment_status varchar(20),
+    @termination_date date=NULL,
+    @medical_license_no nvarchar(100)=NULL,
+    @license_issued_date date=NULL,
+    @license_expiry_date date=NULL,
+    @academic_title nvarchar(100)=NULL,
+    @biography nvarchar(max)=NULL,
+    @default_slot_minutes smallint=NULL,
+    @accepts_online_booking bit=NULL,
+    @expected_employee_row_ver binary(8),
+    @expected_doctor_row_ver binary(8)=NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    IF NULLIF(LTRIM(RTRIM(@full_name)),N'') IS NULL
+        THROW 53039,N'Họ tên nhân viên là bắt buộc.',1;
+    IF @date_of_birth IS NOT NULL AND @date_of_birth>=CONVERT(date,SYSUTCDATETIME())
+        THROW 53036,N'Ngày sinh phải ở trong quá khứ.',1;
+    IF @employment_status NOT IN ('ACTIVE','ON_LEAVE','SUSPENDED','TERMINATED')
+        THROW 53040,N'Trạng thái nhân sự không hợp lệ.',1;
+    IF (@employment_status='TERMINATED' AND @termination_date IS NULL)
+       OR (@termination_date IS NOT NULL AND @termination_date<@hire_date)
+        THROW 53041,N'Ngày nghỉ việc không hợp lệ.',1;
+
+    DECLARE @employee_id bigint,@doctor_id bigint,@branch_id bigint,@employee_type varchar(30),
+            @current_employment_status varchar(20);
+    SELECT @employee_id=e.employee_id,@branch_id=e.primary_branch_id,@employee_type=e.employee_type,
+           @doctor_id=d.doctor_id,@current_employment_status=e.employment_status
+    FROM dbo.employees e
+    LEFT JOIN dbo.doctors d ON d.employee_id=e.employee_id
+    WHERE e.user_id=@target_user_id;
+    IF @employee_id IS NULL THROW 53042,N'Tài khoản nhân viên không tồn tại.',1;
+    EXEC dbo.sp_assert_permission @actor_user_id,'USERS_MANAGE',@branch_id;
+    IF @current_employment_status='TERMINATED' AND @employment_status<>'TERMINATED'
+        THROW 53058,N'Không thể khôi phục hồ sơ nhân viên đã nghỉ việc; hãy tạo quy trình tái tuyển dụng riêng.',1;
+
+    IF @employee_type='DOCTOR'
+    BEGIN
+        IF NULLIF(LTRIM(RTRIM(@medical_license_no)),N'') IS NULL
+           OR @default_slot_minutes NOT BETWEEN 5 AND 240
+           OR (@license_expiry_date IS NOT NULL AND @license_issued_date IS NOT NULL
+               AND @license_expiry_date<@license_issued_date)
+            THROW 53038,N'Thông tin hành nghề bác sĩ không hợp lệ.',1;
+        IF @expected_doctor_row_ver IS NULL
+            THROW 53043,N'Phiên bản hồ sơ bác sĩ là bắt buộc.',1;
+    END;
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        DECLARE @target_is_global_admin bit=IIF(EXISTS
+        (
+            SELECT 1 FROM dbo.user_roles ur JOIN dbo.roles r ON r.role_id=ur.role_id
+            WHERE ur.user_id=@target_user_id AND r.role_code='ADMIN' AND ur.branch_id IS NULL
+              AND ur.is_active=1 AND ur.valid_from_utc<=SYSUTCDATETIME()
+              AND (ur.valid_to_utc IS NULL OR ur.valid_to_utc>SYSUTCDATETIME())
+        ),1,0);
+        IF @target_is_global_admin=1 AND NOT EXISTS
+        (
+            SELECT 1 FROM dbo.user_roles ur JOIN dbo.roles r ON r.role_id=ur.role_id
+            WHERE ur.user_id=@actor_user_id AND r.role_code='ADMIN' AND ur.branch_id IS NULL
+              AND ur.is_active=1 AND ur.valid_from_utc<=SYSUTCDATETIME()
+              AND (ur.valid_to_utc IS NULL OR ur.valid_to_utc>SYSUTCDATETIME())
+        ) THROW 51002,N'Chỉ Admin toàn cục được cập nhật hồ sơ của Admin toàn cục.',1;
+        IF @actor_user_id=@target_user_id AND @employment_status IN ('SUSPENDED','TERMINATED')
+            THROW 53048,N'Không được tự đình chỉ hoặc kết thúc hồ sơ đang đăng nhập.',1;
+        IF @target_is_global_admin=1 AND @employment_status IN ('SUSPENDED','TERMINATED')
+        BEGIN
+            DECLARE @admin_lock_result int;
+            EXEC @admin_lock_result=sys.sp_getapplock @Resource=N'security:global-admin',
+                @LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000;
+            IF @admin_lock_result<0 THROW 53059,N'Không thể khóa tài nguyên bảo vệ Admin toàn cục.',1;
+            IF NOT EXISTS
+            (
+                SELECT 1 FROM dbo.user_roles ur JOIN dbo.roles r ON r.role_id=ur.role_id
+                JOIN dbo.users u ON u.user_id=ur.user_id
+                WHERE ur.user_id<>@target_user_id AND r.role_code='ADMIN' AND ur.branch_id IS NULL
+                  AND ur.is_active=1 AND ur.valid_from_utc<=SYSUTCDATETIME()
+                  AND (ur.valid_to_utc IS NULL OR ur.valid_to_utc>SYSUTCDATETIME())
+                  AND u.status='ACTIVE' AND u.deleted_at_utc IS NULL
+            ) THROW 53050,N'Không được đình chỉ Admin toàn cục cuối cùng.',1;
+        END;
+        UPDATE dbo.employees WITH (UPDLOCK)
+           SET full_name=@full_name,date_of_birth=@date_of_birth,gender=@gender,
+               phone=@phone,email=@email,address_line=@address_line,hire_date=@hire_date,
+               employment_status=@employment_status,
+               termination_date=IIF(@employment_status='TERMINATED',@termination_date,NULL),
+               is_active=IIF(@employment_status IN ('SUSPENDED','TERMINATED'),0,1),
+               updated_at_utc=SYSUTCDATETIME()
+         WHERE employee_id=@employee_id AND row_ver=@expected_employee_row_ver;
+        IF @@ROWCOUNT=0 THROW 53044,N'Hồ sơ nhân viên đã được người khác cập nhật.',1;
+
+        UPDATE dbo.users
+           SET display_name=@full_name,email=@email,phone=@phone,
+               status=IIF(@employment_status IN ('SUSPENDED','TERMINATED'),'DISABLED',status),
+               token_version=IIF(@employment_status IN ('SUSPENDED','TERMINATED'),token_version+1,token_version),
+               updated_at_utc=SYSUTCDATETIME()
+         WHERE user_id=@target_user_id;
+
+        IF @doctor_id IS NOT NULL
+        BEGIN
+            UPDATE dbo.doctors WITH (UPDLOCK)
+               SET medical_license_no=@medical_license_no,license_issued_date=@license_issued_date,
+                   license_expiry_date=@license_expiry_date,academic_title=@academic_title,
+                   biography=@biography,default_slot_minutes=@default_slot_minutes,
+                   accepts_online_booking=@accepts_online_booking,
+                   is_active=IIF(@employment_status IN ('SUSPENDED','TERMINATED'),0,1),
+                   updated_at_utc=SYSUTCDATETIME()
+             WHERE doctor_id=@doctor_id AND row_ver=@expected_doctor_row_ver;
+            IF @@ROWCOUNT=0 THROW 53045,N'Hồ sơ bác sĩ đã được người khác cập nhật.',1;
+        END;
+
+        IF @employment_status IN ('SUSPENDED','TERMINATED')
+            UPDATE dbo.user_sessions SET revoked_at_utc=COALESCE(revoked_at_utc,SYSUTCDATETIME()),
+                revocation_reason=COALESCE(revocation_reason,'ACCOUNT_CHANGED')
+            WHERE user_id=@target_user_id AND revoked_at_utc IS NULL;
+
+        DECLARE @entity_id varchar(100)=CONVERT(varchar(100),@employee_id);
+        DECLARE @audit_json nvarchar(max)=CONCAT(N'{"employmentStatus":"',@employment_status,N'"}');
+        EXEC dbo.sp_write_audit @actor_user_id,@branch_id,'STAFF_ACCOUNT_UPDATED','EMPLOYEE',
+            @entity_id,NULL,@audit_json;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_set_staff_account_status
+    @actor_user_id bigint,
+    @target_user_id bigint,
+    @status varchar(20),
+    @reason nvarchar(500)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    IF @status NOT IN ('ACTIVE','DISABLED')
+        THROW 53046,N'Trạng thái tài khoản chỉ có thể là ACTIVE hoặc DISABLED.',1;
+    IF NULLIF(LTRIM(RTRIM(@reason)),N'') IS NULL
+        THROW 53047,N'Bắt buộc nhập lý do đổi trạng thái tài khoản.',1;
+    IF @actor_user_id=@target_user_id AND @status='DISABLED'
+        THROW 53048,N'Không được tự vô hiệu hóa tài khoản đang đăng nhập.',1;
+
+    DECLARE @branch_id bigint,@current_status varchar(20),@employment_status varchar(20);
+    SELECT @branch_id=e.primary_branch_id,@employment_status=e.employment_status,
+           @current_status=u.status
+    FROM dbo.users u JOIN dbo.employees e ON e.user_id=u.user_id
+    WHERE u.user_id=@target_user_id AND u.deleted_at_utc IS NULL;
+    IF @branch_id IS NULL THROW 53042,N'Tài khoản nhân viên không tồn tại.',1;
+    EXEC dbo.sp_assert_permission @actor_user_id,'USERS_MANAGE',@branch_id;
+    IF @status='ACTIVE' AND @employment_status='TERMINATED'
+        THROW 53049,N'Không thể kích hoạt tài khoản của nhân viên đã nghỉ việc.',1;
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        DECLARE @target_is_global_admin bit=IIF(EXISTS
+        (
+            SELECT 1 FROM dbo.user_roles ur JOIN dbo.roles r ON r.role_id=ur.role_id
+            WHERE ur.user_id=@target_user_id AND r.role_code='ADMIN' AND ur.branch_id IS NULL
+              AND ur.is_active=1 AND ur.valid_from_utc<=SYSUTCDATETIME()
+              AND (ur.valid_to_utc IS NULL OR ur.valid_to_utc>SYSUTCDATETIME())
+        ),1,0);
+        IF @target_is_global_admin=1 AND NOT EXISTS
+        (
+            SELECT 1 FROM dbo.user_roles ur JOIN dbo.roles r ON r.role_id=ur.role_id
+            WHERE ur.user_id=@actor_user_id AND r.role_code='ADMIN' AND ur.branch_id IS NULL
+              AND ur.is_active=1 AND ur.valid_from_utc<=SYSUTCDATETIME()
+              AND (ur.valid_to_utc IS NULL OR ur.valid_to_utc>SYSUTCDATETIME())
+        ) THROW 51002,N'Chỉ Admin toàn cục được đổi trạng thái của Admin toàn cục.',1;
+        IF @status='DISABLED' AND @target_is_global_admin=1
+        BEGIN
+            DECLARE @admin_lock_result int;
+            EXEC @admin_lock_result=sys.sp_getapplock @Resource=N'security:global-admin',
+                @LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000;
+            IF @admin_lock_result<0 THROW 53059,N'Không thể khóa tài nguyên bảo vệ Admin toàn cục.',1;
+            IF NOT EXISTS
+        (
+            SELECT 1 FROM dbo.user_roles ur JOIN dbo.roles r ON r.role_id=ur.role_id
+            JOIN dbo.users u ON u.user_id=ur.user_id
+            WHERE ur.user_id<>@target_user_id AND r.role_code='ADMIN' AND ur.branch_id IS NULL
+              AND ur.is_active=1 AND ur.valid_from_utc<=SYSUTCDATETIME()
+              AND (ur.valid_to_utc IS NULL OR ur.valid_to_utc>SYSUTCDATETIME())
+              AND u.status='ACTIVE' AND u.deleted_at_utc IS NULL
+            ) THROW 53050,N'Không được vô hiệu hóa Admin toàn cục cuối cùng.',1;
+        END;
+
+        UPDATE dbo.users WITH (UPDLOCK)
+           SET status=@status,failed_login_count=IIF(@status='ACTIVE',0,failed_login_count),
+               locked_until_utc=IIF(@status='ACTIVE',NULL,locked_until_utc),
+               token_version=token_version+1,updated_at_utc=SYSUTCDATETIME()
+         WHERE user_id=@target_user_id AND status<>@status;
+        IF @@ROWCOUNT=0 AND @current_status<>@status
+            THROW 53042,N'Tài khoản nhân viên không tồn tại.',1;
+        UPDATE dbo.user_sessions SET revoked_at_utc=COALESCE(revoked_at_utc,SYSUTCDATETIME()),
+            revocation_reason=COALESCE(revocation_reason,'ACCOUNT_CHANGED')
+        WHERE user_id=@target_user_id AND revoked_at_utc IS NULL;
+
+        DECLARE @entity_id varchar(100)=CONVERT(varchar(100),@target_user_id);
+        DECLARE @audit_json nvarchar(max)=CONCAT(N'{"status":"',@status,N'","reason":"',
+            STRING_ESCAPE(@reason,'json'),N'"}');
+        EXEC dbo.sp_write_audit @actor_user_id,@branch_id,'STAFF_ACCOUNT_STATUS_CHANGED','USER',
+            @entity_id,NULL,@audit_json;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_unlock_staff_account
+    @actor_user_id bigint,
+    @target_user_id bigint,
+    @reason nvarchar(500)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    IF NULLIF(LTRIM(RTRIM(@reason)),N'') IS NULL
+        THROW 53051,N'Bắt buộc nhập lý do mở khóa tài khoản.',1;
+    DECLARE @branch_id bigint;
+    SELECT @branch_id=e.primary_branch_id FROM dbo.employees e
+    JOIN dbo.users u ON u.user_id=e.user_id
+    WHERE u.user_id=@target_user_id AND u.deleted_at_utc IS NULL;
+    IF @branch_id IS NULL THROW 53042,N'Tài khoản nhân viên không tồn tại.',1;
+    EXEC dbo.sp_assert_permission @actor_user_id,'USERS_MANAGE',@branch_id;
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        IF EXISTS
+        (
+            SELECT 1 FROM dbo.user_roles ur JOIN dbo.roles r ON r.role_id=ur.role_id
+            WHERE ur.user_id=@target_user_id AND r.role_code='ADMIN' AND ur.branch_id IS NULL
+              AND ur.is_active=1 AND ur.valid_from_utc<=SYSUTCDATETIME()
+              AND (ur.valid_to_utc IS NULL OR ur.valid_to_utc>SYSUTCDATETIME())
+        ) AND NOT EXISTS
+        (
+            SELECT 1 FROM dbo.user_roles ur JOIN dbo.roles r ON r.role_id=ur.role_id
+            WHERE ur.user_id=@actor_user_id AND r.role_code='ADMIN' AND ur.branch_id IS NULL
+              AND ur.is_active=1 AND ur.valid_from_utc<=SYSUTCDATETIME()
+              AND (ur.valid_to_utc IS NULL OR ur.valid_to_utc>SYSUTCDATETIME())
+        ) THROW 51002,N'Chỉ Admin toàn cục được mở khóa Admin toàn cục.',1;
+        UPDATE dbo.users WITH (UPDLOCK)
+           SET status=IIF(status='LOCKED','ACTIVE',status),failed_login_count=0,
+               locked_until_utc=NULL,token_version=token_version+1,
+               updated_at_utc=SYSUTCDATETIME()
+         WHERE user_id=@target_user_id AND status<>'DISABLED'
+           AND (status='LOCKED' OR locked_until_utc IS NOT NULL OR failed_login_count>0);
+        IF @@ROWCOUNT=0 THROW 53052,N'Tài khoản không bị khóa hoặc đang bị vô hiệu hóa.',1;
+        UPDATE dbo.user_sessions SET revoked_at_utc=COALESCE(revoked_at_utc,SYSUTCDATETIME()),
+            revocation_reason=COALESCE(revocation_reason,'ACCOUNT_CHANGED')
+        WHERE user_id=@target_user_id AND revoked_at_utc IS NULL;
+        DECLARE @entity_id varchar(100)=CONVERT(varchar(100),@target_user_id);
+        DECLARE @audit_json nvarchar(max)=CONCAT(N'{"reason":"',STRING_ESCAPE(@reason,'json'),N'"}');
+        EXEC dbo.sp_write_audit @actor_user_id,@branch_id,'STAFF_ACCOUNT_UNLOCKED','USER',
+            @entity_id,NULL,@audit_json;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
 CREATE OR ALTER PROCEDURE dbo.sp_grant_user_role
     @actor_user_id bigint,
     @target_user_id bigint,
@@ -4216,15 +4595,33 @@ AS
 BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
+    IF @actor_user_id=@target_user_id
+        THROW 53053,N'Không được tự gán quyền cho tài khoản đang đăng nhập.',1;
+    IF @role_code='PATIENT'
+        THROW 53054,N'Role PATIENT chỉ được cấp qua luồng tài khoản bệnh nhân.',1;
+    IF (@role_code='ADMIN' AND @branch_id IS NOT NULL)
+       OR (@role_code<>'ADMIN' AND @branch_id IS NULL)
+        THROW 53055,N'ADMIN phải ở phạm vi toàn cục; role nhân viên phải thuộc một chi nhánh.',1;
     EXEC dbo.sp_assert_permission @actor_user_id, 'ROLES_MANAGE', @branch_id;
 
     BEGIN TRY
         BEGIN TRANSACTION;
 
+        IF @role_code='ADMIN'
+        BEGIN
+            DECLARE @admin_lock_result int;
+            EXEC @admin_lock_result=sys.sp_getapplock @Resource=N'security:global-admin',
+                @LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000;
+            IF @admin_lock_result<0 THROW 53059,N'Không thể khóa tài nguyên bảo vệ Admin toàn cục.',1;
+        END;
+
         DECLARE @role_id bigint;
         SELECT @role_id = role_id FROM dbo.roles WITH (UPDLOCK, HOLDLOCK)
         WHERE role_code = @role_code AND is_active = 1;
         IF @role_id IS NULL THROW 53007, N'Vai trò không tồn tại hoặc đã ngừng.', 1;
+        IF @branch_id IS NOT NULL AND NOT EXISTS
+           (SELECT 1 FROM dbo.branches WHERE branch_id=@branch_id AND is_active=1)
+            THROW 53005,N'Chi nhánh không tồn tại hoặc ngừng hoạt động.',1;
         IF NOT EXISTS (SELECT 1 FROM dbo.users WHERE user_id = @target_user_id AND deleted_at_utc IS NULL)
             THROW 53008, N'Tài khoản đích không tồn tại.', 1;
         IF @valid_to_utc IS NOT NULL AND @valid_to_utc <= SYSUTCDATETIME()
@@ -4242,6 +4639,12 @@ BEGIN
             (user_id, role_id, branch_id, granted_by_user_id, valid_to_utc, is_active)
         VALUES
             (@target_user_id, @role_id, @branch_id, @actor_user_id, @valid_to_utc, 1);
+
+        UPDATE dbo.users SET token_version=token_version+1,updated_at_utc=SYSUTCDATETIME()
+        WHERE user_id=@target_user_id;
+        UPDATE dbo.user_sessions SET revoked_at_utc=COALESCE(revoked_at_utc,SYSUTCDATETIME()),
+            revocation_reason=COALESCE(revocation_reason,'ACCOUNT_CHANGED')
+        WHERE user_id=@target_user_id AND revoked_at_utc IS NULL;
 
         DECLARE @grant_entity_id varchar(100) = CONVERT(varchar(100), @target_user_id);
         DECLARE @grant_audit_json nvarchar(max) = CONCAT(N'{"role":"', @role_code, N'"}');
@@ -4273,14 +4676,39 @@ BEGIN
     SELECT @branch_id = ur.branch_id, @target_user_id = ur.user_id, @role_code = r.role_code
     FROM dbo.user_roles ur JOIN dbo.roles r ON r.role_id = ur.role_id
     WHERE ur.user_role_id = @user_role_id;
+    IF @target_user_id IS NULL THROW 53012,N'Vai trò không tồn tại hoặc đã bị thu hồi.',1;
+    IF @target_user_id=@actor_user_id
+        THROW 53056,N'Không được tự thu hồi vai trò của tài khoản đang đăng nhập.',1;
     EXEC dbo.sp_assert_permission @actor_user_id, 'ROLES_MANAGE', @branch_id;
 
     BEGIN TRY
         BEGIN TRANSACTION;
+        IF @role_code='ADMIN' AND @branch_id IS NULL
+        BEGIN
+            DECLARE @admin_lock_result int;
+            EXEC @admin_lock_result=sys.sp_getapplock @Resource=N'security:global-admin',
+                @LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000;
+            IF @admin_lock_result<0 THROW 53059,N'Không thể khóa tài nguyên bảo vệ Admin toàn cục.',1;
+            IF NOT EXISTS
+        (
+            SELECT 1 FROM dbo.user_roles ur JOIN dbo.roles r ON r.role_id=ur.role_id
+            JOIN dbo.users u ON u.user_id=ur.user_id
+            WHERE ur.user_role_id<>@user_role_id AND r.role_code='ADMIN' AND ur.branch_id IS NULL
+              AND ur.is_active=1 AND ur.valid_from_utc<=SYSUTCDATETIME()
+              AND (ur.valid_to_utc IS NULL OR ur.valid_to_utc>SYSUTCDATETIME())
+              AND u.status='ACTIVE' AND u.deleted_at_utc IS NULL
+            ) THROW 53057,N'Không được thu hồi Admin toàn cục cuối cùng.',1;
+        END;
         UPDATE dbo.user_roles WITH (UPDLOCK, HOLDLOCK)
            SET is_active = 0, valid_to_utc = COALESCE(valid_to_utc, SYSUTCDATETIME())
          WHERE user_role_id = @user_role_id AND is_active = 1;
         IF @@ROWCOUNT = 0 THROW 53012, N'Vai trò không tồn tại hoặc đã bị thu hồi.', 1;
+
+        UPDATE dbo.users SET token_version=token_version+1,updated_at_utc=SYSUTCDATETIME()
+        WHERE user_id=@target_user_id;
+        UPDATE dbo.user_sessions SET revoked_at_utc=COALESCE(revoked_at_utc,SYSUTCDATETIME()),
+            revocation_reason=COALESCE(revocation_reason,'ACCOUNT_CHANGED')
+        WHERE user_id=@target_user_id AND revoked_at_utc IS NULL;
 
         DECLARE @revoke_entity_id varchar(100) = CONVERT(varchar(100), @user_role_id);
         DECLARE @revoke_audit_json nvarchar(max) =
@@ -7221,20 +7649,31 @@ GRANT EXECUTE ON OBJECT::dbo.sp_auth_create_session TO auth_core_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_auth_rotate_session TO auth_core_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_auth_revoke_session TO auth_core_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_auth_revoke_all_sessions TO auth_core_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_create_staff_account TO auth_core_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_update_staff_account TO auth_core_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_set_staff_account_status TO auth_core_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_unlock_staff_account TO auth_core_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_grant_user_role TO auth_core_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_revoke_user_role TO auth_core_executor;
 GRANT SELECT ON OBJECT::dbo.users TO auth_core_executor;
 GRANT SELECT ON OBJECT::dbo.user_roles TO auth_core_executor;
 GRANT SELECT ON OBJECT::dbo.roles TO auth_core_executor;
 GRANT SELECT ON OBJECT::dbo.role_permissions TO auth_core_executor;
 GRANT SELECT ON OBJECT::dbo.permissions TO auth_core_executor;
+GRANT SELECT ON OBJECT::dbo.branches TO auth_core_executor;
+GRANT SELECT ON OBJECT::dbo.employees TO auth_core_executor;
+GRANT SELECT ON OBJECT::dbo.doctors TO auth_core_executor;
+GRANT SELECT ON OBJECT::dbo.specialties TO auth_core_executor;
+GRANT SELECT ON OBJECT::dbo.doctor_specialties TO auth_core_executor;
 GO
 
-GRANT EXECUTE ON OBJECT::dbo.sp_create_staff_account TO clinic_api_executor;
+REVOKE EXECUTE ON OBJECT::dbo.sp_create_staff_account FROM clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_create_room TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_create_service TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_assign_doctor_service TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_create_medicine_batch TO clinic_api_executor;
-GRANT EXECUTE ON OBJECT::dbo.sp_grant_user_role TO clinic_api_executor;
-GRANT EXECUTE ON OBJECT::dbo.sp_revoke_user_role TO clinic_api_executor;
+REVOKE EXECUTE ON OBJECT::dbo.sp_grant_user_role FROM clinic_api_executor;
+REVOKE EXECUTE ON OBJECT::dbo.sp_revoke_user_role FROM clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_create_patient TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_create_patient_portal_account TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_link_user_patient TO clinic_api_executor;

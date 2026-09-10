@@ -57,6 +57,72 @@ export function createApiClient(options: ApiClientOptions) {
           method: 'POST',
         }),
     },
+    staff: {
+      references: () =>
+        request<import('@clinic/generated-api-types').StaffReferenceResponse>(
+          '/api/v1/admin/staff/reference-data',
+        ),
+      list: (query: {
+        query?: string;
+        branchPublicId?: string;
+        employeeType?: import('@clinic/generated-api-types').EmployeeType;
+        accountStatus?: import('@clinic/generated-api-types').AccountStatus;
+        page?: number;
+        pageSize?: number;
+      } = {}) => {
+        const search = new URLSearchParams();
+        Object.entries(query).forEach(([key, value]) => {
+          if (value !== undefined && value !== '') search.set(key, String(value));
+        });
+        const suffix = search.size ? `?${search.toString()}` : '';
+        return request<import('@clinic/generated-api-types').StaffListResponse>(
+          `/api/v1/admin/staff${suffix}`,
+        );
+      },
+      get: (staffId: string) =>
+        request<import('@clinic/generated-api-types').StaffResponse>(
+          `/api/v1/admin/staff/${encodeURIComponent(staffId)}`,
+        ),
+      create: (body: import('@clinic/generated-api-types').CreateStaffRequestWritable) =>
+        request<import('@clinic/generated-api-types').StaffResponse>('/api/v1/admin/staff', {
+          method: 'POST',
+          body: JSON.stringify(body),
+        }),
+      update: (
+        staffId: string,
+        body: import('@clinic/generated-api-types').UpdateStaffRequest,
+        employeeRowVersion: string,
+        doctorRowVersion?: string,
+      ) =>
+        request<import('@clinic/generated-api-types').StaffResponse>(
+          `/api/v1/admin/staff/${encodeURIComponent(staffId)}`,
+          {
+            method: 'PUT',
+            headers: { 'if-match': `"${employeeRowVersion}${doctorRowVersion ? `:${doctorRowVersion}` : ''}"` },
+            body: JSON.stringify(body),
+          },
+        ),
+      setStatus: (userId: string, body: import('@clinic/generated-api-types').SetAccountStatusRequest) =>
+        request<import('@clinic/generated-api-types').StaffResponse>(
+          `/api/v1/admin/users/${encodeURIComponent(userId)}/status`,
+          { method: 'PUT', body: JSON.stringify(body) },
+        ),
+      unlock: (userId: string, body: import('@clinic/generated-api-types').ReasonRequest) =>
+        request<import('@clinic/generated-api-types').StaffResponse>(
+          `/api/v1/admin/users/${encodeURIComponent(userId)}/unlock`,
+          { method: 'POST', body: JSON.stringify(body) },
+        ),
+      grantRole: (userId: string, body: import('@clinic/generated-api-types').GrantRoleRequest) =>
+        request<import('@clinic/generated-api-types').StaffResponse>(
+          `/api/v1/admin/users/${encodeURIComponent(userId)}/roles`,
+          { method: 'POST', body: JSON.stringify(body) },
+        ),
+      revokeRole: (userId: string, assignmentId: string, body: import('@clinic/generated-api-types').ReasonRequest) =>
+        request<import('@clinic/generated-api-types').StaffResponse>(
+          `/api/v1/admin/users/${encodeURIComponent(userId)}/roles/${encodeURIComponent(assignmentId)}`,
+          { method: 'DELETE', body: JSON.stringify(body) },
+        ),
+    },
     health: {
       live: () => request<import('@clinic/generated-api-types').HealthResponse>('/health/live'),
       ready: () => request<import('@clinic/generated-api-types').ReadinessResponse>('/health/ready'),

@@ -3,10 +3,13 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { ApiClientError } from '@clinic/generated-api-client'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import {
+  Navigate, NavLink, Outlet, Route, Routes, useLocation, useNavigate,
+} from 'react-router-dom'
 import { z } from 'zod'
 import './App.css'
 import { useAuth } from './features/auth/auth-context'
+import { StaffPage } from './features/staff/staff-page'
 
 const loginSchema = z.object({
   identifier: z.string().trim().min(3, 'Nhập tài khoản, email hoặc số điện thoại.'),
@@ -51,24 +54,14 @@ function LoginPage() {
         <form onSubmit={submit} noValidate>
           <label>
             Tài khoản
-            <input
-              {...register('identifier')}
-              aria-invalid={Boolean(errors.identifier)}
-              autoComplete="username"
-              autoFocus
-              placeholder="Username, email hoặc số điện thoại"
-            />
+            <input {...register('identifier')} aria-invalid={Boolean(errors.identifier)}
+              autoComplete="username" autoFocus placeholder="Username, email hoặc số điện thoại" />
             {errors.identifier && <span className="field-error">{errors.identifier.message}</span>}
           </label>
           <label>
             Mật khẩu
-            <input
-              {...register('password')}
-              aria-invalid={Boolean(errors.password)}
-              autoComplete="current-password"
-              type="password"
-              placeholder="Nhập mật khẩu"
-            />
+            <input {...register('password')} aria-invalid={Boolean(errors.password)}
+              autoComplete="current-password" type="password" placeholder="Nhập mật khẩu" />
             {errors.password && <span className="field-error">{errors.password.message}</span>}
           </label>
           {serverError && <div className="form-error" role="alert">{serverError}</div>}
@@ -81,17 +74,19 @@ function LoginPage() {
   )
 }
 
-function DashboardPage() {
+function ProtectedRoute({ children }: { children: ReactNode }) {
+  const { user, isRestoring } = useAuth()
+  const location = useLocation()
+  if (isRestoring) return <main className="loading-screen">Đang khôi phục phiên đăng nhập…</main>
+  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />
+  return children
+}
+
+function AdminLayout() {
   const { user, logout } = useAuth()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
-  const modules = [
-    ['Lịch hẹn hôm nay', 'Tiếp nhận lịch online và bệnh nhân đến trực tiếp'],
-    ['Danh sách chờ', 'Điều phối bệnh nhân theo phòng và bác sĩ'],
-    ['Hồ sơ khám', 'Sinh hiệu, chẩn đoán, chỉ định và kết luận'],
-    ['Đơn thuốc', 'Kê đơn, kiểm tra liều và hướng dẫn dùng thuốc'],
-    ['Thu ngân', 'Hóa đơn, thanh toán và hoàn tiền có kiểm soát'],
-    ['Báo cáo', 'Doanh thu, lượt khám và hiệu suất vận hành'],
-  ]
+  const canManageStaff = user?.roles.some((role) => role.code === 'ADMIN')
+    || user?.permissions.includes('USERS_MANAGE')
 
   const onLogout = async () => {
     setIsLoggingOut(true)
@@ -104,56 +99,68 @@ function DashboardPage() {
         <div className="brand">Clinic Admin</div>
         <nav>
           <NavLink to="/dashboard">Tổng quan</NavLink>
+          {canManageStaff && <NavLink to="/staff">Nhân sự</NavLink>}
           <a href="#appointments">Lịch hẹn</a>
           <a href="#patients">Bệnh nhân</a>
           <a href="#medical-records">Khám bệnh</a>
           <a href="#billing">Thu ngân</a>
         </nav>
-      </aside>
-      <main className="dashboard">
-        <header>
-          <div>
-            <span className="eyebrow">TRUNG TÂM ĐIỀU HÀNH</span>
-            <h1>Xin chào, {user?.displayName}</h1>
-            <p className="role-summary">
-              {user?.roles.map((role) => role.code).join(' · ') || 'Chưa được gán vai trò'}
-            </p>
-          </div>
+        <div className="sidebar-user">
+          <strong>{user?.displayName}</strong>
+          <span>{user?.roles.map((role) => role.code).join(' · ')}</span>
           <button className="logout" type="button" disabled={isLoggingOut} onClick={() => void onLogout()}>
             {isLoggingOut ? 'Đang đăng xuất…' : 'Đăng xuất'}
           </button>
-        </header>
-        <section className="notice">
-          <strong>Phiên đăng nhập an toàn đã hoạt động.</strong>
-          <span>Quyền truy cập sẽ được áp dụng theo vai trò và chi nhánh của tài khoản.</span>
-        </section>
-        <section className="module-grid">
-          {modules.map(([title, description]) => (
-            <article key={title}>
-              <div className="module-icon">+</div>
-              <h2>{title}</h2>
-              <p>{description}</p>
-            </article>
-          ))}
-        </section>
-      </main>
+        </div>
+      </aside>
+      <main className="dashboard"><Outlet /></main>
     </div>
   )
 }
 
-function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { user, isRestoring } = useAuth()
-  const location = useLocation()
-  if (isRestoring) return <main className="loading-screen">Đang khôi phục phiên đăng nhập…</main>
-  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />
-  return children
+function DashboardPage() {
+  const { user } = useAuth()
+  const modules = [
+    ['Nhân sự', 'Tài khoản, hồ sơ bác sĩ và phân quyền theo chi nhánh'],
+    ['Lịch hẹn hôm nay', 'Tiếp nhận lịch online và bệnh nhân đến trực tiếp'],
+    ['Danh sách chờ', 'Điều phối bệnh nhân theo phòng và bác sĩ'],
+    ['Hồ sơ khám', 'Sinh hiệu, chẩn đoán, chỉ định và kết luận'],
+    ['Đơn thuốc', 'Kê đơn, kiểm tra liều và hướng dẫn dùng thuốc'],
+    ['Thu ngân', 'Hóa đơn, thanh toán và hoàn tiền có kiểm soát'],
+  ]
+  return (
+    <>
+      <header>
+        <div>
+          <span className="eyebrow">TRUNG TÂM ĐIỀU HÀNH</span>
+          <h1>Xin chào, {user?.displayName}</h1>
+        </div>
+      </header>
+      <section className="notice">
+        <strong>Phiên đăng nhập an toàn đã hoạt động.</strong>
+        <span>Quyền truy cập được áp dụng theo vai trò và chi nhánh của tài khoản.</span>
+      </section>
+      <section className="module-grid">
+        {modules.map(([title, description]) => (
+          <article key={title}>
+            <div className="module-icon">+</div>
+            <h2>{title}</h2>
+            <p>{description}</p>
+          </article>
+        ))}
+      </section>
+    </>
+  )
 }
 
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+      <Route element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
+        <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/staff" element={<StaffPage />} />
+      </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   )

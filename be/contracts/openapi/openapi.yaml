@@ -142,7 +142,319 @@ paths:
                 $ref: '#/components/schemas/LogoutAllResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
+  /api/v1/admin/staff/reference-data:
+    get:
+      operationId: getStaffReferenceData
+      summary: Get branches, assignable roles, and specialties in the actor's scope
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Workforce reference data.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffReferenceResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/admin/staff:
+    get:
+      operationId: listStaff
+      summary: List staff in an authorized branch scope
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: query
+          schema:
+            type: string
+            maxLength: 100
+        - in: query
+          name: branchPublicId
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: employeeType
+          schema:
+            $ref: '#/components/schemas/EmployeeType'
+        - in: query
+          name: accountStatus
+          schema:
+            $ref: '#/components/schemas/AccountStatus'
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - in: query
+          name: pageSize
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: A page of staff accounts.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      operationId: createStaff
+      summary: Atomically create an account, employee profile, doctor profile, and default branch role
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateStaffRequest'
+      responses:
+        '201':
+          description: Staff account created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/admin/staff/{staffId}:
+    parameters:
+      - $ref: '#/components/parameters/StaffId'
+    get:
+      operationId: getStaff
+      summary: Get one staff account and its effective role assignments
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Staff details.
+          headers:
+            ETag:
+              $ref: '#/components/headers/StaffEtag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      operationId: updateStaff
+      summary: Update a complete staff profile using optimistic concurrency
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateStaffRequest'
+      responses:
+        '200':
+          description: Updated staff details.
+          headers:
+            ETag:
+              $ref: '#/components/headers/StaffEtag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+  /api/v1/admin/users/{userId}/status:
+    put:
+      operationId: setStaffAccountStatus
+      summary: Activate or disable a staff account and revoke existing sessions
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetAccountStatusRequest'
+      responses:
+        '200':
+          description: Updated staff details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/admin/users/{userId}/unlock:
+    post:
+      operationId: unlockStaffAccount
+      summary: Unlock a staff account after administrative verification
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+      responses:
+        '200':
+          description: Updated staff details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/admin/users/{userId}/roles:
+    post:
+      operationId: grantStaffRole
+      summary: Grant a time-bounded global or branch role
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GrantRoleRequest'
+      responses:
+        '200':
+          description: Updated staff details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/admin/users/{userId}/roles/{assignmentId}:
+    delete:
+      operationId: revokeStaffRole
+      summary: Revoke an active role assignment with a reason
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+        - name: assignmentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+      responses:
+        '200':
+          description: Updated staff details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
 components:
+  parameters:
+    StaffId:
+      name: staffId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Strong ETag containing the Base64 employee rowversion and optional doctor rowversion.
+      schema:
+        type: string
+        pattern: '^"[A-Za-z0-9+/]{11}=(:[A-Za-z0-9+/]{11}=)?"$'
+  headers:
+    StaffEtag:
+      description: Strong ETag for optimistic concurrency.
+      schema:
+        type: string
+        pattern: '^"[A-Za-z0-9+/]{11}=(:[A-Za-z0-9+/]{11}=)?"$'
   securitySchemes:
     bearerAuth:
       type: http
@@ -163,6 +475,24 @@ components:
             $ref: '#/components/schemas/ApiErrorResponse'
     Forbidden:
       description: The account is unavailable for login.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    NotFound:
+      description: The requested resource does not exist in the caller's scope.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    Conflict:
+      description: The operation conflicts with uniqueness, concurrency, or account safety rules.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    PreconditionRequired:
+      description: The If-Match precondition is required for this update.
       content:
         application/json:
           schema:
@@ -383,6 +713,424 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Jwk'
+    EmployeeType:
+      type: string
+      enum: [DOCTOR, NURSE, RECEPTIONIST, PHARMACIST, CASHIER, LAB_TECH, TECHNICIAN, MANAGER, OTHER]
+    EmploymentStatus:
+      type: string
+      enum: [ACTIVE, ON_LEAVE, SUSPENDED, TERMINATED]
+    AccountStatus:
+      type: string
+      enum: [ACTIVE, LOCKED, DISABLED, PENDING]
+    Gender:
+      type: string
+      enum: [MALE, FEMALE, OTHER]
+    BranchReference:
+      type: object
+      additionalProperties: false
+      required: [publicId, code, name]
+      properties:
+        publicId:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+    RoleReference:
+      type: object
+      additionalProperties: false
+      required: [code, name, scope]
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        scope:
+          type: string
+          enum: [GLOBAL, BRANCH]
+    SpecialtyReference:
+      type: object
+      additionalProperties: false
+      required: [publicId, code, name]
+      properties:
+        publicId:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+    StaffReferenceData:
+      type: object
+      additionalProperties: false
+      required: [branches, roles, specialties]
+      properties:
+        branches:
+          type: array
+          items:
+            $ref: '#/components/schemas/BranchReference'
+        roles:
+          type: array
+          description: Empty for actors who can manage users but cannot assign roles.
+          items:
+            $ref: '#/components/schemas/RoleReference'
+        specialties:
+          type: array
+          items:
+            $ref: '#/components/schemas/SpecialtyReference'
+    StaffReferenceResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data:
+          $ref: '#/components/schemas/StaffReferenceData'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+        requestId:
+          $ref: '#/components/schemas/RequestId'
+    StaffRoleAssignment:
+      type: object
+      additionalProperties: false
+      required: [publicId, code, name, branch, validFromUtc, validToUtc]
+      properties:
+        publicId:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        branch:
+          oneOf:
+            - $ref: '#/components/schemas/BranchReference'
+            - type: 'null'
+        validFromUtc:
+          type: string
+          format: date-time
+        validToUtc:
+          type: [string, 'null']
+          format: date-time
+    DoctorProfile:
+      type: object
+      additionalProperties: false
+      required:
+        - publicId
+        - medicalLicenseNo
+        - licenseIssuedDate
+        - licenseExpiryDate
+        - academicTitle
+        - biography
+        - defaultSlotMinutes
+        - acceptsOnlineBooking
+        - rowVersion
+      properties:
+        publicId:
+          type: string
+          format: uuid
+        medicalLicenseNo:
+          type: string
+        licenseIssuedDate:
+          type: [string, 'null']
+          format: date
+        licenseExpiryDate:
+          type: [string, 'null']
+          format: date
+        academicTitle:
+          type: [string, 'null']
+        biography:
+          type: [string, 'null']
+        defaultSlotMinutes:
+          type: integer
+          minimum: 5
+          maximum: 240
+        acceptsOnlineBooking:
+          type: boolean
+        rowVersion:
+          type: string
+          pattern: '^[A-Za-z0-9+/]{11}=$'
+    Staff:
+      type: object
+      additionalProperties: false
+      required:
+        - publicId
+        - userPublicId
+        - username
+        - email
+        - phone
+        - accountStatus
+        - lockedUntilUtc
+        - employeeCode
+        - employeeType
+        - fullName
+        - dateOfBirth
+        - gender
+        - addressLine
+        - hireDate
+        - employmentStatus
+        - branch
+        - doctor
+        - roles
+        - rowVersion
+      properties:
+        publicId:
+          type: string
+          format: uuid
+        userPublicId:
+          type: string
+          format: uuid
+        username:
+          type: string
+        email:
+          type: [string, 'null']
+          format: email
+        phone:
+          type: [string, 'null']
+        accountStatus:
+          $ref: '#/components/schemas/AccountStatus'
+        lockedUntilUtc:
+          type: [string, 'null']
+          format: date-time
+        employeeCode:
+          type: string
+        employeeType:
+          $ref: '#/components/schemas/EmployeeType'
+        fullName:
+          type: string
+        dateOfBirth:
+          type: [string, 'null']
+          format: date
+        gender:
+          oneOf:
+            - $ref: '#/components/schemas/Gender'
+            - type: 'null'
+        addressLine:
+          type: [string, 'null']
+        hireDate:
+          type: string
+          format: date
+        employmentStatus:
+          $ref: '#/components/schemas/EmploymentStatus'
+        branch:
+          $ref: '#/components/schemas/BranchReference'
+        doctor:
+          oneOf:
+            - $ref: '#/components/schemas/DoctorProfile'
+            - type: 'null'
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/StaffRoleAssignment'
+        rowVersion:
+          type: string
+          pattern: '^[A-Za-z0-9+/]{11}=$'
+    StaffResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data:
+          $ref: '#/components/schemas/Staff'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+        requestId:
+          $ref: '#/components/schemas/RequestId'
+    PageMeta:
+      type: object
+      additionalProperties: false
+      required: [page, pageSize, total]
+      properties:
+        page:
+          type: integer
+          minimum: 1
+        pageSize:
+          type: integer
+          minimum: 1
+        total:
+          type: integer
+          minimum: 0
+    StaffListResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Staff'
+        meta:
+          $ref: '#/components/schemas/PageMeta'
+        requestId:
+          $ref: '#/components/schemas/RequestId'
+    CreateStaffRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - branchPublicId
+        - username
+        - temporaryPassword
+        - employeeCode
+        - employeeType
+        - fullName
+        - hireDate
+      properties:
+        branchPublicId:
+          type: string
+          format: uuid
+        username:
+          type: string
+          minLength: 3
+          maxLength: 80
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        phone:
+          type: string
+          minLength: 8
+          maxLength: 20
+        temporaryPassword:
+          type: string
+          format: password
+          minLength: 12
+          maxLength: 200
+          writeOnly: true
+        employeeCode:
+          type: string
+          minLength: 2
+          maxLength: 30
+        employeeType:
+          $ref: '#/components/schemas/EmployeeType'
+        fullName:
+          type: string
+          minLength: 2
+          maxLength: 200
+        dateOfBirth:
+          type: string
+          format: date
+        gender:
+          $ref: '#/components/schemas/Gender'
+        addressLine:
+          type: string
+          maxLength: 300
+        hireDate:
+          type: string
+          format: date
+        medicalLicenseNo:
+          type: string
+          maxLength: 100
+        licenseIssuedDate:
+          type: string
+          format: date
+        licenseExpiryDate:
+          type: string
+          format: date
+        academicTitle:
+          type: string
+          maxLength: 100
+        biography:
+          type: string
+          maxLength: 4000
+        defaultSlotMinutes:
+          type: integer
+          minimum: 5
+          maximum: 240
+          default: 30
+        acceptsOnlineBooking:
+          type: boolean
+          default: true
+        specialtyPublicId:
+          type: string
+          format: uuid
+    UpdateStaffRequest:
+      type: object
+      additionalProperties: false
+      required: [fullName, hireDate, employmentStatus]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        phone:
+          type: string
+          minLength: 8
+          maxLength: 20
+        fullName:
+          type: string
+          minLength: 2
+          maxLength: 200
+        dateOfBirth:
+          type: string
+          format: date
+        gender:
+          $ref: '#/components/schemas/Gender'
+        addressLine:
+          type: string
+          maxLength: 300
+        hireDate:
+          type: string
+          format: date
+        employmentStatus:
+          $ref: '#/components/schemas/EmploymentStatus'
+        terminationDate:
+          type: string
+          format: date
+        medicalLicenseNo:
+          type: string
+          maxLength: 100
+        licenseIssuedDate:
+          type: string
+          format: date
+        licenseExpiryDate:
+          type: string
+          format: date
+        academicTitle:
+          type: string
+          maxLength: 100
+        biography:
+          type: string
+          maxLength: 4000
+        defaultSlotMinutes:
+          type: integer
+          minimum: 5
+          maximum: 240
+        acceptsOnlineBooking:
+          type: boolean
+    ReasonRequest:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 3
+          maxLength: 500
+    SetAccountStatusRequest:
+      allOf:
+        - $ref: '#/components/schemas/ReasonRequest'
+        - type: object
+          required: [status]
+          properties:
+            status:
+              type: string
+              enum: [ACTIVE, DISABLED]
+    GrantRoleRequest:
+      type: object
+      additionalProperties: false
+      required: [roleCode]
+      properties:
+        roleCode:
+          type: string
+          minLength: 2
+          maxLength: 50
+        branchPublicId:
+          type: string
+          format: uuid
+          description: Required for branch roles and forbidden for ADMIN.
+        validToUtc:
+          type: string
+          format: date-time
     ApiErrorResponse:
       type: object
       additionalProperties: false

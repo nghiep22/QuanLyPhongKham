@@ -6,6 +6,7 @@ import { pinoHttp } from 'pino-http';
 import { env } from './config.js';
 import { probeDatabase } from './infrastructure/database/sql-database.js';
 import { AuthService, createAuthRouter, SqlAuthRepository } from './modules/auth/index.js';
+import { createWorkforceRouter, SqlWorkforceRepository, WorkforceService } from './modules/workforce/index.js';
 import { errorHandler, HttpError, notFoundHandler } from './shared/http/errors.js';
 import { requestContext } from './shared/http/request-context.js';
 
@@ -13,12 +14,14 @@ export type DatabaseProbe = () => Promise<{ database: string }>;
 export type AppDependencies = {
   databaseProbe?: DatabaseProbe;
   authService?: AuthService;
+  workforceService?: WorkforceService;
 };
 
 export function createApp(dependencies: AppDependencies = {}) {
   const app = express();
   const databaseProbe = dependencies.databaseProbe ?? probeDatabase;
   const authService = dependencies.authService ?? new AuthService(new SqlAuthRepository());
+  const workforceService = dependencies.workforceService ?? new WorkforceService(new SqlWorkforceRepository());
 
   app.disable('x-powered-by');
   app.set('trust proxy', 'loopback');
@@ -37,7 +40,7 @@ export function createApp(dependencies: AppDependencies = {}) {
       callback(new HttpError(403, 'ORIGIN_NOT_ALLOWED', 'Origin không được phép truy cập Auth Service.'));
     },
     credentials: true,
-    exposedHeaders: ['x-request-id'],
+    exposedHeaders: ['x-request-id', 'etag'],
   }));
   app.use(express.json({ limit: '1mb' }));
   app.use(cookieParser());
@@ -75,6 +78,7 @@ export function createApp(dependencies: AppDependencies = {}) {
     }
   });
   app.use('/api/v1/auth', createAuthRouter(authService));
+  app.use('/api/v1/admin', createWorkforceRouter(authService, workforceService));
 
   app.use(notFoundHandler);
   app.use(errorHandler);

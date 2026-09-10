@@ -2,7 +2,7 @@
 
 import { client } from './client.gen.js';
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client/index.js';
-import type { GetAuthJwksData, GetAuthJwksResponses, GetLivenessData, GetLivenessResponses, GetReadinessData, GetReadinessErrors, GetReadinessResponses, LoginData, LoginErrors, LoginResponses, LogoutAllData2, LogoutAllErrors, LogoutAllResponses, LogoutData2, LogoutErrors, LogoutResponses, RefreshSessionData, RefreshSessionErrors, RefreshSessionResponses } from './types.gen.js';
+import type { CreateStaffData, CreateStaffErrors, CreateStaffResponses, GetAuthJwksData, GetAuthJwksResponses, GetLivenessData, GetLivenessResponses, GetReadinessData, GetReadinessErrors, GetReadinessResponses, GetStaffData, GetStaffErrors, GetStaffReferenceDataData, GetStaffReferenceDataErrors, GetStaffReferenceDataResponses, GetStaffResponses, GrantStaffRoleData, GrantStaffRoleErrors, GrantStaffRoleResponses, ListStaffData, ListStaffErrors, ListStaffResponses, LoginData, LoginErrors, LoginResponses, LogoutAllData2, LogoutAllErrors, LogoutAllResponses, LogoutData2, LogoutErrors, LogoutResponses, RefreshSessionData, RefreshSessionErrors, RefreshSessionResponses, RevokeStaffRoleData, RevokeStaffRoleErrors, RevokeStaffRoleResponses, SetStaffAccountStatusData, SetStaffAccountStatusErrors, SetStaffAccountStatusResponses, UnlockStaffAccountData, UnlockStaffAccountErrors, UnlockStaffAccountResponses, UpdateStaffData, UpdateStaffErrors, UpdateStaffResponses } from './types.gen.js';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -80,4 +80,109 @@ export const logoutAll = <ThrowOnError extends boolean = false>(options?: Option
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/v1/auth/logout-all',
     ...options
+});
+
+/**
+ * Get branches, assignable roles, and specialties in the actor's scope
+ */
+export const getStaffReferenceData = <ThrowOnError extends boolean = false>(options?: Options<GetStaffReferenceDataData, ThrowOnError>): RequestResult<GetStaffReferenceDataResponses, GetStaffReferenceDataErrors, ThrowOnError> => (options?.client ?? client).get<GetStaffReferenceDataResponses, GetStaffReferenceDataErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/staff/reference-data',
+    ...options
+});
+
+/**
+ * List staff in an authorized branch scope
+ */
+export const listStaff = <ThrowOnError extends boolean = false>(options?: Options<ListStaffData, ThrowOnError>): RequestResult<ListStaffResponses, ListStaffErrors, ThrowOnError> => (options?.client ?? client).get<ListStaffResponses, ListStaffErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/staff',
+    ...options
+});
+
+/**
+ * Atomically create an account, employee profile, doctor profile, and default branch role
+ */
+export const createStaff = <ThrowOnError extends boolean = false>(options: Options<CreateStaffData, ThrowOnError>): RequestResult<CreateStaffResponses, CreateStaffErrors, ThrowOnError> => (options.client ?? client).post<CreateStaffResponses, CreateStaffErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/staff',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Get one staff account and its effective role assignments
+ */
+export const getStaff = <ThrowOnError extends boolean = false>(options: Options<GetStaffData, ThrowOnError>): RequestResult<GetStaffResponses, GetStaffErrors, ThrowOnError> => (options.client ?? client).get<GetStaffResponses, GetStaffErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/staff/{staffId}',
+    ...options
+});
+
+/**
+ * Update a complete staff profile using optimistic concurrency
+ */
+export const updateStaff = <ThrowOnError extends boolean = false>(options: Options<UpdateStaffData, ThrowOnError>): RequestResult<UpdateStaffResponses, UpdateStaffErrors, ThrowOnError> => (options.client ?? client).put<UpdateStaffResponses, UpdateStaffErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/staff/{staffId}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Activate or disable a staff account and revoke existing sessions
+ */
+export const setStaffAccountStatus = <ThrowOnError extends boolean = false>(options: Options<SetStaffAccountStatusData, ThrowOnError>): RequestResult<SetStaffAccountStatusResponses, SetStaffAccountStatusErrors, ThrowOnError> => (options.client ?? client).put<SetStaffAccountStatusResponses, SetStaffAccountStatusErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/users/{userId}/status',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Unlock a staff account after administrative verification
+ */
+export const unlockStaffAccount = <ThrowOnError extends boolean = false>(options: Options<UnlockStaffAccountData, ThrowOnError>): RequestResult<UnlockStaffAccountResponses, UnlockStaffAccountErrors, ThrowOnError> => (options.client ?? client).post<UnlockStaffAccountResponses, UnlockStaffAccountErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/users/{userId}/unlock',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Grant a time-bounded global or branch role
+ */
+export const grantStaffRole = <ThrowOnError extends boolean = false>(options: Options<GrantStaffRoleData, ThrowOnError>): RequestResult<GrantStaffRoleResponses, GrantStaffRoleErrors, ThrowOnError> => (options.client ?? client).post<GrantStaffRoleResponses, GrantStaffRoleErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/users/{userId}/roles',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Revoke an active role assignment with a reason
+ */
+export const revokeStaffRole = <ThrowOnError extends boolean = false>(options: Options<RevokeStaffRoleData, ThrowOnError>): RequestResult<RevokeStaffRoleResponses, RevokeStaffRoleErrors, ThrowOnError> => (options.client ?? client).delete<RevokeStaffRoleResponses, RevokeStaffRoleErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/users/{userId}/roles/{assignmentId}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });

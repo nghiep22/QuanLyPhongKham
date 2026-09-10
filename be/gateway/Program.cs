@@ -15,7 +15,7 @@ builder.Services.AddCors(options =>
         .AllowAnyHeader()
         .AllowAnyMethod()
         .WithOrigins(allowedOrigins)
-        .WithExposedHeaders("x-request-id")
+        .WithExposedHeaders("x-request-id", "etag")
         .AllowCredentials());
 });
 builder.Services.AddOcelot(builder.Configuration);
