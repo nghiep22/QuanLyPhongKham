@@ -142,6 +142,72 @@ paths:
                 $ref: '#/components/schemas/LogoutAllResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
+  /api/v1/auth/password/change:
+    post:
+      operationId: changePassword
+      summary: Change the authenticated user's password and revoke every session
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '200':
+          description: Password changed and every session was revoked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasswordChangedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/auth/password/forgot:
+    post:
+      operationId: requestPasswordReset
+      summary: Request a one-time password reset link
+      description: Always returns the same accepted response, regardless of whether the identifier exists or is deliverable.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordRequest'
+      responses:
+        '202':
+          description: The request was accepted without revealing account existence.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasswordResetAcceptedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /api/v1/auth/password/reset:
+    post:
+      operationId: resetPassword
+      summary: Consume a one-time reset token and revoke every existing session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+      responses:
+        '200':
+          description: Password reset and every session was revoked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasswordChangedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /api/v1/admin/staff/reference-data:
     get:
       operationId: getStaffReferenceData
@@ -588,6 +654,87 @@ components:
         refreshToken:
           type: string
           description: Required for mobile clients and omitted when using the web HttpOnly cookie.
+    StrongPassword:
+      type: string
+      format: password
+      minLength: 12
+      maxLength: 200
+      pattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9]).+$'
+      description: At least 12 characters with lowercase, uppercase, and a digit.
+    ChangePasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 200
+        newPassword:
+          $ref: '#/components/schemas/StrongPassword'
+    ForgotPasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [identifier]
+      properties:
+        identifier:
+          type: string
+          minLength: 3
+          maxLength: 254
+          description: Username, normalized email address, or normalized phone number.
+    ResetPasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [token, newPassword]
+      properties:
+        token:
+          type: string
+          pattern: '^[A-Za-z0-9_-]{43}$'
+          description: One-time opaque token received through the configured recovery channel.
+        newPassword:
+          $ref: '#/components/schemas/StrongPassword'
+    PasswordResetAcceptedData:
+      type: object
+      additionalProperties: false
+      required: [accepted]
+      properties:
+        accepted:
+          type: boolean
+          const: true
+    PasswordChangedData:
+      type: object
+      additionalProperties: false
+      required: [passwordChanged, allSessionsRevoked]
+      properties:
+        passwordChanged:
+          type: boolean
+          const: true
+        allSessionsRevoked:
+          type: boolean
+          const: true
+    PasswordResetAcceptedResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data:
+          $ref: '#/components/schemas/PasswordResetAcceptedData'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+        requestId:
+          $ref: '#/components/schemas/RequestId'
+    PasswordChangedResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data:
+          $ref: '#/components/schemas/PasswordChangedData'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+        requestId:
+          $ref: '#/components/schemas/RequestId'
     RoleAssignment:
       type: object
       additionalProperties: false

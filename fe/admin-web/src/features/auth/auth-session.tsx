@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
@@ -26,6 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthenticatedUser | null>(null)
   const [isRestoring, setIsRestoring] = useState(true)
   const [expiresAt, setExpiresAt] = useState<number | null>(null)
+  const sessionGeneration = useRef(0)
 
   const applySession = useCallback((response: AuthResponse) => {
     setAccessToken(response.data.accessToken)
@@ -34,6 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const clearSession = useCallback(() => {
+    sessionGeneration.current += 1
     setAccessToken(null)
     setUser(null)
     setExpiresAt(null)
@@ -42,9 +45,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true
+    const generation = sessionGeneration.current
     void refreshInitialSession()
       .then((response) => {
-        if (active) applySession(response)
+        if (active && generation === sessionGeneration.current) applySession(response)
       })
       .catch((error: unknown) => {
         if (active && !(error instanceof ApiClientError && error.status === 401)) {
@@ -63,8 +67,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!expiresAt || !user) return
     const delay = Math.max(expiresAt - Date.now() - 30_000, 1_000)
     const timer = window.setTimeout(() => {
+      const generation = sessionGeneration.current
       void apiClient.auth.refresh()
-        .then(applySession)
+        .then((response) => {
+          if (generation === sessionGeneration.current) applySession(response)
+        })
         .catch(clearSession)
     }, delay)
     return () => window.clearTimeout(timer)
@@ -93,9 +100,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [clearSession])
 
+  const changePassword = useCallback(async (currentPassword: string, newPassword: string) => {
+    await apiClient.auth.changePassword({ currentPassword, newPassword })
+    clearSession()
+  }, [clearSession])
+
+  const resetPassword = useCallback(async (token: string, newPassword: string) => {
+    await apiClient.auth.resetPassword({ token, newPassword })
+    clearSession()
+  }, [clearSession])
+
   const value = useMemo(
-    () => ({ user, isRestoring, login, logout, logoutAll }),
-    [user, isRestoring, login, logout, logoutAll],
+    () => ({ user, isRestoring, login, logout, logoutAll, changePassword, resetPassword }),
+    [user, isRestoring, login, logout, logoutAll, changePassword, resetPassword],
   )
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

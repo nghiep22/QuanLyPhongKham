@@ -70,6 +70,20 @@ nhân viên, hồ sơ bác sĩ, khóa/mở tài khoản và quản lý role theo
 chỉ thao tác trong chi nhánh được phân quyền; quản lý role yêu cầu Admin toàn cục.
 Các cập nhật hồ sơ dùng `ETag`/`If-Match` để không ghi đè thay đổi đồng thời.
 
+Ở môi trường development, liên kết quên mật khẩu được ghi ra terminal của Auth
+Service với cờ `developmentOnly`. Khi chạy production phải cấu hình adapter gửi:
+
+```dotenv
+PASSWORD_RESET_DELIVERY_MODE=webhook
+PASSWORD_RESET_URL=https://admin.example.com/reset-password
+PASSWORD_RESET_WEBHOOK_URL=https://notification.example.com/password-reset
+PASSWORD_RESET_WEBHOOK_BEARER_TOKEN=replace-with-a-long-random-secret
+```
+
+Webhook nhận JSON gồm `type`, `channel`, `recipient`, `displayName`, `resetUrl` và
+`expiresAtUtc`. Auth Service từ chối khởi động production nếu URL không dùng HTTPS,
+thiếu bearer secret hoặc vẫn dùng console delivery.
+
 Nếu SQL Server local chưa bật TCP/IP và bạn dùng Windows Authentication, đặt
 `SQL_SERVER=np:\\.\pipe\sql\query` trong `.env`. Xem thêm [be/README.md](./be/README.md).
 
@@ -89,6 +103,7 @@ Kiểm thử hồi quy SQL Server:
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\auth-session.test.sql
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\staff-rbac.test.sql
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\staff-safety.test.sql
+sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\password-lifecycle.test.sql
 ```
 
 Chi tiết nghiệp vụ và thứ tự phát triển nằm trong [PROJECT_PLAN.md](./PROJECT_PLAN.md).

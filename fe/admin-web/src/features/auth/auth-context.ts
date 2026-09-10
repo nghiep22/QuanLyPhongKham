@@ -8,6 +8,8 @@ export type AuthContextValue = {
   login: (credentials: Credentials) => Promise<void>
   logout: () => Promise<void>
   logoutAll: () => Promise<void>
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>
+  resetPassword: (token: string, newPassword: string) => Promise<void>
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null)

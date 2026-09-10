@@ -5,6 +5,7 @@ import type {
   AuthPrincipal,
   AuthRepository,
   CredentialUser,
+  PasswordResetCredential,
   RotateSessionResult,
   RoleAssignment,
   SessionMetadata,
@@ -19,6 +20,8 @@ type UserRow = {
   failedLoginCount: number;
   lockedUntilUtc: Date | null;
   tokenVersion: number;
+  email: string | null;
+  phone: string | null;
 };
 
 type RoleRow = {
@@ -77,7 +80,7 @@ export class SqlAuthRepository implements AuthRepository {
     request.input('phone', sql.VarChar(20), normalizedPhone);
     const result = await request.query<UserRow>(`
       SELECT TOP (1) user_id AS userId,CONVERT(varchar(36),public_id) AS publicId,
-        password_hash AS passwordHash,display_name AS displayName,status,
+        password_hash AS passwordHash,display_name AS displayName,email,phone,status,
         failed_login_count AS failedLoginCount,locked_until_utc AS lockedUntilUtc,
         token_version AS tokenVersion
       FROM dbo.users
@@ -87,7 +90,41 @@ export class SqlAuthRepository implements AuthRepository {
     const user = result.recordset[0];
     if (!user) return null;
     return { ...mapPrincipal(user, await loadRoles(Number(user.userId))), passwordHash: user.passwordHash,
+      email: user.email, phone: user.phone,
       status: user.status, lockedUntilUtc: user.lockedUntilUtc };
+  }
+
+  async getCredential(userId: number): Promise<CredentialUser | null> {
+    const pool = await getSqlPool();
+    const request = pool.request();
+    request.input('userId', sql.BigInt, userId);
+    const result = await request.query<UserRow>(`
+      SELECT user_id AS userId,CONVERT(varchar(36),public_id) AS publicId,
+        password_hash AS passwordHash,display_name AS displayName,email,phone,status,
+        failed_login_count AS failedLoginCount,locked_until_utc AS lockedUntilUtc,
+        token_version AS tokenVersion
+      FROM dbo.users WHERE user_id=@userId AND deleted_at_utc IS NULL;
+    `);
+    const user = result.recordset[0];
+    if (!user) return null;
+    return { ...mapPrincipal(user, await loadRoles(userId)), passwordHash: user.passwordHash,
+      email: user.email, phone: user.phone, status: user.status, lockedUntilUtc: user.lockedUntilUtc };
+  }
+
+  async findPasswordResetCredential(tokenHash: Buffer): Promise<PasswordResetCredential | null> {
+    const pool = await getSqlPool();
+    const request = pool.request();
+    request.input('tokenHash', sql.VarBinary(32), tokenHash);
+    const result = await request.query<PasswordResetCredential>(`
+      SELECT u.user_id AS userId,u.password_hash AS passwordHash
+      FROM dbo.password_reset_challenges c
+      JOIN dbo.users u ON u.user_id=c.user_id
+      WHERE c.token_hash=@tokenHash AND c.consumed_at_utc IS NULL AND c.revoked_at_utc IS NULL
+        AND c.expires_at_utc>SYSUTCDATETIME() AND u.status IN ('ACTIVE','LOCKED')
+        AND u.deleted_at_utc IS NULL;
+    `);
+    const row = result.recordset[0];
+    return row ? { userId: Number(row.userId), passwordHash: row.passwordHash } : null;
   }
 
   async getPrincipal(userId: number): Promise<AuthPrincipal | null> {
@@ -96,7 +133,7 @@ export class SqlAuthRepository implements AuthRepository {
     request.input('userId', sql.BigInt, userId);
     const result = await request.query<UserRow>(`
       SELECT user_id AS userId,CONVERT(varchar(36),public_id) AS publicId,password_hash AS passwordHash,
-        display_name AS displayName,status,failed_login_count AS failedLoginCount,
+        display_name AS displayName,email,phone,status,failed_login_count AS failedLoginCount,
         locked_until_utc AS lockedUntilUtc,token_version AS tokenVersion
       FROM dbo.users WHERE user_id=@userId AND status='ACTIVE' AND deleted_at_utc IS NULL
         AND (locked_until_utc IS NULL OR locked_until_utc<=SYSUTCDATETIME());
@@ -158,6 +195,41 @@ export class SqlAuthRepository implements AuthRepository {
   async revokeAllSessions(userId: number, requestId: string) {
     await executeCommand('dbo.sp_auth_revoke_all_sessions', [
       { name: 'actor_user_id', type: sql.BigInt, value: userId },
+    ], { requestId, actorUserId: userId });
+  }
+
+  async createPasswordReset(userId: number, tokenHash: Buffer, expiresAtUtc: Date, requestedIp: string | undefined, requestId: string) {
+    const result = await executeCommand<never>('dbo.sp_auth_create_password_reset', [
+      { name: 'user_id', type: sql.BigInt, value: userId },
+      { name: 'token_hash', type: sql.VarBinary(32), value: tokenHash },
+      { name: 'requested_ip', type: sql.VarChar(45), value: requestedIp ?? null },
+      { name: 'expires_at_utc', type: sql.DateTime2(3), value: expiresAtUtc },
+      { name: 'max_requests_per_hour', type: sql.SmallInt, value: env.PASSWORD_RESET_MAX_PER_HOUR },
+      { name: 'created', type: sql.Bit, value: false, direction: 'output' },
+    ], { requestId, actorUserId: userId });
+    return Boolean(result.output.created);
+  }
+
+  async cancelPasswordReset(tokenHash: Buffer, requestId: string) {
+    await executeCommand('dbo.sp_auth_cancel_password_reset', [
+      { name: 'token_hash', type: sql.VarBinary(32), value: tokenHash },
+    ], { requestId });
+  }
+
+  async consumePasswordReset(tokenHash: Buffer, newPasswordHash: string, requestId: string) {
+    const result = await executeCommand<never>('dbo.sp_auth_consume_password_reset', [
+      { name: 'token_hash', type: sql.VarBinary(32), value: tokenHash },
+      { name: 'new_password_hash', type: sql.VarChar(255), value: newPasswordHash },
+      { name: 'succeeded', type: sql.Bit, value: false, direction: 'output' },
+    ], { requestId });
+    return Boolean(result.output.succeeded);
+  }
+
+  async changePassword(userId: number, expectedPasswordHash: string, newPasswordHash: string, requestId: string) {
+    await executeCommand('dbo.sp_auth_change_password', [
+      { name: 'actor_user_id', type: sql.BigInt, value: userId },
+      { name: 'expected_password_hash', type: sql.VarChar(255), value: expectedPasswordHash },
+      { name: 'new_password_hash', type: sql.VarChar(255), value: newPasswordHash },
     ], { requestId, actorUserId: userId });
   }
 }

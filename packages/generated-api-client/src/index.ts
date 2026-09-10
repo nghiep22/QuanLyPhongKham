@@ -56,6 +56,21 @@ export function createApiClient(options: ApiClientOptions) {
         request<import('@clinic/generated-api-types').LogoutAllResponse>('/api/v1/auth/logout-all', {
           method: 'POST',
         }),
+      changePassword: (body: import('@clinic/generated-api-types').ChangePasswordRequest) =>
+        request<import('@clinic/generated-api-types').PasswordChangedResponse>('/api/v1/auth/password/change', {
+          method: 'POST',
+          body: JSON.stringify(body),
+        }),
+      requestPasswordReset: (body: import('@clinic/generated-api-types').ForgotPasswordRequest) =>
+        request<import('@clinic/generated-api-types').PasswordResetAcceptedResponse>('/api/v1/auth/password/forgot', {
+          method: 'POST',
+          body: JSON.stringify(body),
+        }),
+      resetPassword: (body: import('@clinic/generated-api-types').ResetPasswordRequest) =>
+        request<import('@clinic/generated-api-types').PasswordChangedResponse>('/api/v1/auth/password/reset', {
+          method: 'POST',
+          body: JSON.stringify(body),
+        }),
     },
     staff: {
       references: () =>

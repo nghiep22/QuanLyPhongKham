@@ -11,6 +11,19 @@ const loginSchema = z.object({
   clientType: z.enum(['web', 'mobile']).default('web'),
 }).strict();
 const refreshSchema = z.object({ refreshToken: z.string().optional() }).strict();
+const strongPassword = z.string().min(12).max(200)
+  .regex(/[a-z]/, 'Mật khẩu cần chữ thường.')
+  .regex(/[A-Z]/, 'Mật khẩu cần chữ hoa.')
+  .regex(/[0-9]/, 'Mật khẩu cần chữ số.');
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(8).max(200),
+  newPassword: strongPassword,
+}).strict();
+const forgotPasswordSchema = z.object({ identifier: z.string().trim().min(3).max(254) }).strict();
+const resetPasswordSchema = z.object({
+  token: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+  newPassword: strongPassword,
+}).strict();
 
 function asyncRoute(handler: (request: Request, response: Response, next: NextFunction) => Promise<void>) {
   return (request: Request, response: Response, next: NextFunction) => void handler(request, response, next).catch(next);
@@ -56,8 +69,20 @@ function success(response: Response, data: unknown) {
   response.json({ data, meta: {}, requestId: response.locals.requestId });
 }
 
+async function authenticate(request: Request, auth: AuthService) {
+  const authorization = request.header('authorization');
+  if (!authorization?.startsWith('Bearer ')) {
+    throw new HttpError(401, 'ACCESS_TOKEN_REQUIRED', 'Yêu cầu access token.');
+  }
+  return auth.authenticate(authorization.slice(7));
+}
+
 export function createAuthRouter(auth: AuthService) {
   const router = Router();
+  router.use((_request, response, next) => {
+    response.set('cache-control', 'no-store');
+    next();
+  });
 
   router.post('/login', asyncRoute(async (request, response) => {
     const input = validate(loginSchema, request.body);
@@ -99,14 +124,32 @@ export function createAuthRouter(auth: AuthService) {
   }));
 
   router.post('/logout-all', asyncRoute(async (request, response) => {
-    const authorization = request.header('authorization');
-    if (!authorization?.startsWith('Bearer ')) {
-      throw new HttpError(401, 'ACCESS_TOKEN_REQUIRED', 'Yêu cầu access token.');
-    }
-    const principal = await auth.authenticate(authorization.slice(7));
+    const principal = await authenticate(request, auth);
     await auth.logoutAll(principal.userId, response.locals.requestId);
     clearRefreshCookie(response);
     success(response, { loggedOut: true, allDevices: true });
+  }));
+
+  router.post('/password/change', asyncRoute(async (request, response) => {
+    const principal = await authenticate(request, auth);
+    const body = validate(changePasswordSchema, request.body);
+    await auth.changePassword(principal.userId, body.currentPassword, body.newPassword, response.locals.requestId);
+    clearRefreshCookie(response);
+    success(response, { passwordChanged: true, allSessionsRevoked: true });
+  }));
+
+  router.post('/password/forgot', asyncRoute(async (request, response) => {
+    const body = validate(forgotPasswordSchema, request.body);
+    await auth.requestPasswordReset(body.identifier, metadata(request).ipAddress, response.locals.requestId);
+    response.status(202);
+    success(response, { accepted: true });
+  }));
+
+  router.post('/password/reset', asyncRoute(async (request, response) => {
+    const body = validate(resetPasswordSchema, request.body);
+    await auth.resetPassword(body.token, body.newPassword, response.locals.requestId);
+    clearRefreshCookie(response);
+    success(response, { passwordChanged: true, allSessionsRevoked: true });
   }));
 
   return router;

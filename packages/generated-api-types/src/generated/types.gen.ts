@@ -58,6 +58,52 @@ export type RefreshRequest = {
     refreshToken?: string;
 };
 
+/**
+ * At least 12 characters with lowercase, uppercase, and a digit.
+ */
+export type StrongPassword = string;
+
+export type ChangePasswordRequest = {
+    currentPassword: string;
+    newPassword: StrongPassword;
+};
+
+export type ForgotPasswordRequest = {
+    /**
+     * Username, normalized email address, or normalized phone number.
+     */
+    identifier: string;
+};
+
+export type ResetPasswordRequest = {
+    /**
+     * One-time opaque token received through the configured recovery channel.
+     */
+    token: string;
+    newPassword: StrongPassword;
+};
+
+export type PasswordResetAcceptedData = {
+    accepted: true;
+};
+
+export type PasswordChangedData = {
+    passwordChanged: true;
+    allSessionsRevoked: true;
+};
+
+export type PasswordResetAcceptedResponse = {
+    data: PasswordResetAcceptedData;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type PasswordChangedResponse = {
+    data: PasswordChangedData;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
 export type RoleAssignment = {
     code: string;
     /**
@@ -503,6 +549,93 @@ export type LogoutAllResponses = {
 };
 
 export type LogoutAllResponse2 = LogoutAllResponses[keyof LogoutAllResponses];
+
+export type ChangePasswordData = {
+    body: ChangePasswordRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/auth/password/change';
+};
+
+export type ChangePasswordErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type ChangePasswordError = ChangePasswordErrors[keyof ChangePasswordErrors];
+
+export type ChangePasswordResponses = {
+    /**
+     * Password changed and every session was revoked.
+     */
+    200: PasswordChangedResponse;
+};
+
+export type ChangePasswordResponse = ChangePasswordResponses[keyof ChangePasswordResponses];
+
+export type RequestPasswordResetData = {
+    body: ForgotPasswordRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/auth/password/forgot';
+};
+
+export type RequestPasswordResetErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+};
+
+export type RequestPasswordResetError = RequestPasswordResetErrors[keyof RequestPasswordResetErrors];
+
+export type RequestPasswordResetResponses = {
+    /**
+     * The request was accepted without revealing account existence.
+     */
+    202: PasswordResetAcceptedResponse;
+};
+
+export type RequestPasswordResetResponse = RequestPasswordResetResponses[keyof RequestPasswordResetResponses];
+
+export type ResetPasswordData = {
+    body: ResetPasswordRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/auth/password/reset';
+};
+
+export type ResetPasswordErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type ResetPasswordError = ResetPasswordErrors[keyof ResetPasswordErrors];
+
+export type ResetPasswordResponses = {
+    /**
+     * Password reset and every session was revoked.
+     */
+    200: PasswordChangedResponse;
+};
+
+export type ResetPasswordResponse = ResetPasswordResponses[keyof ResetPasswordResponses];
 
 export type GetStaffReferenceDataData = {
     body?: never;

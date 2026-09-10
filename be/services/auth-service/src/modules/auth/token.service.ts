@@ -61,7 +61,15 @@ export class TokenService {
     return randomBytes(32).toString('base64url');
   }
 
+  createPasswordResetToken() {
+    return randomBytes(32).toString('base64url');
+  }
+
   hashRefreshToken(token: string) {
+    return createHash('sha256').update(token, 'utf8').digest();
+  }
+
+  hashPasswordResetToken(token: string) {
     return createHash('sha256').update(token, 'utf8').digest();
   }
 

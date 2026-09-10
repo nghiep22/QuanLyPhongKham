@@ -4,6 +4,7 @@ import request from 'supertest';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app.js';
 import { AuthService } from '../src/modules/auth/auth.service.js';
+import type { RecoveryDelivery, RecoveryDeliveryMessage } from '../src/modules/auth/recovery-delivery.js';
 import type {
   AuthPrincipal,
   AuthRepository,
@@ -18,6 +19,7 @@ let passwordHash: string;
 class MemoryAuthRepository implements AuthRepository {
   failed = 0;
   sessions = new Map<string, { userId: number; sessionId: string; replaced: boolean; revoked: boolean }>();
+  resetTokens = new Map<string, { userId: number; active: boolean }>();
   user: CredentialUser;
 
   constructor() {
@@ -26,6 +28,8 @@ class MemoryAuthRepository implements AuthRepository {
       publicId: randomUUID(),
       displayName: 'Quản trị viên',
       passwordHash,
+      email: 'admin@example.com',
+      phone: null,
       status: 'ACTIVE',
       lockedUntilUtc: null,
       tokenVersion: 1,
@@ -36,6 +40,15 @@ class MemoryAuthRepository implements AuthRepository {
 
   findCredential(identifier: string) {
     return Promise.resolve(identifier === 'admin' ? this.user : null);
+  }
+  getCredential(userId: number) {
+    return Promise.resolve(userId === this.user.userId ? this.user : null);
+  }
+  findPasswordResetCredential(tokenHash: Buffer) {
+    const token = this.resetTokens.get(tokenHash.toString('hex'));
+    return Promise.resolve(token?.active
+      ? { userId: token.userId, passwordHash: this.user.passwordHash }
+      : null);
   }
   getPrincipal(userId: number): Promise<AuthPrincipal | null> {
     return Promise.resolve(userId === this.user.userId ? this.user : null);
@@ -74,11 +87,47 @@ class MemoryAuthRepository implements AuthRepository {
     this.user.tokenVersion += 1;
     return Promise.resolve();
   }
+  createPasswordReset(userId: number, tokenHash: Buffer) {
+    for (const token of this.resetTokens.values()) token.active = false;
+    this.resetTokens.set(tokenHash.toString('hex'), { userId, active: true });
+    return Promise.resolve(true);
+  }
+  cancelPasswordReset(tokenHash: Buffer) {
+    const token = this.resetTokens.get(tokenHash.toString('hex'));
+    if (token) token.active = false;
+    return Promise.resolve();
+  }
+  consumePasswordReset(tokenHash: Buffer, newPasswordHash: string) {
+    const token = this.resetTokens.get(tokenHash.toString('hex'));
+    if (!token?.active) return Promise.resolve(false);
+    token.active = false;
+    this.user.passwordHash = newPasswordHash;
+    this.user.tokenVersion += 1;
+    for (const session of this.sessions.values()) session.revoked = true;
+    return Promise.resolve(true);
+  }
+  changePassword(_userId: number, expectedPasswordHash: string, newPasswordHash: string) {
+    if (this.user.passwordHash !== expectedPasswordHash) return Promise.reject({ number: 53062 });
+    this.user.passwordHash = newPasswordHash;
+    this.user.tokenVersion += 1;
+    for (const session of this.sessions.values()) session.revoked = true;
+    return Promise.resolve();
+  }
 }
 
-function app(repository: MemoryAuthRepository) {
+class MemoryRecoveryDelivery implements RecoveryDelivery {
+  messages: RecoveryDeliveryMessage[] = [];
+  fail = false;
+  deliver(message: RecoveryDeliveryMessage) {
+    if (this.fail) return Promise.reject(new Error('delivery unavailable'));
+    this.messages.push(message);
+    return Promise.resolve();
+  }
+}
+
+function app(repository: MemoryAuthRepository, delivery?: RecoveryDelivery) {
   return createApp({
-    authService: new AuthService(repository),
+    authService: new AuthService(repository, undefined, delivery),
     databaseProbe: async () => ({ database: 'test' }),
   });
 }
@@ -170,6 +219,97 @@ describe('authentication vertical slice', () => {
       .set('authorization', `Bearer ${login.body.data.accessToken as string}`).send({});
     expect(rejected.status).toBe(401);
     expect(rejected.body.error.code).toBe('INVALID_ACCESS_TOKEN');
+  });
+
+  it('returns the same accepted response for known and unknown recovery identifiers', async () => {
+    const delivery = new MemoryRecoveryDelivery();
+    const server = app(repository, delivery);
+    const known = await request(server).post('/api/v1/auth/password/forgot').send({ identifier: 'admin' });
+    const unknown = await request(server).post('/api/v1/auth/password/forgot').send({ identifier: 'missing-user' });
+    expect(known.status).toBe(202);
+    expect(unknown.status).toBe(202);
+    expect(known.headers['cache-control']).toBe('no-store');
+    expect(known.body.data).toEqual(unknown.body.data);
+    expect(delivery.messages).toHaveLength(1);
+    expect(delivery.messages[0]?.recipient).toBe('admin@example.com');
+  });
+
+  it('resets a password with a one-time opaque link and rejects replay', async () => {
+    const delivery = new MemoryRecoveryDelivery();
+    const server = app(repository, delivery);
+    await request(server).post('/api/v1/auth/password/forgot').send({ identifier: 'admin' });
+    const resetUrl = new URL(delivery.messages[0]!.resetUrl);
+    const token = new URLSearchParams(resetUrl.hash.slice(1)).get('token');
+    expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/);
+
+    const reusedPassword = await request(server).post('/api/v1/auth/password/reset').send({
+      token, newPassword: 'CorrectPassword123!',
+    });
+    const reset = await request(server).post('/api/v1/auth/password/reset').send({
+      token, newPassword: 'ResetPassword456!',
+    });
+    const replay = await request(server).post('/api/v1/auth/password/reset').send({
+      token, newPassword: 'AnotherPassword789!',
+    });
+    const login = await request(server).post('/api/v1/auth/login').send({
+      identifier: 'admin', password: 'ResetPassword456!', clientType: 'mobile',
+    });
+    expect(reusedPassword.status).toBe(409);
+    expect(reusedPassword.body.error.code).toBe('PASSWORD_REUSE_NOT_ALLOWED');
+    expect(reset.status).toBe(200);
+    expect(reset.body.data).toEqual({ passwordChanged: true, allSessionsRevoked: true });
+    expect(replay.status).toBe(400);
+    expect(replay.body.error.code).toBe('INVALID_OR_EXPIRED_RESET_TOKEN');
+    expect(login.status).toBe(200);
+  });
+
+  it('changes an authenticated password and invalidates every existing token', async () => {
+    const server = app(repository);
+    const login = await request(server).post('/api/v1/auth/login').send({
+      identifier: 'admin', password: 'CorrectPassword123!', clientType: 'mobile',
+    });
+    const accessToken = login.body.data.accessToken as string;
+    const changed = await request(server).post('/api/v1/auth/password/change')
+      .set('authorization', `Bearer ${accessToken}`).send({
+        currentPassword: 'CorrectPassword123!', newPassword: 'ChangedPassword456!',
+      });
+    const oldToken = await request(server).post('/api/v1/auth/logout-all')
+      .set('authorization', `Bearer ${accessToken}`).send({});
+    const newLogin = await request(server).post('/api/v1/auth/login').send({
+      identifier: 'admin', password: 'ChangedPassword456!', clientType: 'mobile',
+    });
+    expect(changed.status).toBe(200);
+    expect(oldToken.status).toBe(401);
+    expect(newLogin.status).toBe(200);
+  });
+
+  it('rejects an incorrect current password and reuse of the current password', async () => {
+    const server = app(repository);
+    const login = await request(server).post('/api/v1/auth/login').send({
+      identifier: 'admin', password: 'CorrectPassword123!', clientType: 'mobile',
+    });
+    const authorization = `Bearer ${login.body.data.accessToken as string}`;
+    const incorrect = await request(server).post('/api/v1/auth/password/change')
+      .set('authorization', authorization).send({
+        currentPassword: 'WrongPassword123!', newPassword: 'ChangedPassword456!',
+      });
+    const reused = await request(server).post('/api/v1/auth/password/change')
+      .set('authorization', authorization).send({
+        currentPassword: 'CorrectPassword123!', newPassword: 'CorrectPassword123!',
+      });
+    expect(incorrect.status).toBe(400);
+    expect(incorrect.body.error.code).toBe('CURRENT_PASSWORD_INVALID');
+    expect(reused.status).toBe(409);
+    expect(reused.body.error.code).toBe('PASSWORD_REUSE_NOT_ALLOWED');
+  });
+
+  it('cancels a reset challenge when the delivery adapter fails without exposing it', async () => {
+    const delivery = new MemoryRecoveryDelivery();
+    delivery.fail = true;
+    const response = await request(app(repository, delivery)).post('/api/v1/auth/password/forgot')
+      .send({ identifier: 'admin' });
+    expect(response.status).toBe(202);
+    expect([...repository.resetTokens.values()].every((token) => !token.active)).toBe(true);
   });
 
   it('rejects browser origins outside the configured allow-list', async () => {

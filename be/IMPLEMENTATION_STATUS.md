@@ -58,23 +58,43 @@ Phạm vi đã hoàn thành:
 - Gateway định tuyến `/api/v1/admin/*` đến Auth Service; OpenAPI và generated
   client/types đã đồng bộ chín operation quản trị nhân sự/RBAC.
 
-### Bằng chứng xác minh local
+## DONE — Slice 04: Password Lifecycle & Recovery
+
+Phạm vi đã hoàn thành:
+
+- Người dùng đã đăng nhập đổi mật khẩu bằng mật khẩu hiện tại; không cho dùng
+  lại mật khẩu đang có và xử lý xung đột khi phiên khác vừa đổi mật khẩu.
+- Quên mật khẩu luôn trả cùng HTTP 202 cho tài khoản tồn tại/không tồn tại;
+  phản hồi có thời gian tối thiểu để giảm account enumeration qua timing.
+- Reset token ngẫu nhiên 256-bit chỉ lưu SHA-256 hash, dùng đúng một lần, TTL 15
+  phút, thay thế token cũ và giới hạn mặc định ba yêu cầu hợp lệ mỗi giờ.
+- Đổi hoặc reset mật khẩu đều tăng token version, xóa trạng thái khóa, thu hồi
+  toàn bộ session và challenge còn lại, đồng thời ghi audit trong transaction.
+- Delivery tách qua adapter: console chỉ cho local development; production bắt
+  buộc webhook HTTPS có bearer secret và reset URL HTTPS. Delivery lỗi sẽ hủy
+  challenge mà vẫn giữ phản hồi chung cho người gọi.
+- Admin Web có màn Quên mật khẩu, Đặt lại mật khẩu và Đổi mật khẩu. Token đi
+  trong URL fragment, bị xóa khỏi lịch sử ngay khi nhận; Auth response dùng
+  `Cache-Control: no-store`.
+- OpenAPI/generated client đã đồng bộ ba operation password lifecycle.
+
+### Bằng chứng xác minh local toàn bộ
 
 | Kiểm tra | Kết quả |
 |---|---|
-| Baseline SQL chạy lại idempotent | Đạt; 66 bảng, 12 view, 65 procedure, 29 trigger |
-| SQL auth session/staff RBAC/staff safety regression | PASS/PASS/PASS; rollback sạch, 0 user test |
+| Baseline SQL chạy lại idempotent | Đạt; 67 bảng, 12 view, 69 procedure, 29 trigger |
+| SQL auth session/staff RBAC/staff safety/password lifecycle regression | PASS/PASS/PASS/PASS; rollback sạch, 0 user/challenge test |
 | npm run openapi:check | Đạt; contract và generated code đồng bộ |
 | npm run lint | Đạt, không cảnh báo |
 | npm run typecheck | Đạt |
-| npm test | 21 test đạt (Auth 18, Clinic 3) |
+| npm test | 26 test đạt (Auth 23, Clinic 3) |
 | npm run build | Đạt; .NET 0 warning/0 error |
 | npm run doctor:mobile | 21/21 |
-| Gateway → Auth → SQL smoke test | JWKS 200; invalid login 401; blocked origin 403; `/api/v1/admin/staff` không token trả đúng Auth 401 và giữ request ID |
+| Gateway → Auth → SQL smoke test | Forgot password 202 với response tối thiểu 350 ms; reset token giả 400; change password thiếu bearer 401; cả ba có `Cache-Control: no-store` |
 
 ## Chưa hoàn thành
 
 - Phase 0 baseline freeze tổng thể, checksum và các defect P0 ngoài phạm vi Auth.
 - Lần chạy GitHub Actions và branch protection chỉ xác minh được sau khi push.
-- Phần còn lại của Phase 2: đổi/quên mật khẩu, patient portal/link, đăng ký bệnh
-  nhân + OTP delivery/replay và các mục P1 như MFA/lịch sử session.
+- Phần còn lại của Phase 2: patient portal/link, đăng ký bệnh nhân + OTP
+  delivery/replay và các mục P1 như MFA/lịch sử session.

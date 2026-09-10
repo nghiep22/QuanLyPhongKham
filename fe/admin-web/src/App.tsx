@@ -4,11 +4,12 @@ import { ApiClientError } from '@clinic/generated-api-client'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import {
-  Navigate, NavLink, Outlet, Route, Routes, useLocation, useNavigate,
+  Link, Navigate, NavLink, Outlet, Route, Routes, useLocation, useNavigate, useSearchParams,
 } from 'react-router-dom'
 import { z } from 'zod'
 import './App.css'
 import { useAuth } from './features/auth/auth-context'
+import { ChangePasswordPage, ForgotPasswordPage, ResetPasswordPage } from './features/auth/password-pages'
 import { StaffPage } from './features/staff/staff-page'
 
 const loginSchema = z.object({
@@ -20,6 +21,7 @@ type LoginValues = z.infer<typeof loginSchema>
 function LoginPage() {
   const { user, isRestoring, login } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [serverError, setServerError] = useState<string | null>(null)
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
@@ -51,6 +53,8 @@ function LoginPage() {
         <span className="eyebrow">PHÒNG KHÁM TƯ NHÂN</span>
         <h1 id="login-title">Đăng nhập nhân viên</h1>
         <p>Dùng tài khoản được quản trị viên cấp để vào hệ thống điều hành phòng khám.</p>
+        {(searchParams.has('passwordChanged') || searchParams.has('passwordReset'))
+          && <div className="form-success" role="status">Mật khẩu đã được cập nhật. Hãy đăng nhập lại.</div>}
         <form onSubmit={submit} noValidate>
           <label>
             Tài khoản
@@ -69,6 +73,7 @@ function LoginPage() {
             {isSubmitting ? 'Đang đăng nhập…' : 'Đăng nhập'}
           </button>
         </form>
+        <div className="auth-links"><Link to="/forgot-password">Quên mật khẩu?</Link></div>
       </section>
     </main>
   )
@@ -100,6 +105,7 @@ function AdminLayout() {
         <nav>
           <NavLink to="/dashboard">Tổng quan</NavLink>
           {canManageStaff && <NavLink to="/staff">Nhân sự</NavLink>}
+          <NavLink to="/change-password">Đổi mật khẩu</NavLink>
           <a href="#appointments">Lịch hẹn</a>
           <a href="#patients">Bệnh nhân</a>
           <a href="#medical-records">Khám bệnh</a>
@@ -157,9 +163,12 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/staff" element={<StaffPage />} />
+        <Route path="/change-password" element={<ChangePasswordPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>

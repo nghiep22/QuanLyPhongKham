@@ -337,6 +337,40 @@ IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT
         (revocation_reason IS NULL OR revocation_reason IN (''ROTATED'',''LOGOUT'',''LOGOUT_ALL'',''REUSE_DETECTED'',''EXPIRED'',''ACCOUNT_CHANGED''));';
 GO
 
+IF OBJECT_ID(N'dbo.password_reset_challenges', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.password_reset_challenges
+    (
+        password_reset_challenge_id uniqueidentifier NOT NULL
+            CONSTRAINT DF_password_reset_challenges_id DEFAULT NEWSEQUENTIALID(),
+        user_id              bigint NOT NULL,
+        token_hash           binary(32) NOT NULL,
+        requested_ip         varchar(45) NULL,
+        expires_at_utc       datetime2(3) NOT NULL,
+        consumed_at_utc      datetime2(3) NULL,
+        revoked_at_utc       datetime2(3) NULL,
+        revocation_reason    varchar(30) NULL,
+        created_at_utc       datetime2(3) NOT NULL
+            CONSTRAINT DF_password_reset_challenges_created DEFAULT SYSUTCDATETIME(),
+        CONSTRAINT PK_password_reset_challenges PRIMARY KEY CLUSTERED (password_reset_challenge_id),
+        CONSTRAINT FK_password_reset_challenges_user FOREIGN KEY (user_id) REFERENCES dbo.users(user_id),
+        CONSTRAINT UQ_password_reset_challenges_token UNIQUE (token_hash),
+        CONSTRAINT CK_password_reset_challenges_expiry CHECK (expires_at_utc > created_at_utc),
+        CONSTRAINT CK_password_reset_challenges_terminal CHECK
+            (consumed_at_utc IS NULL OR revoked_at_utc IS NULL),
+        CONSTRAINT CK_password_reset_challenges_revocation CHECK
+            (revocation_reason IS NULL OR revocation_reason IN ('REQUEST_REPLACED','DELIVERY_FAILED','PASSWORD_CHANGED'))
+    );
+END;
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.password_reset_challenges')
+               AND name=N'IX_password_reset_challenges_user_created')
+    CREATE INDEX IX_password_reset_challenges_user_created
+    ON dbo.password_reset_challenges(user_id,created_at_utc DESC)
+    INCLUDE (expires_at_utc,consumed_at_utc,revoked_at_utc,revocation_reason);
+GO
+
 IF OBJECT_ID(N'dbo.user_roles', N'U') IS NULL
 BEGIN
     CREATE TABLE dbo.user_roles
@@ -4124,6 +4158,192 @@ BEGIN
 END;
 GO
 
+CREATE OR ALTER PROCEDURE dbo.sp_auth_create_password_reset
+    @user_id bigint,
+    @token_hash binary(32),
+    @requested_ip varchar(45)=NULL,
+    @expires_at_utc datetime2(3),
+    @max_requests_per_hour smallint=3,
+    @created bit OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    SET @created=0;
+    IF @expires_at_utc<=SYSUTCDATETIME() OR @max_requests_per_hour NOT BETWEEN 1 AND 20
+        THROW 53060,N'Chính sách khôi phục mật khẩu không hợp lệ.',1;
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        DECLARE @status varchar(20),@lock_result int,@resource nvarchar(255)=CONCAT(N'security:password:',@user_id);
+        EXEC @lock_result=sys.sp_getapplock @Resource=@resource,@LockMode='Exclusive',
+             @LockOwner='Transaction',@LockTimeout=10000;
+        IF @lock_result<0 THROW 53059,N'Không thể khóa tài nguyên bảo mật tài khoản.',1;
+        SELECT @status=status FROM dbo.users WITH (UPDLOCK,HOLDLOCK)
+        WHERE user_id=@user_id AND deleted_at_utc IS NULL;
+        IF @status IS NULL OR @status NOT IN ('ACTIVE','LOCKED')
+        BEGIN COMMIT TRANSACTION; RETURN; END;
+        IF (SELECT COUNT_BIG(*) FROM dbo.password_reset_challenges WITH (UPDLOCK,HOLDLOCK)
+            WHERE user_id=@user_id AND created_at_utc>DATEADD(hour,-1,SYSUTCDATETIME())
+              AND ISNULL(revocation_reason,'')<>'DELIVERY_FAILED')>=@max_requests_per_hour
+        BEGIN COMMIT TRANSACTION; RETURN; END;
+
+        UPDATE dbo.password_reset_challenges
+           SET revoked_at_utc=SYSUTCDATETIME(),revocation_reason='REQUEST_REPLACED'
+         WHERE user_id=@user_id AND consumed_at_utc IS NULL AND revoked_at_utc IS NULL
+           AND expires_at_utc>SYSUTCDATETIME();
+        INSERT dbo.password_reset_challenges(user_id,token_hash,requested_ip,expires_at_utc)
+        VALUES(@user_id,@token_hash,@requested_ip,@expires_at_utc);
+        SET @created=1;
+        DECLARE @entity_id varchar(100)=CONVERT(varchar(100),@user_id);
+        EXEC dbo.sp_write_audit @actor_user_id=@user_id,@action_code='PASSWORD_RESET_REQUESTED',
+            @entity_type='USER',@entity_id=@entity_id;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_auth_cancel_password_reset
+    @token_hash binary(32)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        DECLARE @user_id bigint;
+        SELECT @user_id=user_id FROM dbo.password_reset_challenges WITH (UPDLOCK,HOLDLOCK)
+        WHERE token_hash=@token_hash AND consumed_at_utc IS NULL AND revoked_at_utc IS NULL;
+        UPDATE dbo.password_reset_challenges
+           SET revoked_at_utc=SYSUTCDATETIME(),revocation_reason='DELIVERY_FAILED'
+         WHERE token_hash=@token_hash AND consumed_at_utc IS NULL AND revoked_at_utc IS NULL;
+        IF @user_id IS NOT NULL
+        BEGIN
+            DECLARE @entity_id varchar(100)=CONVERT(varchar(100),@user_id);
+            EXEC dbo.sp_write_audit @actor_user_id=@user_id,@action_code='PASSWORD_RESET_DELIVERY_FAILED',
+                @entity_type='USER',@entity_id=@entity_id;
+        END;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_auth_consume_password_reset
+    @token_hash binary(32),
+    @new_password_hash varchar(255),
+    @succeeded bit OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    SET @succeeded=0;
+    IF LEN(@new_password_hash)<40
+        THROW 53061,N'new_password_hash phải là hash mạnh do backend tạo.',1;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        DECLARE @challenge_id uniqueidentifier,@user_id bigint,@status varchar(20),
+                @lock_result int,@resource nvarchar(255);
+        SELECT @user_id=user_id FROM dbo.password_reset_challenges
+        WHERE token_hash=@token_hash AND consumed_at_utc IS NULL AND revoked_at_utc IS NULL
+          AND expires_at_utc>SYSUTCDATETIME();
+        IF @user_id IS NULL
+        BEGIN COMMIT TRANSACTION; RETURN; END;
+        SET @resource=CONCAT(N'security:password:',@user_id);
+        EXEC @lock_result=sys.sp_getapplock @Resource=@resource,@LockMode='Exclusive',
+             @LockOwner='Transaction',@LockTimeout=10000;
+        IF @lock_result<0 THROW 53059,N'Không thể khóa tài nguyên bảo mật tài khoản.',1;
+        SELECT @challenge_id=password_reset_challenge_id,@user_id=user_id
+        FROM dbo.password_reset_challenges WITH (UPDLOCK,HOLDLOCK)
+        WHERE token_hash=@token_hash AND consumed_at_utc IS NULL AND revoked_at_utc IS NULL
+          AND expires_at_utc>SYSUTCDATETIME();
+        IF @challenge_id IS NULL
+        BEGIN COMMIT TRANSACTION; RETURN; END;
+        SELECT @status=status FROM dbo.users WITH (UPDLOCK,HOLDLOCK)
+        WHERE user_id=@user_id AND deleted_at_utc IS NULL;
+        IF @status IS NULL OR @status NOT IN ('ACTIVE','LOCKED')
+        BEGIN
+            UPDATE dbo.password_reset_challenges SET revoked_at_utc=SYSUTCDATETIME(),
+                revocation_reason='PASSWORD_CHANGED' WHERE password_reset_challenge_id=@challenge_id;
+            COMMIT TRANSACTION;
+            RETURN;
+        END;
+
+        UPDATE dbo.password_reset_challenges SET consumed_at_utc=SYSUTCDATETIME()
+        WHERE password_reset_challenge_id=@challenge_id;
+        UPDATE dbo.password_reset_challenges SET revoked_at_utc=SYSUTCDATETIME(),
+            revocation_reason='PASSWORD_CHANGED'
+        WHERE user_id=@user_id AND password_reset_challenge_id<>@challenge_id
+          AND consumed_at_utc IS NULL AND revoked_at_utc IS NULL;
+        UPDATE dbo.users SET password_hash=@new_password_hash,password_changed_utc=SYSUTCDATETIME(),
+            status=IIF(status='LOCKED','ACTIVE',status),failed_login_count=0,locked_until_utc=NULL,
+            token_version=token_version+1,updated_at_utc=SYSUTCDATETIME()
+        WHERE user_id=@user_id;
+        UPDATE dbo.user_sessions SET revoked_at_utc=COALESCE(revoked_at_utc,SYSUTCDATETIME()),
+            revocation_reason=COALESCE(revocation_reason,'ACCOUNT_CHANGED')
+        WHERE user_id=@user_id AND revoked_at_utc IS NULL;
+        SET @succeeded=1;
+        DECLARE @entity_id varchar(100)=CONVERT(varchar(100),@user_id);
+        EXEC dbo.sp_write_audit @actor_user_id=@user_id,@action_code='PASSWORD_RESET_COMPLETED',
+            @entity_type='USER',@entity_id=@entity_id;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_auth_change_password
+    @actor_user_id bigint,
+    @expected_password_hash varchar(255),
+    @new_password_hash varchar(255)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    EXEC dbo.sp_assert_actor @actor_user_id;
+    IF LEN(@new_password_hash)<40
+        THROW 53061,N'new_password_hash phải là hash mạnh do backend tạo.',1;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        DECLARE @lock_result int,@resource nvarchar(255)=CONCAT(N'security:password:',@actor_user_id);
+        EXEC @lock_result=sys.sp_getapplock @Resource=@resource,@LockMode='Exclusive',
+             @LockOwner='Transaction',@LockTimeout=10000;
+        IF @lock_result<0 THROW 53059,N'Không thể khóa tài nguyên bảo mật tài khoản.',1;
+        UPDATE dbo.users WITH (UPDLOCK)
+           SET password_hash=@new_password_hash,password_changed_utc=SYSUTCDATETIME(),
+               failed_login_count=0,locked_until_utc=NULL,token_version=token_version+1,
+               updated_at_utc=SYSUTCDATETIME()
+         WHERE user_id=@actor_user_id AND password_hash=@expected_password_hash
+           AND status='ACTIVE' AND deleted_at_utc IS NULL;
+        IF @@ROWCOUNT=0 THROW 53062,N'Mật khẩu hiện tại đã thay đổi hoặc tài khoản không khả dụng.',1;
+        UPDATE dbo.password_reset_challenges SET revoked_at_utc=SYSUTCDATETIME(),
+            revocation_reason='PASSWORD_CHANGED'
+        WHERE user_id=@actor_user_id AND consumed_at_utc IS NULL AND revoked_at_utc IS NULL;
+        UPDATE dbo.user_sessions SET revoked_at_utc=COALESCE(revoked_at_utc,SYSUTCDATETIME()),
+            revocation_reason=COALESCE(revocation_reason,'ACCOUNT_CHANGED')
+        WHERE user_id=@actor_user_id AND revoked_at_utc IS NULL;
+        DECLARE @entity_id varchar(100)=CONVERT(varchar(100),@actor_user_id);
+        EXEC dbo.sp_write_audit @actor_user_id=@actor_user_id,@action_code='PASSWORD_CHANGED',
+            @entity_type='USER',@entity_id=@entity_id;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
 CREATE OR ALTER PROCEDURE dbo.sp_bootstrap_first_admin
     @username nvarchar(80),
     @email varchar(254) = NULL,
@@ -7649,6 +7869,10 @@ GRANT EXECUTE ON OBJECT::dbo.sp_auth_create_session TO auth_core_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_auth_rotate_session TO auth_core_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_auth_revoke_session TO auth_core_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_auth_revoke_all_sessions TO auth_core_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_auth_create_password_reset TO auth_core_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_auth_cancel_password_reset TO auth_core_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_auth_consume_password_reset TO auth_core_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_auth_change_password TO auth_core_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_create_staff_account TO auth_core_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_update_staff_account TO auth_core_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_set_staff_account_status TO auth_core_executor;
@@ -7665,9 +7889,14 @@ GRANT SELECT ON OBJECT::dbo.employees TO auth_core_executor;
 GRANT SELECT ON OBJECT::dbo.doctors TO auth_core_executor;
 GRANT SELECT ON OBJECT::dbo.specialties TO auth_core_executor;
 GRANT SELECT ON OBJECT::dbo.doctor_specialties TO auth_core_executor;
+GRANT SELECT ON OBJECT::dbo.password_reset_challenges TO auth_core_executor;
 GO
 
 REVOKE EXECUTE ON OBJECT::dbo.sp_create_staff_account FROM clinic_api_executor;
+REVOKE EXECUTE ON OBJECT::dbo.sp_auth_create_password_reset FROM clinic_api_executor;
+REVOKE EXECUTE ON OBJECT::dbo.sp_auth_cancel_password_reset FROM clinic_api_executor;
+REVOKE EXECUTE ON OBJECT::dbo.sp_auth_consume_password_reset FROM clinic_api_executor;
+REVOKE EXECUTE ON OBJECT::dbo.sp_auth_change_password FROM clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_create_room TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_create_service TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_assign_doctor_service TO clinic_api_executor;
