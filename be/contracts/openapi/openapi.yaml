@@ -208,6 +208,51 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '409':
           $ref: '#/components/responses/Conflict'
+  /api/v1/auth/patient-registration/request:
+    post:
+      operationId: requestPatientRegistration
+      summary: Start a patient self-registration and send a one-time verification code
+      description: The accepted response does not reveal whether the contact already belongs to an account.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatientRegistrationRequest'
+      responses:
+        '202':
+          description: Registration request accepted without disclosing contact availability.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientRegistrationAcceptedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/auth/patient-registration/verify:
+    post:
+      operationId: verifyPatientRegistration
+      summary: Verify a patient registration OTP and create the portal account and SELF profile link
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatientRegistrationVerificationRequest'
+      responses:
+        '201':
+          description: Patient account, profile, and verified SELF link created atomically.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientRegistrationCompletedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
   /api/v1/admin/staff/reference-data:
     get:
       operationId: getStaffReferenceData
@@ -515,6 +560,14 @@ components:
       schema:
         type: string
         pattern: '^"[A-Za-z0-9+/]{11}=(:[A-Za-z0-9+/]{11}=)?"$'
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: UUID that makes retries with the same registration payload return the same challenge.
+      schema:
+        type: string
+        format: uuid
   headers:
     StaffEtag:
       description: Strong ETag for optimistic concurrency.
@@ -559,6 +612,12 @@ components:
             $ref: '#/components/schemas/ApiErrorResponse'
     PreconditionRequired:
       description: The If-Match precondition is required for this update.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    ServiceUnavailable:
+      description: A required registration dependency is unavailable.
       content:
         application/json:
           schema:
@@ -731,6 +790,102 @@ components:
       properties:
         data:
           $ref: '#/components/schemas/PasswordChangedData'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+        requestId:
+          $ref: '#/components/schemas/RequestId'
+    ContactChannel:
+      type: string
+      enum: [EMAIL, SMS]
+    PatientRegistrationRequest:
+      type: object
+      additionalProperties: false
+      required: [contactChannel, contact, password, fullName, dateOfBirth, gender]
+      properties:
+        contactChannel:
+          $ref: '#/components/schemas/ContactChannel'
+        contact:
+          type: string
+          minLength: 3
+          maxLength: 254
+          description: Email address or phone number matching contactChannel.
+        password:
+          $ref: '#/components/schemas/StrongPassword'
+        fullName:
+          type: string
+          minLength: 2
+          maxLength: 200
+        dateOfBirth:
+          type: string
+          format: date
+          example: '1990-01-01'
+        gender:
+          $ref: '#/components/schemas/Gender'
+    PatientRegistrationVerificationRequest:
+      type: object
+      additionalProperties: false
+      required: [challengeId, otp]
+      properties:
+        challengeId:
+          type: string
+          format: uuid
+        otp:
+          type: string
+          pattern: '^\d{6}$'
+    PatientRegistrationAcceptedData:
+      type: object
+      additionalProperties: false
+      required: [challengeId, expiresIn, resendAfter]
+      properties:
+        challengeId:
+          type: string
+          format: uuid
+        expiresIn:
+          type: integer
+          minimum: 180
+          description: Maximum OTP lifetime in seconds.
+        resendAfter:
+          type: integer
+          minimum: 1
+          description: Minimum delay before submitting a new registration request.
+    RegisteredPatientReference:
+      type: object
+      additionalProperties: false
+      required: [publicId, code]
+      properties:
+        publicId:
+          type: string
+          format: uuid
+        code:
+          type: string
+    PatientRegistrationCompletedData:
+      type: object
+      additionalProperties: false
+      required: [registered, patient]
+      properties:
+        registered:
+          type: boolean
+          const: true
+        patient:
+          $ref: '#/components/schemas/RegisteredPatientReference'
+    PatientRegistrationAcceptedResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data:
+          $ref: '#/components/schemas/PatientRegistrationAcceptedData'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+        requestId:
+          $ref: '#/components/schemas/RequestId'
+    PatientRegistrationCompletedResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data:
+          $ref: '#/components/schemas/PatientRegistrationCompletedData'
         meta:
           $ref: '#/components/schemas/ResponseMeta'
         requestId:

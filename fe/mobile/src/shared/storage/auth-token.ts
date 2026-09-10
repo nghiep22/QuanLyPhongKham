@@ -7,10 +7,18 @@ export const authTokenStorage = {
   getAccessToken: () => SecureStore.getItemAsync(accessTokenKey),
   getRefreshToken: () => SecureStore.getItemAsync(refreshTokenKey),
   save: async (accessToken: string, refreshToken: string) => {
-    await Promise.all([
-      SecureStore.setItemAsync(accessTokenKey, accessToken),
-      SecureStore.setItemAsync(refreshTokenKey, refreshToken),
-    ]);
+    try {
+      await Promise.all([
+        SecureStore.setItemAsync(accessTokenKey, accessToken),
+        SecureStore.setItemAsync(refreshTokenKey, refreshToken),
+      ]);
+    } catch (error) {
+      await Promise.allSettled([
+        SecureStore.deleteItemAsync(accessTokenKey),
+        SecureStore.deleteItemAsync(refreshTokenKey),
+      ]);
+      throw error;
+    }
   },
   clear: async () => {
     await Promise.all([

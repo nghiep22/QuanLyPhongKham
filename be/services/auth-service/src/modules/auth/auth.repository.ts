@@ -5,6 +5,9 @@ import type {
   AuthPrincipal,
   AuthRepository,
   CredentialUser,
+  PatientRegistrationChallengeResult,
+  PatientRegistrationInput,
+  PatientRegistrationVerificationResult,
   PasswordResetCredential,
   RotateSessionResult,
   RoleAssignment,
@@ -231,5 +234,67 @@ export class SqlAuthRepository implements AuthRepository {
       { name: 'expected_password_hash', type: sql.VarChar(255), value: expectedPasswordHash },
       { name: 'new_password_hash', type: sql.VarChar(255), value: newPasswordHash },
     ], { requestId, actorUserId: userId });
+  }
+
+  async getRegistrationBranchId(branchCode: string) {
+    const pool = await getSqlPool();
+    const request = pool.request();
+    request.input('branchCode', sql.VarChar(30), branchCode);
+    const result = await request.query<{ branchId: number }>(`
+      SELECT branch_id AS branchId FROM dbo.branches
+      WHERE branch_code=@branchCode AND is_active=1;
+    `);
+    return result.recordset[0] ? Number(result.recordset[0].branchId) : null;
+  }
+
+  async createPatientRegistration(input: PatientRegistrationInput, requestId: string) {
+    const result = await executeCommand<never>('dbo.sp_auth_create_patient_registration', [
+      { name: 'registration_challenge_id', type: sql.UniqueIdentifier, value: input.challengeId },
+      { name: 'idempotency_key', type: sql.UniqueIdentifier, value: input.idempotencyKey },
+      { name: 'request_hash', type: sql.VarBinary(32), value: input.requestHash },
+      { name: 'branch_id', type: sql.BigInt, value: input.branchId },
+      { name: 'username', type: sql.NVarChar(80), value: input.username },
+      { name: 'contact_channel', type: sql.VarChar(10), value: input.contactChannel },
+      { name: 'contact_value', type: sql.VarChar(254), value: input.contactValue },
+      { name: 'contact_normalized', type: sql.VarChar(254), value: input.contactNormalized },
+      { name: 'password_hash', type: sql.VarChar(255), value: input.passwordHash },
+      { name: 'full_name', type: sql.NVarChar(200), value: input.fullName },
+      { name: 'date_of_birth', type: sql.Date, value: new Date(`${input.dateOfBirth}T00:00:00.000Z`) },
+      { name: 'gender', type: sql.VarChar(10), value: input.gender },
+      { name: 'otp_hash', type: sql.VarBinary(32), value: input.otpHash },
+      { name: 'requested_ip', type: sql.VarChar(45), value: input.requestedIp ?? null },
+      { name: 'expires_at_utc', type: sql.DateTime2(3), value: input.expiresAtUtc },
+      { name: 'max_attempts', type: sql.SmallInt, value: env.AUTH_OTP_MAX_ATTEMPTS },
+      { name: 'max_requests_per_hour', type: sql.SmallInt, value: env.AUTH_OTP_MAX_REQUESTS_PER_HOUR },
+      { name: 'effective_challenge_id', type: sql.UniqueIdentifier, value: null, direction: 'output' },
+      { name: 'created', type: sql.Bit, value: false, direction: 'output' },
+    ], { requestId });
+    return {
+      challengeId: String(result.output.effective_challenge_id),
+      created: Boolean(result.output.created),
+    } satisfies PatientRegistrationChallengeResult;
+  }
+
+  async cancelPatientRegistration(challengeId: string, requestId: string) {
+    await executeCommand('dbo.sp_auth_cancel_patient_registration', [
+      { name: 'registration_challenge_id', type: sql.UniqueIdentifier, value: challengeId },
+    ], { requestId });
+  }
+
+  async verifyPatientRegistration(challengeId: string, otpHash: Buffer, requestId: string) {
+    const result = await executeCommand<never>('dbo.sp_auth_verify_patient_registration', [
+      { name: 'registration_challenge_id', type: sql.UniqueIdentifier, value: challengeId },
+      { name: 'otp_hash', type: sql.VarBinary(32), value: otpHash },
+      { name: 'succeeded', type: sql.Bit, value: false, direction: 'output' },
+      { name: 'user_id', type: sql.BigInt, value: null, direction: 'output' },
+      { name: 'patient_public_id', type: sql.UniqueIdentifier, value: null, direction: 'output' },
+      { name: 'patient_code', type: sql.VarChar(30), value: null, direction: 'output' },
+    ], { requestId });
+    return {
+      succeeded: Boolean(result.output.succeeded),
+      userId: result.output.user_id === null ? null : Number(result.output.user_id),
+      patientPublicId: result.output.patient_public_id ? String(result.output.patient_public_id) : null,
+      patientCode: result.output.patient_code ? String(result.output.patient_code) : null,
+    } satisfies PatientRegistrationVerificationResult;
   }
 }

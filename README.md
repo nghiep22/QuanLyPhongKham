@@ -84,6 +84,22 @@ Webhook nhận JSON gồm `type`, `channel`, `recipient`, `displayName`, `resetU
 `expiresAtUtc`. Auth Service từ chối khởi động production nếu URL không dùng HTTPS,
 thiếu bearer secret hoặc vẫn dùng console delivery.
 
+Mobile hiện có luồng đăng ký bệnh nhân bằng email hoặc SMS, xác minh OTP rồi đăng
+nhập. Development ghi OTP ra terminal Auth Service với cờ `developmentOnly`.
+Production phải dùng HMAC secret riêng và webhook HTTPS:
+
+```dotenv
+PATIENT_REGISTRATION_BRANCH_CODE=MAIN
+AUTH_OTP_HASH_SECRET=replace-with-at-least-32-random-characters
+AUTH_OTP_DELIVERY_MODE=webhook
+AUTH_OTP_WEBHOOK_URL=https://notification.example.com/auth-otp
+AUTH_OTP_WEBHOOK_BEARER_TOKEN=replace-with-a-long-random-secret
+```
+
+Webhook OTP nhận `type=AUTH_OTP`, `channel`, `recipient`, `displayName`, `otp` và
+`expiresAtUtc`. OTP mặc định hết hạn sau 10 phút, tối đa năm lần thử và ba yêu cầu
+mỗi contact trong một giờ.
+
 Nếu SQL Server local chưa bật TCP/IP và bạn dùng Windows Authentication, đặt
 `SQL_SERVER=np:\\.\pipe\sql\query` trong `.env`. Xem thêm [be/README.md](./be/README.md).
 
@@ -104,6 +120,7 @@ sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\a
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\staff-rbac.test.sql
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\staff-safety.test.sql
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\password-lifecycle.test.sql
+sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\patient-registration.test.sql
 ```
 
 Chi tiết nghiệp vụ và thứ tự phát triển nằm trong [PROJECT_PLAN.md](./PROJECT_PLAN.md).

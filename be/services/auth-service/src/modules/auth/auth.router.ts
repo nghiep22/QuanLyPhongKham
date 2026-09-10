@@ -24,6 +24,33 @@ const resetPasswordSchema = z.object({
   token: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
   newPassword: strongPassword,
 }).strict();
+const dateOfBirth = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((value) => {
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.getTime())
+    && parsed.toISOString().slice(0, 10) === value
+    && value >= '1900-01-01'
+    && value <= new Date().toISOString().slice(0, 10);
+}, 'Ngày sinh không hợp lệ.');
+const patientRegistrationSchema = z.object({
+  contactChannel: z.enum(['EMAIL', 'SMS']),
+  contact: z.string().trim().min(3).max(254),
+  password: strongPassword,
+  fullName: z.string().trim().min(2).max(200),
+  dateOfBirth,
+  gender: z.enum(['MALE', 'FEMALE', 'OTHER']),
+}).strict().superRefine((value, context) => {
+  if (value.contactChannel === 'EMAIL' && !z.email().safeParse(value.contact).success) {
+    context.addIssue({ code: 'custom', path: ['contact'], message: 'Email không hợp lệ.' });
+  }
+  const phone = value.contact.replace(/[ .-]/g, '');
+  if (value.contactChannel === 'SMS' && !/^\+?[0-9]{9,15}$/.test(phone)) {
+    context.addIssue({ code: 'custom', path: ['contact'], message: 'Số điện thoại không hợp lệ.' });
+  }
+});
+const verifyPatientRegistrationSchema = z.object({
+  challengeId: z.uuid(),
+  otp: z.string().regex(/^\d{6}$/),
+}).strict();
 
 function asyncRoute(handler: (request: Request, response: Response, next: NextFunction) => Promise<void>) {
   return (request: Request, response: Response, next: NextFunction) => void handler(request, response, next).catch(next);
@@ -150,6 +177,26 @@ export function createAuthRouter(auth: AuthService) {
     await auth.resetPassword(body.token, body.newPassword, response.locals.requestId);
     clearRefreshCookie(response);
     success(response, { passwordChanged: true, allSessionsRevoked: true });
+  }));
+
+  router.post('/patient-registration/request', asyncRoute(async (request, response) => {
+    const idempotencyKey = request.header('idempotency-key');
+    if (!idempotencyKey || !z.uuid().safeParse(idempotencyKey).success) {
+      throw new HttpError(400, 'IDEMPOTENCY_KEY_REQUIRED', 'Yêu cầu Idempotency-Key dạng UUID.');
+    }
+    const body = validate(patientRegistrationSchema, request.body);
+    const result = await auth.requestPatientRegistration(
+      body, idempotencyKey, metadata(request).ipAddress, response.locals.requestId,
+    );
+    response.status(202);
+    success(response, result);
+  }));
+
+  router.post('/patient-registration/verify', asyncRoute(async (request, response) => {
+    const body = validate(verifyPatientRegistrationSchema, request.body);
+    const result = await auth.verifyPatientRegistration(body.challengeId, body.otp, response.locals.requestId);
+    response.status(201);
+    success(response, result);
   }));
 
   return router;

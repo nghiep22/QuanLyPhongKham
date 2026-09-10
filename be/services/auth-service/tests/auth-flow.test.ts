@@ -5,10 +5,12 @@ import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app.js';
 import { AuthService } from '../src/modules/auth/auth.service.js';
 import type { RecoveryDelivery, RecoveryDeliveryMessage } from '../src/modules/auth/recovery-delivery.js';
+import type { OtpDelivery, OtpDeliveryMessage } from '../src/modules/auth/otp-delivery.js';
 import type {
   AuthPrincipal,
   AuthRepository,
   CredentialUser,
+  PatientRegistrationInput,
   RotateSessionResult,
   SessionMetadata,
 } from '../src/modules/auth/auth.types.js';
@@ -20,6 +22,7 @@ class MemoryAuthRepository implements AuthRepository {
   failed = 0;
   sessions = new Map<string, { userId: number; sessionId: string; replaced: boolean; revoked: boolean }>();
   resetTokens = new Map<string, { userId: number; active: boolean }>();
+  registrations = new Map<string, PatientRegistrationInput & { active: boolean }>();
   user: CredentialUser;
 
   constructor() {
@@ -113,6 +116,40 @@ class MemoryAuthRepository implements AuthRepository {
     for (const session of this.sessions.values()) session.revoked = true;
     return Promise.resolve();
   }
+  getRegistrationBranchId() {
+    return Promise.resolve(1);
+  }
+  createPatientRegistration(input: PatientRegistrationInput) {
+    const existing = [...this.registrations.values()].find((item) => item.idempotencyKey === input.idempotencyKey);
+    if (existing) {
+      if (!existing.requestHash.equals(input.requestHash)) return Promise.reject({ number: 53073 });
+      return Promise.resolve({ challengeId: existing.challengeId, created: false });
+    }
+    if (input.contactNormalized === this.user.email) {
+      this.registrations.set(input.challengeId, { ...input, active: false });
+      return Promise.resolve({ challengeId: input.challengeId, created: false });
+    }
+    this.registrations.set(input.challengeId, { ...input, active: true });
+    return Promise.resolve({ challengeId: input.challengeId, created: true });
+  }
+  cancelPatientRegistration(challengeId: string) {
+    const challenge = this.registrations.get(challengeId);
+    if (challenge) challenge.active = false;
+    return Promise.resolve();
+  }
+  verifyPatientRegistration(challengeId: string, otpHash: Buffer) {
+    const challenge = this.registrations.get(challengeId);
+    if (!challenge?.active || !challenge.otpHash.equals(otpHash)) {
+      return Promise.resolve({ succeeded: false, userId: null, patientPublicId: null, patientCode: null });
+    }
+    challenge.active = false;
+    return Promise.resolve({
+      succeeded: true,
+      userId: 2,
+      patientPublicId: randomUUID(),
+      patientCode: 'BN-20260910-000001',
+    });
+  }
 }
 
 class MemoryRecoveryDelivery implements RecoveryDelivery {
@@ -125,9 +162,19 @@ class MemoryRecoveryDelivery implements RecoveryDelivery {
   }
 }
 
-function app(repository: MemoryAuthRepository, delivery?: RecoveryDelivery) {
+class MemoryOtpDelivery implements OtpDelivery {
+  messages: OtpDeliveryMessage[] = [];
+  fail = false;
+  deliver(message: OtpDeliveryMessage) {
+    if (this.fail) return Promise.reject(new Error('otp delivery unavailable'));
+    this.messages.push(message);
+    return Promise.resolve();
+  }
+}
+
+function app(repository: MemoryAuthRepository, delivery?: RecoveryDelivery, otpDelivery?: OtpDelivery) {
   return createApp({
-    authService: new AuthService(repository, undefined, delivery),
+    authService: new AuthService(repository, undefined, delivery, otpDelivery),
     databaseProbe: async () => ({ database: 'test' }),
   });
 }
@@ -310,6 +357,97 @@ describe('authentication vertical slice', () => {
       .send({ identifier: 'admin' });
     expect(response.status).toBe(202);
     expect([...repository.resetTokens.values()].every((token) => !token.active)).toBe(true);
+  });
+
+  it('requests an OTP without revealing whether the contact already has an account', async () => {
+    const otpDelivery = new MemoryOtpDelivery();
+    const server = app(repository, undefined, otpDelivery);
+    const registration = {
+      contactChannel: 'EMAIL', password: 'PatientPassword123', fullName: 'Nguyễn An',
+      dateOfBirth: '1995-06-15', gender: 'FEMALE',
+    };
+    const idempotencyKey = randomUUID();
+    const available = await request(server).post('/api/v1/auth/patient-registration/request')
+      .set('idempotency-key', randomUUID()).send({ ...registration, contact: 'new-patient@example.com' });
+    const existing = await request(server).post('/api/v1/auth/patient-registration/request')
+      .set('idempotency-key', idempotencyKey).send({ ...registration, contact: 'admin@example.com' });
+    const existingRetry = await request(server).post('/api/v1/auth/patient-registration/request')
+      .set('idempotency-key', idempotencyKey).send({ ...registration, contact: 'admin@example.com' });
+    expect(available.status).toBe(202);
+    expect(existing.status).toBe(202);
+    expect(available.body.data).toMatchObject({ expiresIn: 600, resendAfter: 60 });
+    expect(existing.body.data).toMatchObject({ expiresIn: 600, resendAfter: 60 });
+    expect(existingRetry.body.data.challengeId).toBe(existing.body.data.challengeId);
+    expect(available.body.data.challengeId).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(existing.body.data.challengeId).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(available.headers['cache-control']).toBe('no-store');
+    expect(otpDelivery.messages).toHaveLength(1);
+  });
+
+  it('completes registration once with the delivered OTP and rejects replay', async () => {
+    const otpDelivery = new MemoryOtpDelivery();
+    const server = app(repository, undefined, otpDelivery);
+    const requested = await request(server).post('/api/v1/auth/patient-registration/request')
+      .set('idempotency-key', randomUUID()).send({
+        contactChannel: 'SMS', contact: '+84901234567', password: 'PatientPassword123',
+        fullName: 'Trần Bình', dateOfBirth: '1988-03-20', gender: 'MALE',
+      });
+    const challengeId = requested.body.data.challengeId as string;
+    const otp = otpDelivery.messages[0]!.otp;
+    const wrongOtp = otp === '000000' ? '000001' : '000000';
+    const wrong = await request(server).post('/api/v1/auth/patient-registration/verify')
+      .send({ challengeId, otp: wrongOtp });
+    const verified = await request(server).post('/api/v1/auth/patient-registration/verify')
+      .send({ challengeId, otp });
+    const replay = await request(server).post('/api/v1/auth/patient-registration/verify')
+      .send({ challengeId, otp });
+    expect(wrong.status).toBe(400);
+    expect(wrong.body.error.code).toBe('INVALID_OR_EXPIRED_OTP');
+    expect(verified.status).toBe(201);
+    expect(verified.body.data.registered).toBe(true);
+    expect(verified.body.data.patient.code).toMatch(/^BN-/);
+    expect(replay.status).toBe(400);
+    expect(replay.body.error.code).toBe('INVALID_OR_EXPIRED_OTP');
+  });
+
+  it('makes patient registration idempotent and rejects reuse with another payload', async () => {
+    const otpDelivery = new MemoryOtpDelivery();
+    const server = app(repository, undefined, otpDelivery);
+    const idempotencyKey = randomUUID();
+    const registration = {
+      contactChannel: 'EMAIL', contact: 'idempotent@example.com', password: 'PatientPassword123',
+      fullName: 'Lê Chi', dateOfBirth: '2000-01-02', gender: 'OTHER',
+    };
+    const first = await request(server).post('/api/v1/auth/patient-registration/request')
+      .set('idempotency-key', idempotencyKey).send(registration);
+    const retry = await request(server).post('/api/v1/auth/patient-registration/request')
+      .set('idempotency-key', idempotencyKey).send(registration);
+    const conflict = await request(server).post('/api/v1/auth/patient-registration/request')
+      .set('idempotency-key', idempotencyKey).send({ ...registration, fullName: 'Tên khác' });
+    expect(first.status).toBe(202);
+    expect(retry.status).toBe(202);
+    expect(retry.body.data.challengeId).toBe(first.body.data.challengeId);
+    expect(otpDelivery.messages).toHaveLength(1);
+    expect(conflict.status).toBe(409);
+    expect(conflict.body.error.code).toBe('IDEMPOTENCY_KEY_REUSED');
+  });
+
+  it('invalidates the OTP challenge when delivery fails and requires a UUID idempotency key', async () => {
+    const otpDelivery = new MemoryOtpDelivery();
+    otpDelivery.fail = true;
+    const server = app(repository, undefined, otpDelivery);
+    const body = {
+      contactChannel: 'EMAIL', contact: 'delivery-fail@example.com', password: 'PatientPassword123',
+      fullName: 'Phạm Dung', dateOfBirth: '1999-09-09', gender: 'FEMALE',
+    };
+    const missingKey = await request(server).post('/api/v1/auth/patient-registration/request').send(body);
+    const accepted = await request(server).post('/api/v1/auth/patient-registration/request')
+      .set('idempotency-key', randomUUID()).send(body);
+    const challenge = repository.registrations.get(accepted.body.data.challengeId as string);
+    expect(missingKey.status).toBe(400);
+    expect(missingKey.body.error.code).toBe('IDEMPOTENCY_KEY_REQUIRED');
+    expect(accepted.status).toBe(202);
+    expect(challenge?.active).toBe(false);
   });
 
   it('rejects browser origins outside the configured allow-list', async () => {

@@ -3,9 +3,6 @@ export type ApiClientOptions = {
   getAccessToken?: () => Promise<string | null>;
 };
 
-export * from './generated/sdk.gen.js';
-export { client as generatedClient } from './generated/client.gen.js';
-
 export function createApiClient(options: ApiClientOptions) {
   async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const accessToken = await options.getAccessToken?.();
@@ -71,6 +68,23 @@ export function createApiClient(options: ApiClientOptions) {
           method: 'POST',
           body: JSON.stringify(body),
         }),
+      requestPatientRegistration: (
+        body: import('@clinic/generated-api-types').PatientRegistrationRequest,
+        idempotencyKey: string,
+      ) => request<import('@clinic/generated-api-types').PatientRegistrationAcceptedResponse>(
+        '/api/v1/auth/patient-registration/request',
+        {
+          method: 'POST',
+          headers: { 'idempotency-key': idempotencyKey },
+          body: JSON.stringify(body),
+        },
+      ),
+      verifyPatientRegistration: (
+        body: import('@clinic/generated-api-types').PatientRegistrationVerificationRequest,
+      ) => request<import('@clinic/generated-api-types').PatientRegistrationCompletedResponse>(
+        '/api/v1/auth/patient-registration/verify',
+        { method: 'POST', body: JSON.stringify(body) },
+      ),
     },
     staff: {
       references: () =>

@@ -364,6 +364,60 @@ BEGIN
 END;
 GO
 
+IF OBJECT_ID(N'dbo.patient_registration_challenges', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.patient_registration_challenges
+    (
+        registration_challenge_id uniqueidentifier NOT NULL,
+        idempotency_key            uniqueidentifier NOT NULL,
+        request_hash               binary(32) NOT NULL,
+        branch_id                  bigint NOT NULL,
+        username                   nvarchar(80) NOT NULL,
+        contact_channel            varchar(10) NOT NULL,
+        contact_value              varchar(254) NOT NULL,
+        contact_normalized         varchar(254) NOT NULL,
+        password_hash              varchar(255) NOT NULL,
+        full_name                  nvarchar(200) NOT NULL,
+        date_of_birth              date NOT NULL,
+        gender                     varchar(10) NOT NULL,
+        otp_hash                   binary(32) NOT NULL,
+        attempt_count              smallint NOT NULL CONSTRAINT DF_patient_registration_attempts DEFAULT (0),
+        max_attempts               smallint NOT NULL,
+        requested_ip               varchar(45) NULL,
+        expires_at_utc             datetime2(3) NOT NULL,
+        consumed_at_utc            datetime2(3) NULL,
+        revoked_at_utc             datetime2(3) NULL,
+        revocation_reason          varchar(30) NULL,
+        created_at_utc             datetime2(3) NOT NULL
+            CONSTRAINT DF_patient_registration_created DEFAULT SYSUTCDATETIME(),
+        CONSTRAINT PK_patient_registration_challenges PRIMARY KEY CLUSTERED (registration_challenge_id),
+        CONSTRAINT UQ_patient_registration_idempotency UNIQUE (idempotency_key),
+        CONSTRAINT FK_patient_registration_branch FOREIGN KEY (branch_id) REFERENCES dbo.branches(branch_id),
+        CONSTRAINT CK_patient_registration_channel CHECK (contact_channel IN ('EMAIL','SMS')),
+        CONSTRAINT CK_patient_registration_contact CHECK
+            (LEN(LTRIM(RTRIM(contact_value)))>0 AND LEN(LTRIM(RTRIM(contact_normalized)))>0
+             AND (contact_channel<>'SMS' OR LEN(contact_normalized)<=20)),
+        CONSTRAINT CK_patient_registration_gender CHECK (gender IN ('MALE','FEMALE','OTHER')),
+        CONSTRAINT CK_patient_registration_attempts CHECK
+            (max_attempts BETWEEN 1 AND 10 AND attempt_count BETWEEN 0 AND max_attempts),
+        CONSTRAINT CK_patient_registration_expiry CHECK (expires_at_utc>created_at_utc),
+        CONSTRAINT CK_patient_registration_terminal CHECK
+            (consumed_at_utc IS NULL OR revoked_at_utc IS NULL),
+        CONSTRAINT CK_patient_registration_revocation CHECK
+            (revocation_reason IS NULL OR revocation_reason IN
+                ('REQUEST_REPLACED','DELIVERY_FAILED','TOO_MANY_ATTEMPTS','EXPIRED','CONTACT_UNAVAILABLE'))
+    );
+END;
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes
+               WHERE object_id=OBJECT_ID(N'dbo.patient_registration_challenges')
+                 AND name=N'IX_patient_registration_contact_created')
+    CREATE INDEX IX_patient_registration_contact_created
+    ON dbo.patient_registration_challenges(contact_channel,contact_normalized,created_at_utc DESC)
+    INCLUDE (expires_at_utc,consumed_at_utc,revoked_at_utc,revocation_reason);
+GO
+
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.password_reset_challenges')
                AND name=N'IX_password_reset_challenges_user_created')
     CREATE INDEX IX_password_reset_challenges_user_created
@@ -591,6 +645,7 @@ BEGIN
     CREATE TABLE dbo.patients
     (
         patient_id             bigint IDENTITY(1,1) NOT NULL,
+        public_id              uniqueidentifier NOT NULL CONSTRAINT DF_patients_public_id DEFAULT NEWSEQUENTIALID(),
         patient_code           varchar(30) NOT NULL,
         full_name              nvarchar(200) NOT NULL,
         date_of_birth          date NOT NULL,
@@ -627,6 +682,19 @@ BEGIN
             (national_id IS NULL OR LEN(LTRIM(RTRIM(national_id))) > 0)
     );
 END;
+GO
+
+IF COL_LENGTH(N'dbo.patients', N'public_id') IS NULL
+    ALTER TABLE dbo.patients ADD public_id uniqueidentifier NULL;
+IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.patients') AND name=N'public_id' AND is_nullable=1)
+BEGIN
+    EXEC sys.sp_executesql N'UPDATE dbo.patients SET public_id=NEWID() WHERE public_id IS NULL;';
+    EXEC sys.sp_executesql N'ALTER TABLE dbo.patients ALTER COLUMN public_id uniqueidentifier NOT NULL;';
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.default_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.patients') AND name=N'DF_patients_public_id')
+    EXEC sys.sp_executesql N'ALTER TABLE dbo.patients ADD CONSTRAINT DF_patients_public_id DEFAULT NEWSEQUENTIALID() FOR public_id;';
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.patients') AND name=N'UX_patients_public_id')
+    EXEC sys.sp_executesql N'CREATE UNIQUE INDEX UX_patients_public_id ON dbo.patients(public_id);';
 GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.patients') AND name = N'UX_patients_national_id')
@@ -4344,6 +4412,269 @@ BEGIN
 END;
 GO
 
+CREATE OR ALTER PROCEDURE dbo.sp_auth_create_patient_registration
+    @registration_challenge_id uniqueidentifier,
+    @idempotency_key uniqueidentifier,
+    @request_hash binary(32),
+    @branch_id bigint,
+    @username nvarchar(80),
+    @contact_channel varchar(10),
+    @contact_value varchar(254),
+    @contact_normalized varchar(254),
+    @password_hash varchar(255),
+    @full_name nvarchar(200),
+    @date_of_birth date,
+    @gender varchar(10),
+    @otp_hash binary(32),
+    @requested_ip varchar(45)=NULL,
+    @expires_at_utc datetime2(3),
+    @max_attempts smallint=5,
+    @max_requests_per_hour smallint=3,
+    @effective_challenge_id uniqueidentifier OUTPUT,
+    @created bit OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    SET @created=0;
+    SET @effective_challenge_id=@registration_challenge_id;
+    DECLARE @expected_contact varchar(254)=CASE WHEN @contact_channel='EMAIL'
+        THEN LOWER(LTRIM(RTRIM(@contact_value)))
+        WHEN @contact_channel='SMS'
+        THEN REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(@contact_value)),' ',''),'-',''),'.','') END;
+    IF @expected_contact IS NULL OR @expected_contact<>@contact_normalized
+       OR LEN(@password_hash)<40 OR LEN(LTRIM(RTRIM(@full_name)))<2
+       OR @date_of_birth>CONVERT(date,SYSUTCDATETIME())
+       OR @gender NOT IN ('MALE','FEMALE','OTHER')
+       OR @expires_at_utc<=SYSUTCDATETIME()
+       OR @max_attempts NOT BETWEEN 1 AND 10 OR @max_requests_per_hour NOT BETWEEN 1 AND 20
+        THROW 53070,N'Chính sách hoặc dữ liệu đăng ký bệnh nhân không hợp lệ.',1;
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        DECLARE @lock_result int,@existing_challenge_id uniqueidentifier,@existing_hash binary(32),
+                @resource nvarchar(255);
+        SET @resource=CONCAT(N'patient-registration:idempotency:',CONVERT(varchar(36),@idempotency_key));
+        EXEC @lock_result=sys.sp_getapplock
+            @Resource=@resource,
+            @LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000;
+        IF @lock_result<0 THROW 53059,N'Không thể khóa tài nguyên đăng ký bệnh nhân.',1;
+        SELECT @existing_challenge_id=registration_challenge_id,@existing_hash=request_hash
+        FROM dbo.patient_registration_challenges WITH (UPDLOCK,HOLDLOCK)
+        WHERE idempotency_key=@idempotency_key;
+        IF @existing_challenge_id IS NOT NULL
+        BEGIN
+            IF @existing_hash<>@request_hash
+                THROW 53073,N'Idempotency-Key đã được dùng với nội dung khác.',1;
+            SET @effective_challenge_id=@existing_challenge_id;
+            COMMIT TRANSACTION;
+            RETURN;
+        END;
+
+        SET @resource=CONCAT(N'patient-registration:contact:',@contact_channel,N':',@contact_normalized);
+        EXEC @lock_result=sys.sp_getapplock
+            @Resource=@resource,
+            @LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000;
+        IF @lock_result<0 THROW 53059,N'Không thể khóa tài nguyên đăng ký bệnh nhân.',1;
+        IF NOT EXISTS(SELECT 1 FROM dbo.branches WHERE branch_id=@branch_id AND is_active=1)
+            THROW 53071,N'Chi nhánh đăng ký không khả dụng.',1;
+        IF (SELECT COUNT_BIG(*) FROM dbo.patient_registration_challenges WITH (UPDLOCK,HOLDLOCK)
+            WHERE contact_channel=@contact_channel AND contact_normalized=@contact_normalized
+              AND created_at_utc>DATEADD(hour,-1,SYSUTCDATETIME())
+              AND ISNULL(revocation_reason,'')<>'DELIVERY_FAILED')>=@max_requests_per_hour
+        BEGIN COMMIT TRANSACTION; RETURN; END;
+        IF EXISTS
+        (
+            SELECT 1 FROM dbo.users
+            WHERE deleted_at_utc IS NULL AND
+              ((@contact_channel='EMAIL' AND email_normalized=@contact_normalized)
+               OR (@contact_channel='SMS' AND phone_normalized=@contact_normalized))
+        )
+        BEGIN
+            INSERT dbo.patient_registration_challenges
+                (registration_challenge_id,idempotency_key,request_hash,branch_id,username,
+                 contact_channel,contact_value,contact_normalized,password_hash,full_name,
+                 date_of_birth,gender,otp_hash,attempt_count,max_attempts,requested_ip,
+                 expires_at_utc,revoked_at_utc,revocation_reason)
+            VALUES
+                (@registration_challenge_id,@idempotency_key,@request_hash,@branch_id,@username,
+                 @contact_channel,@contact_value,@contact_normalized,@password_hash,LTRIM(RTRIM(@full_name)),
+                 @date_of_birth,@gender,CONVERT(binary(32),0x00),0,@max_attempts,@requested_ip,
+                 @expires_at_utc,SYSUTCDATETIME(),'CONTACT_UNAVAILABLE');
+            COMMIT TRANSACTION;
+            RETURN;
+        END;
+        UPDATE dbo.patient_registration_challenges
+           SET revoked_at_utc=SYSUTCDATETIME(),revocation_reason='REQUEST_REPLACED',
+               otp_hash=CONVERT(binary(32),0x00)
+         WHERE contact_channel=@contact_channel AND contact_normalized=@contact_normalized
+           AND consumed_at_utc IS NULL AND revoked_at_utc IS NULL;
+        INSERT dbo.patient_registration_challenges
+            (registration_challenge_id,idempotency_key,request_hash,branch_id,username,
+             contact_channel,contact_value,contact_normalized,password_hash,full_name,
+             date_of_birth,gender,otp_hash,attempt_count,max_attempts,requested_ip,expires_at_utc)
+        VALUES
+            (@registration_challenge_id,@idempotency_key,@request_hash,@branch_id,@username,
+             @contact_channel,@contact_value,@contact_normalized,@password_hash,LTRIM(RTRIM(@full_name)),
+             @date_of_birth,@gender,@otp_hash,0,@max_attempts,@requested_ip,@expires_at_utc);
+        SET @created=1;
+        DECLARE @entity_id varchar(100)=CONVERT(varchar(100),@registration_challenge_id);
+        EXEC dbo.sp_write_audit @action_code='PATIENT_REGISTRATION_REQUESTED',
+            @entity_type='REGISTRATION_CHALLENGE',@entity_id=@entity_id;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_auth_cancel_patient_registration
+    @registration_challenge_id uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        UPDATE dbo.patient_registration_challenges WITH (UPDLOCK,HOLDLOCK)
+           SET revoked_at_utc=SYSUTCDATETIME(),revocation_reason='DELIVERY_FAILED',
+               otp_hash=CONVERT(binary(32),0x00)
+         WHERE registration_challenge_id=@registration_challenge_id
+           AND consumed_at_utc IS NULL AND revoked_at_utc IS NULL;
+        IF @@ROWCOUNT=1
+        BEGIN
+            DECLARE @entity_id varchar(100)=CONVERT(varchar(100),@registration_challenge_id);
+            EXEC dbo.sp_write_audit @action_code='PATIENT_REGISTRATION_DELIVERY_FAILED',
+                @entity_type='REGISTRATION_CHALLENGE',@entity_id=@entity_id;
+        END;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_auth_verify_patient_registration
+    @registration_challenge_id uniqueidentifier,
+    @otp_hash binary(32),
+    @succeeded bit OUTPUT,
+    @user_id bigint OUTPUT,
+    @patient_public_id uniqueidentifier OUTPUT,
+    @patient_code varchar(30) OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    SET @succeeded=0;
+    SET @user_id=NULL;
+    SET @patient_public_id=NULL;
+    SET @patient_code=NULL;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        DECLARE @contact_channel varchar(10),@contact_value varchar(254),@contact_normalized varchar(254),
+                @branch_id bigint,@username nvarchar(80),@password_hash varchar(255),
+                @full_name nvarchar(200),@date_of_birth date,@gender varchar(10),
+                @stored_otp_hash binary(32),@attempt_count smallint,@max_attempts smallint,
+                @expires_at_utc datetime2(3),@consumed_at_utc datetime2(3),@revoked_at_utc datetime2(3),
+                @lock_result int,@resource nvarchar(255);
+        SELECT @contact_channel=contact_channel,@contact_normalized=contact_normalized
+        FROM dbo.patient_registration_challenges WHERE registration_challenge_id=@registration_challenge_id;
+        IF @contact_channel IS NULL BEGIN COMMIT TRANSACTION; RETURN; END;
+        SET @resource=CONCAT(N'patient-registration:contact:',@contact_channel,N':',@contact_normalized);
+        EXEC @lock_result=sys.sp_getapplock
+            @Resource=@resource,
+            @LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000;
+        IF @lock_result<0 THROW 53059,N'Không thể khóa tài nguyên đăng ký bệnh nhân.',1;
+        SELECT @contact_channel=contact_channel,@contact_value=contact_value,
+               @contact_normalized=contact_normalized,@branch_id=branch_id,@username=username,
+               @password_hash=password_hash,@full_name=full_name,@date_of_birth=date_of_birth,
+               @gender=gender,@stored_otp_hash=otp_hash,@attempt_count=attempt_count,
+               @max_attempts=max_attempts,@expires_at_utc=expires_at_utc,
+               @consumed_at_utc=consumed_at_utc,@revoked_at_utc=revoked_at_utc
+        FROM dbo.patient_registration_challenges WITH (UPDLOCK,HOLDLOCK)
+        WHERE registration_challenge_id=@registration_challenge_id;
+        IF @consumed_at_utc IS NOT NULL OR @revoked_at_utc IS NOT NULL
+        BEGIN COMMIT TRANSACTION; RETURN; END;
+        IF @expires_at_utc<=SYSUTCDATETIME()
+        BEGIN
+            UPDATE dbo.patient_registration_challenges SET revoked_at_utc=SYSUTCDATETIME(),
+                revocation_reason='EXPIRED',otp_hash=CONVERT(binary(32),0x00)
+            WHERE registration_challenge_id=@registration_challenge_id;
+            COMMIT TRANSACTION;
+            RETURN;
+        END;
+        IF @stored_otp_hash<>@otp_hash
+        BEGIN
+            SET @attempt_count=@attempt_count+1;
+            UPDATE dbo.patient_registration_challenges
+               SET attempt_count=@attempt_count,
+                   revoked_at_utc=CASE WHEN @attempt_count>=@max_attempts THEN SYSUTCDATETIME() ELSE NULL END,
+                   revocation_reason=CASE WHEN @attempt_count>=@max_attempts THEN 'TOO_MANY_ATTEMPTS' ELSE NULL END,
+                   otp_hash=CASE WHEN @attempt_count>=@max_attempts THEN CONVERT(binary(32),0x00) ELSE otp_hash END
+             WHERE registration_challenge_id=@registration_challenge_id;
+            COMMIT TRANSACTION;
+            RETURN;
+        END;
+        IF EXISTS
+        (
+            SELECT 1 FROM dbo.users WITH (UPDLOCK,HOLDLOCK)
+            WHERE deleted_at_utc IS NULL AND
+              ((@contact_channel='EMAIL' AND email_normalized=@contact_normalized)
+               OR (@contact_channel='SMS' AND phone_normalized=@contact_normalized))
+        )
+        BEGIN
+            UPDATE dbo.patient_registration_challenges SET revoked_at_utc=SYSUTCDATETIME(),
+                revocation_reason='CONTACT_UNAVAILABLE',otp_hash=CONVERT(binary(32),0x00)
+            WHERE registration_challenge_id=@registration_challenge_id;
+            COMMIT TRANSACTION;
+            RETURN;
+        END;
+
+        DECLARE @role_id bigint=(SELECT role_id FROM dbo.roles WHERE role_code='PATIENT' AND is_active=1);
+        IF @role_id IS NULL THROW 53072,N'Role PATIENT chưa được cấu hình.',1;
+        INSERT dbo.users(username,email,phone,password_hash,display_name,status)
+        VALUES(@username,CASE WHEN @contact_channel='EMAIL' THEN @contact_value END,
+               CASE WHEN @contact_channel='SMS' THEN @contact_value END,
+               @password_hash,@full_name,'ACTIVE');
+        SET @user_id=SCOPE_IDENTITY();
+        INSERT dbo.user_roles(user_id,role_id,branch_id,granted_by_user_id,is_active)
+        VALUES(@user_id,@role_id,NULL,@user_id,1);
+
+        DECLARE @business_date date;
+        EXEC dbo.sp_get_branch_business_date @branch_id,NULL,@business_date OUTPUT;
+        EXEC dbo.sp_next_document_number @branch_id,'PATIENT',@business_date,'BN',@patient_code OUTPUT;
+        INSERT dbo.patients(patient_code,full_name,date_of_birth,gender,phone,email,created_by_user_id)
+        VALUES(@patient_code,@full_name,@date_of_birth,@gender,
+               CASE WHEN @contact_channel='SMS' THEN @contact_value END,
+               CASE WHEN @contact_channel='EMAIL' THEN @contact_value END,@user_id);
+        DECLARE @patient_id bigint=SCOPE_IDENTITY();
+        SELECT @patient_public_id=public_id FROM dbo.patients WHERE patient_id=@patient_id;
+        INSERT dbo.user_patient_access
+            (user_id,patient_id,relationship_type,status,is_booking_allowed,
+             verified_by_user_id,verified_at_utc)
+        VALUES(@user_id,@patient_id,'SELF','ACTIVE',1,@user_id,SYSUTCDATETIME());
+        UPDATE dbo.patient_registration_challenges
+           SET consumed_at_utc=SYSUTCDATETIME(),otp_hash=CONVERT(binary(32),0x00)
+         WHERE registration_challenge_id=@registration_challenge_id;
+        SET @succeeded=1;
+        DECLARE @entity_id varchar(100)=CONVERT(varchar(100),@patient_public_id);
+        DECLARE @audit_json nvarchar(max)=N'{"relationship":"SELF","bookingAllowed":true}';
+        EXEC dbo.sp_write_audit @actor_user_id=@user_id,@branch_id=@branch_id,
+            @action_code='PATIENT_SELF_REGISTERED',@entity_type='PATIENT',
+            @entity_id=@entity_id,@new_values_json=@audit_json;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
 CREATE OR ALTER PROCEDURE dbo.sp_bootstrap_first_admin
     @username nvarchar(80),
     @email varchar(254) = NULL,
@@ -7873,6 +8204,9 @@ GRANT EXECUTE ON OBJECT::dbo.sp_auth_create_password_reset TO auth_core_executor
 GRANT EXECUTE ON OBJECT::dbo.sp_auth_cancel_password_reset TO auth_core_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_auth_consume_password_reset TO auth_core_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_auth_change_password TO auth_core_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_auth_create_patient_registration TO auth_core_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_auth_cancel_patient_registration TO auth_core_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_auth_verify_patient_registration TO auth_core_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_create_staff_account TO auth_core_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_update_staff_account TO auth_core_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_set_staff_account_status TO auth_core_executor;
@@ -7897,6 +8231,9 @@ REVOKE EXECUTE ON OBJECT::dbo.sp_auth_create_password_reset FROM clinic_api_exec
 REVOKE EXECUTE ON OBJECT::dbo.sp_auth_cancel_password_reset FROM clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_auth_consume_password_reset FROM clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_auth_change_password FROM clinic_api_executor;
+REVOKE EXECUTE ON OBJECT::dbo.sp_auth_create_patient_registration FROM clinic_api_executor;
+REVOKE EXECUTE ON OBJECT::dbo.sp_auth_cancel_patient_registration FROM clinic_api_executor;
+REVOKE EXECUTE ON OBJECT::dbo.sp_auth_verify_patient_registration FROM clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_create_room TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_create_service TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_assign_doctor_service TO clinic_api_executor;

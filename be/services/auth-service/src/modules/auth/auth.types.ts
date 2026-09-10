@@ -47,6 +47,36 @@ export type RotateSessionResult = {
 
 export type PasswordResetCredential = { userId: number; passwordHash: string };
 
+export type PatientRegistrationInput = {
+  challengeId: string;
+  idempotencyKey: string;
+  requestHash: Buffer;
+  branchId: number;
+  username: string;
+  contactChannel: 'EMAIL' | 'SMS';
+  contactValue: string;
+  contactNormalized: string;
+  passwordHash: string;
+  fullName: string;
+  dateOfBirth: string;
+  gender: 'MALE' | 'FEMALE' | 'OTHER';
+  otpHash: Buffer;
+  requestedIp?: string;
+  expiresAtUtc: Date;
+};
+
+export type PatientRegistrationChallengeResult = {
+  challengeId: string;
+  created: boolean;
+};
+
+export type PatientRegistrationVerificationResult = {
+  succeeded: boolean;
+  userId: number | null;
+  patientPublicId: string | null;
+  patientCode: string | null;
+};
+
 export interface AuthRepository {
   findCredential(identifier: string): Promise<CredentialUser | null>;
   getCredential(userId: number): Promise<CredentialUser | null>;
@@ -61,4 +91,8 @@ export interface AuthRepository {
   cancelPasswordReset(tokenHash: Buffer, requestId: string): Promise<void>;
   consumePasswordReset(tokenHash: Buffer, newPasswordHash: string, requestId: string): Promise<boolean>;
   changePassword(userId: number, expectedPasswordHash: string, newPasswordHash: string, requestId: string): Promise<void>;
+  getRegistrationBranchId(branchCode: string): Promise<number | null>;
+  createPatientRegistration(input: PatientRegistrationInput, requestId: string): Promise<PatientRegistrationChallengeResult>;
+  cancelPatientRegistration(challengeId: string, requestId: string): Promise<void>;
+  verifyPatientRegistration(challengeId: string, otpHash: Buffer, requestId: string): Promise<PatientRegistrationVerificationResult>;
 }

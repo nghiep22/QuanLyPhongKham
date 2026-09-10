@@ -6,6 +6,8 @@ dotenv.config({ path: new URL('../../../../.env', import.meta.url) });
 
 const optionalUrl = z.preprocess((value) => value === '' ? undefined : value, z.string().url().optional());
 const optionalSecret = z.preprocess((value) => value === '' ? undefined : value, z.string().min(16).optional());
+const developmentOtpSecret = 'development-only-otp-secret-change-me';
+const exampleOtpSecret = 'replace-with-at-least-32-random-characters';
 
 const environmentSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -38,6 +40,14 @@ const environmentSchema = z.object({
   PASSWORD_RESET_DELIVERY_MODE: z.enum(['console', 'webhook']).default('console'),
   PASSWORD_RESET_WEBHOOK_URL: optionalUrl,
   PASSWORD_RESET_WEBHOOK_BEARER_TOKEN: optionalSecret,
+  PATIENT_REGISTRATION_BRANCH_CODE: z.string().trim().min(1).max(30).default('MAIN'),
+  AUTH_OTP_TTL_MINUTES: z.coerce.number().int().min(3).max(30).default(10),
+  AUTH_OTP_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(5),
+  AUTH_OTP_MAX_REQUESTS_PER_HOUR: z.coerce.number().int().min(1).max(20).default(3),
+  AUTH_OTP_HASH_SECRET: z.string().min(32).default(developmentOtpSecret),
+  AUTH_OTP_DELIVERY_MODE: z.enum(['console', 'webhook']).default('console'),
+  AUTH_OTP_WEBHOOK_URL: optionalUrl,
+  AUTH_OTP_WEBHOOK_BEARER_TOKEN: optionalSecret,
   JWT_PRIVATE_KEY_PATH: z.string().default(fileURLToPath(new URL('../../../../.runtime/auth-private.pem', import.meta.url))),
   JWT_PUBLIC_KEY_PATH: z.string().default(fileURLToPath(new URL('../../../../.runtime/auth-public.pem', import.meta.url))),
 }).superRefine((value, context) => {
@@ -57,6 +67,24 @@ const environmentSchema = z.object({
   if (value.NODE_ENV === 'production' && value.PASSWORD_RESET_WEBHOOK_URL
     && new URL(value.PASSWORD_RESET_WEBHOOK_URL).protocol !== 'https:') {
     context.addIssue({ code: 'custom', path: ['PASSWORD_RESET_WEBHOOK_URL'], message: 'The production webhook URL must use HTTPS.' });
+  }
+  if (value.AUTH_OTP_DELIVERY_MODE === 'webhook' && !value.AUTH_OTP_WEBHOOK_URL) {
+    context.addIssue({ code: 'custom', path: ['AUTH_OTP_WEBHOOK_URL'], message: 'OTP webhook URL is required.' });
+  }
+  if (value.NODE_ENV === 'production' && value.AUTH_OTP_DELIVERY_MODE === 'console') {
+    context.addIssue({ code: 'custom', path: ['AUTH_OTP_DELIVERY_MODE'], message: 'Console OTP delivery is forbidden in production.' });
+  }
+  if (value.NODE_ENV === 'production'
+    && [developmentOtpSecret, exampleOtpSecret].includes(value.AUTH_OTP_HASH_SECRET)) {
+    context.addIssue({ code: 'custom', path: ['AUTH_OTP_HASH_SECRET'], message: 'A unique OTP HMAC secret is required in production.' });
+  }
+  if (value.NODE_ENV === 'production' && value.AUTH_OTP_DELIVERY_MODE === 'webhook'
+    && !value.AUTH_OTP_WEBHOOK_BEARER_TOKEN) {
+    context.addIssue({ code: 'custom', path: ['AUTH_OTP_WEBHOOK_BEARER_TOKEN'], message: 'An OTP webhook bearer token is required in production.' });
+  }
+  if (value.NODE_ENV === 'production' && value.AUTH_OTP_WEBHOOK_URL
+    && new URL(value.AUTH_OTP_WEBHOOK_URL).protocol !== 'https:') {
+    context.addIssue({ code: 'custom', path: ['AUTH_OTP_WEBHOOK_URL'], message: 'The production OTP webhook URL must use HTTPS.' });
   }
 });
 

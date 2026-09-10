@@ -1,18 +1,36 @@
 import argon2 from 'argon2';
+import { randomUUID } from 'node:crypto';
 import { env } from '../../config.js';
 import { HttpError } from '../../shared/http/errors.js';
-import type { AuthRepository, AuthTokens, LoginInput, SessionMetadata } from './auth.types.js';
+import type {
+  AuthRepository,
+  AuthTokens,
+  LoginInput,
+  PatientRegistrationChallengeResult,
+  SessionMetadata,
+} from './auth.types.js';
 import { TokenService } from './token.service.js';
 import { createRecoveryDelivery, type RecoveryDelivery } from './recovery-delivery.js';
+import { createOtpDelivery, type OtpDelivery } from './otp-delivery.js';
 
 const dummyPasswordHash = '$argon2id$v=19$m=19456,t=2,p=1$62vxZxG32M0TiTcGJbAxQg$QbuWRO9aarx2WUiY//mMZXGSonHQ3B+JgO73qybSIlo';
 const refreshTokenPattern = /^[A-Za-z0-9_-]{43}$/;
+
+export type PatientRegistrationRequest = {
+  contactChannel: 'EMAIL' | 'SMS';
+  contact: string;
+  password: string;
+  fullName: string;
+  dateOfBirth: string;
+  gender: 'MALE' | 'FEMALE' | 'OTHER';
+};
 
 export class AuthService {
   constructor(
     private readonly repository: AuthRepository,
     private readonly tokens = new TokenService(),
     private readonly recoveryDelivery: RecoveryDelivery = createRecoveryDelivery(),
+    private readonly otpDelivery: OtpDelivery = createOtpDelivery(),
   ) {}
 
   private hashPassword(password: string) {
@@ -192,6 +210,95 @@ export class AuthService {
     if (!succeeded) {
       throw new HttpError(400, 'INVALID_OR_EXPIRED_RESET_TOKEN', 'Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.');
     }
+  }
+
+  async requestPatientRegistration(
+    input: PatientRegistrationRequest,
+    idempotencyKey: string,
+    ipAddress: string | undefined,
+    requestId: string,
+  ) {
+    const startedAt = Date.now();
+    const challengeId = randomUUID();
+    const contactNormalized = input.contactChannel === 'EMAIL'
+      ? input.contact.trim().toLowerCase()
+      : input.contact.trim().replace(/[ .-]/g, '');
+    const fullName = input.fullName.trim();
+    const canonicalPayload = JSON.stringify({
+      contactChannel: input.contactChannel,
+      contact: contactNormalized,
+      password: input.password,
+      fullName,
+      dateOfBirth: input.dateOfBirth,
+      gender: input.gender,
+    });
+    const [passwordHash, branchId] = await Promise.all([
+      this.hashPassword(input.password),
+      this.repository.getRegistrationBranchId(env.PATIENT_REGISTRATION_BRANCH_CODE),
+    ]);
+    if (!branchId) throw new HttpError(503, 'REGISTRATION_UNAVAILABLE', 'Chức năng đăng ký đang tạm ngưng.');
+    const otp = this.tokens.createRegistrationOtp();
+    const expiresAtUtc = new Date(Date.now() + env.AUTH_OTP_TTL_MINUTES * 60_000);
+    let challenge: PatientRegistrationChallengeResult;
+    try {
+      challenge = await this.repository.createPatientRegistration({
+        challengeId,
+        idempotencyKey,
+        requestHash: this.tokens.hashRegistrationRequest(canonicalPayload),
+        branchId,
+        username: `patient_${challengeId.replaceAll('-', '')}`,
+        contactChannel: input.contactChannel,
+        contactValue: contactNormalized,
+        contactNormalized,
+        passwordHash,
+        fullName,
+        dateOfBirth: input.dateOfBirth,
+        gender: input.gender,
+        otpHash: this.tokens.hashRegistrationOtp(challengeId, otp),
+        requestedIp: ipAddress,
+        expiresAtUtc,
+      }, requestId);
+    } catch (error) {
+      const number = error && typeof error === 'object' && 'number' in error ? error.number : undefined;
+      if (number === 53073) {
+        throw new HttpError(409, 'IDEMPOTENCY_KEY_REUSED', 'Idempotency-Key đã được dùng cho yêu cầu khác.');
+      }
+      throw error;
+    }
+    if (challenge.created) {
+      try {
+        await this.otpDelivery.deliver({
+          channel: input.contactChannel,
+          recipient: contactNormalized,
+          displayName: fullName,
+          otp,
+          expiresAtUtc: expiresAtUtc.toISOString(),
+        });
+      } catch {
+        await this.repository.cancelPatientRegistration(challenge.challengeId, requestId).catch(() => undefined);
+      }
+    }
+    await this.delayRecoveryResponse(startedAt);
+    return {
+      challengeId: challenge.challengeId,
+      expiresIn: env.AUTH_OTP_TTL_MINUTES * 60,
+      resendAfter: 60,
+    };
+  }
+
+  async verifyPatientRegistration(challengeId: string, otp: string, requestId: string) {
+    const result = await this.repository.verifyPatientRegistration(
+      challengeId,
+      this.tokens.hashRegistrationOtp(challengeId, otp),
+      requestId,
+    );
+    if (!result.succeeded || !result.patientPublicId || !result.patientCode) {
+      throw new HttpError(400, 'INVALID_OR_EXPIRED_OTP', 'Mã OTP không hợp lệ hoặc đã hết hạn.');
+    }
+    return {
+      registered: true as const,
+      patient: { publicId: result.patientPublicId, code: result.patientCode },
+    };
   }
 
   getJwks() {

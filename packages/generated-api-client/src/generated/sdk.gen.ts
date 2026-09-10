@@ -2,7 +2,7 @@
 
 import { client } from './client.gen.js';
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client/index.js';
-import type { ChangePasswordData, ChangePasswordErrors, ChangePasswordResponses, CreateStaffData, CreateStaffErrors, CreateStaffResponses, GetAuthJwksData, GetAuthJwksResponses, GetLivenessData, GetLivenessResponses, GetReadinessData, GetReadinessErrors, GetReadinessResponses, GetStaffData, GetStaffErrors, GetStaffReferenceDataData, GetStaffReferenceDataErrors, GetStaffReferenceDataResponses, GetStaffResponses, GrantStaffRoleData, GrantStaffRoleErrors, GrantStaffRoleResponses, ListStaffData, ListStaffErrors, ListStaffResponses, LoginData, LoginErrors, LoginResponses, LogoutAllData2, LogoutAllErrors, LogoutAllResponses, LogoutData2, LogoutErrors, LogoutResponses, RefreshSessionData, RefreshSessionErrors, RefreshSessionResponses, RequestPasswordResetData, RequestPasswordResetErrors, RequestPasswordResetResponses, ResetPasswordData, ResetPasswordErrors, ResetPasswordResponses, RevokeStaffRoleData, RevokeStaffRoleErrors, RevokeStaffRoleResponses, SetStaffAccountStatusData, SetStaffAccountStatusErrors, SetStaffAccountStatusResponses, UnlockStaffAccountData, UnlockStaffAccountErrors, UnlockStaffAccountResponses, UpdateStaffData, UpdateStaffErrors, UpdateStaffResponses } from './types.gen.js';
+import type { ChangePasswordData, ChangePasswordErrors, ChangePasswordResponses, CreateStaffData, CreateStaffErrors, CreateStaffResponses, GetAuthJwksData, GetAuthJwksResponses, GetLivenessData, GetLivenessResponses, GetReadinessData, GetReadinessErrors, GetReadinessResponses, GetStaffData, GetStaffErrors, GetStaffReferenceDataData, GetStaffReferenceDataErrors, GetStaffReferenceDataResponses, GetStaffResponses, GrantStaffRoleData, GrantStaffRoleErrors, GrantStaffRoleResponses, ListStaffData, ListStaffErrors, ListStaffResponses, LoginData, LoginErrors, LoginResponses, LogoutAllData2, LogoutAllErrors, LogoutAllResponses, LogoutData2, LogoutErrors, LogoutResponses, RefreshSessionData, RefreshSessionErrors, RefreshSessionResponses, RequestPasswordResetData, RequestPasswordResetErrors, RequestPasswordResetResponses, RequestPatientRegistrationData, RequestPatientRegistrationErrors, RequestPatientRegistrationResponses, ResetPasswordData, ResetPasswordErrors, ResetPasswordResponses, RevokeStaffRoleData, RevokeStaffRoleErrors, RevokeStaffRoleResponses, SetStaffAccountStatusData, SetStaffAccountStatusErrors, SetStaffAccountStatusResponses, UnlockStaffAccountData, UnlockStaffAccountErrors, UnlockStaffAccountResponses, UpdateStaffData, UpdateStaffErrors, UpdateStaffResponses, VerifyPatientRegistrationData, VerifyPatientRegistrationErrors, VerifyPatientRegistrationResponses } from './types.gen.js';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -114,6 +114,32 @@ export const requestPasswordReset = <ThrowOnError extends boolean = false>(optio
  */
 export const resetPassword = <ThrowOnError extends boolean = false>(options: Options<ResetPasswordData, ThrowOnError>): RequestResult<ResetPasswordResponses, ResetPasswordErrors, ThrowOnError> => (options.client ?? client).post<ResetPasswordResponses, ResetPasswordErrors, ThrowOnError>({
     url: '/api/v1/auth/password/reset',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Start a patient self-registration and send a one-time verification code
+ *
+ * The accepted response does not reveal whether the contact already belongs to an account.
+ */
+export const requestPatientRegistration = <ThrowOnError extends boolean = false>(options: Options<RequestPatientRegistrationData, ThrowOnError>): RequestResult<RequestPatientRegistrationResponses, RequestPatientRegistrationErrors, ThrowOnError> => (options.client ?? client).post<RequestPatientRegistrationResponses, RequestPatientRegistrationErrors, ThrowOnError>({
+    url: '/api/v1/auth/patient-registration/request',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Verify a patient registration OTP and create the portal account and SELF profile link
+ */
+export const verifyPatientRegistration = <ThrowOnError extends boolean = false>(options: Options<VerifyPatientRegistrationData, ThrowOnError>): RequestResult<VerifyPatientRegistrationResponses, VerifyPatientRegistrationErrors, ThrowOnError> => (options.client ?? client).post<VerifyPatientRegistrationResponses, VerifyPatientRegistrationErrors, ThrowOnError>({
+    url: '/api/v1/auth/patient-registration/verify',
     ...options,
     headers: {
         'Content-Type': 'application/json',

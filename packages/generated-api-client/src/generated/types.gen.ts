@@ -104,6 +104,59 @@ export type PasswordChangedResponse = {
     requestId: RequestId;
 };
 
+export type ContactChannel = 'EMAIL' | 'SMS';
+
+export type PatientRegistrationRequest = {
+    contactChannel: ContactChannel;
+    /**
+     * Email address or phone number matching contactChannel.
+     */
+    contact: string;
+    password: StrongPassword;
+    fullName: string;
+    dateOfBirth: string;
+    gender: Gender;
+};
+
+export type PatientRegistrationVerificationRequest = {
+    challengeId: string;
+    otp: string;
+};
+
+export type PatientRegistrationAcceptedData = {
+    challengeId: string;
+    /**
+     * Maximum OTP lifetime in seconds.
+     */
+    expiresIn: number;
+    /**
+     * Minimum delay before submitting a new registration request.
+     */
+    resendAfter: number;
+};
+
+export type RegisteredPatientReference = {
+    publicId: string;
+    code: string;
+};
+
+export type PatientRegistrationCompletedData = {
+    registered: true;
+    patient: RegisteredPatientReference;
+};
+
+export type PatientRegistrationAcceptedResponse = {
+    data: PatientRegistrationAcceptedData;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type PatientRegistrationCompletedResponse = {
+    data: PatientRegistrationCompletedData;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
 export type RoleAssignment = {
     code: string;
     /**
@@ -377,6 +430,11 @@ export type UserId = string;
  */
 export type IfMatch = string;
 
+/**
+ * UUID that makes retries with the same registration payload return the same challenge.
+ */
+export type IdempotencyKey = string;
+
 export type GetLivenessData = {
     body?: never;
     path?: never;
@@ -636,6 +694,70 @@ export type ResetPasswordResponses = {
 };
 
 export type ResetPasswordResponse = ResetPasswordResponses[keyof ResetPasswordResponses];
+
+export type RequestPatientRegistrationData = {
+    body: PatientRegistrationRequest;
+    headers: {
+        /**
+         * UUID that makes retries with the same registration payload return the same challenge.
+         */
+        'Idempotency-Key': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/auth/patient-registration/request';
+};
+
+export type RequestPatientRegistrationErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+    /**
+     * A required registration dependency is unavailable.
+     */
+    503: ApiErrorResponse;
+};
+
+export type RequestPatientRegistrationError = RequestPatientRegistrationErrors[keyof RequestPatientRegistrationErrors];
+
+export type RequestPatientRegistrationResponses = {
+    /**
+     * Registration request accepted without disclosing contact availability.
+     */
+    202: PatientRegistrationAcceptedResponse;
+};
+
+export type RequestPatientRegistrationResponse = RequestPatientRegistrationResponses[keyof RequestPatientRegistrationResponses];
+
+export type VerifyPatientRegistrationData = {
+    body: PatientRegistrationVerificationRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/auth/patient-registration/verify';
+};
+
+export type VerifyPatientRegistrationErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+};
+
+export type VerifyPatientRegistrationError = VerifyPatientRegistrationErrors[keyof VerifyPatientRegistrationErrors];
+
+export type VerifyPatientRegistrationResponses = {
+    /**
+     * Patient account, profile, and verified SELF link created atomically.
+     */
+    201: PatientRegistrationCompletedResponse;
+};
+
+export type VerifyPatientRegistrationResponse = VerifyPatientRegistrationResponses[keyof VerifyPatientRegistrationResponses];
 
 export type GetStaffReferenceDataData = {
     body?: never;

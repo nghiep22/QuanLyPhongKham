@@ -1,4 +1,4 @@
-import { createHash, generateKeyPairSync, randomBytes } from 'node:crypto';
+import { createHash, createHmac, generateKeyPairSync, randomBytes, randomInt } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { exportJWK, importPKCS8, importSPKI, jwtVerify, SignJWT, type JWK, type JWTPayload } from 'jose';
@@ -71,6 +71,22 @@ export class TokenService {
 
   hashPasswordResetToken(token: string) {
     return createHash('sha256').update(token, 'utf8').digest();
+  }
+
+  createRegistrationOtp() {
+    return randomInt(0, 1_000_000).toString().padStart(6, '0');
+  }
+
+  hashRegistrationOtp(challengeId: string, otp: string) {
+    return createHmac('sha256', env.AUTH_OTP_HASH_SECRET)
+      .update(`patient-registration:otp:${challengeId}:${otp}`, 'utf8')
+      .digest();
+  }
+
+  hashRegistrationRequest(canonicalPayload: string) {
+    return createHmac('sha256', env.AUTH_OTP_HASH_SECRET)
+      .update(`patient-registration:request:${canonicalPayload}`, 'utf8')
+      .digest();
   }
 
   refreshExpiry() {

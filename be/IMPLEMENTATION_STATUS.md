@@ -78,23 +78,46 @@ Phạm vi đã hoàn thành:
   `Cache-Control: no-store`.
 - OpenAPI/generated client đã đồng bộ ba operation password lifecycle.
 
+## DONE — Slice 05: Patient Self-registration & OTP
+
+Phạm vi đã hoàn thành:
+
+- Guest đăng ký bằng email hoặc SMS với họ tên, ngày sinh, giới tính và mật khẩu
+  mạnh; phản hồi 202 không tiết lộ contact đã có tài khoản hay chưa.
+- `Idempotency-Key` UUID và request HMAC ngăn retry tạo challenge/user/patient
+  trùng; dùng lại key với payload khác trả conflict rõ ràng.
+- OTP ngẫu nhiên sáu số chỉ lưu HMAC-SHA256 có secret ngoài database, TTL mặc
+  định 10 phút, tối đa năm lần thử và ba yêu cầu mỗi contact trong một giờ.
+- OTP đúng tạo nguyên tử user ACTIVE có role PATIENT, patient có public UUID và
+  liên kết SELF ACTIVE/verified/booking allowed; không tự claim hồ sơ cũ chỉ vì
+  trùng contact. OTP sai, hết hạn, delivery lỗi và replay đều không tạo dữ liệu.
+- OTP hash được cryptoshred khi challenge kết thúc; audit không chứa contact,
+  password hoặc OTP. Production bắt buộc HMAC secret riêng và webhook HTTPS có
+  bearer secret; console delivery chỉ dành cho development.
+- Mobile có đăng ký hai bước, gửi lại OTP có cooldown, đăng nhập email/phone,
+  logout, refresh phiên và lưu access/refresh token bằng Expo SecureStore.
+- OpenAPI/generated client đã đồng bộ hai operation patient registration.
+
 ### Bằng chứng xác minh local toàn bộ
 
 | Kiểm tra | Kết quả |
 |---|---|
-| Baseline SQL chạy lại idempotent | Đạt; 67 bảng, 12 view, 69 procedure, 29 trigger |
-| SQL auth session/staff RBAC/staff safety/password lifecycle regression | PASS/PASS/PASS/PASS; rollback sạch, 0 user/challenge test |
+| Baseline SQL chạy lại idempotent | Đạt; 68 bảng, 12 view, 72 procedure, 29 trigger |
+| SQL auth session/staff RBAC/staff safety/password lifecycle/patient registration regression | PASS/PASS/PASS/PASS/PASS; rollback sạch, 0 user/patient/challenge test |
 | npm run openapi:check | Đạt; contract và generated code đồng bộ |
 | npm run lint | Đạt, không cảnh báo |
 | npm run typecheck | Đạt |
-| npm test | 26 test đạt (Auth 23, Clinic 3) |
+| npm test | 33 test đạt (Auth 27, Mobile 3, Clinic 3) |
 | npm run build | Đạt; .NET 0 warning/0 error |
 | npm run doctor:mobile | 21/21 |
-| Gateway → Auth → SQL smoke test | Forgot password 202 với response tối thiểu 350 ms; reset token giả 400; change password thiếu bearer 401; cả ba có `Cache-Control: no-store` |
+| Gateway → Auth → SQL smoke test | Registration thiếu idempotency key trả 400; challenge lạ trả generic OTP 400; cả hai giữ request ID và `Cache-Control: no-store` |
+| npm audit --omit=dev --audit-level=high | Đạt; 0 high/critical. Còn 17 moderate từ dependency bắc cầu Expo/React Navigation, chưa có bản sửa không breaking |
 
 ## Chưa hoàn thành
 
 - Phase 0 baseline freeze tổng thể, checksum và các defect P0 ngoài phạm vi Auth.
 - Lần chạy GitHub Actions và branch protection chỉ xác minh được sau khi push.
-- Phần còn lại của Phase 2: patient portal/link, đăng ký bệnh nhân + OTP
-  delivery/replay và các mục P1 như MFA/lịch sử session.
+- Theo dõi bản vá upstream cho 17 cảnh báo moderate bắc cầu Expo/React Navigation;
+  không dùng `npm audit fix --force` vì công cụ đề xuất hạ Expo xuống bản breaking.
+- Phần còn lại của Phase 2: claim/duyệt/thu hồi liên kết hồ sơ cũ và người thân,
+  cùng các mục P1 như MFA/lịch sử session.
