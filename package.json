@@ -1,0 +1,42 @@
+{
+  "name": "quan-ly-phong-kham",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "fe/admin-web",
+    "fe/mobile",
+    "be/services/*",
+    "be/workers/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n gateway,auth,clinic,worker,admin -c magenta,blue,green,yellow,cyan \"npm:dev:gateway\" \"npm:dev:auth\" \"npm:dev:clinic\" \"npm:dev:worker\" \"npm:dev:admin\"",
+    "dev:gateway": "dotnet run --project be/gateway/ClinicGateway.csproj",
+    "dev:auth": "npm run dev -w @clinic/auth-service",
+    "dev:clinic": "npm run dev -w @clinic/clinic-service",
+    "dev:worker": "npm run dev -w @clinic/scheduler-worker",
+    "dev:admin": "npm run dev -w @clinic/admin-web",
+    "dev:mobile": "npm run start -w @clinic/mobile",
+    "build": "npm run build --workspaces --if-present && dotnet build be/gateway/ClinicGateway.csproj",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "doctor:mobile": "npx expo-doctor fe/mobile"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "typescript": "~6.0.2"
+  },
+  "engines": {
+    "node": ">=24.0.0",
+    "npm": ">=11.0.0"
+  },
+  "overrides": {
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
+  },
+  "allowScripts": {
+    "argon2@0.44.0": true,
+    "esbuild@0.28.2": true
+  }
+}
