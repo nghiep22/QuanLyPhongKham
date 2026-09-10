@@ -10,6 +10,7 @@
     "lint": "oxlint src tests",
     "start": "node dist/server.js",
     "bootstrap:admin": "tsx src/scripts/bootstrap-admin.ts",
+    "seed:demo-accounts": "tsx src/scripts/seed-demo-accounts.ts",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {

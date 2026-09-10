@@ -49,6 +49,21 @@ Remove-Item Env:BOOTSTRAP_ADMIN_USERNAME, Env:BOOTSTRAP_ADMIN_DISPLAY_NAME, Env:
 Script băm mật khẩu bằng Argon2id trước khi gọi stored procedure; dự án không có mật
 khẩu admin mặc định. Có thể đặt thêm `BOOTSTRAP_ADMIN_EMAIL` trước khi chạy.
 
+### Tài khoản mẫu cho môi trường development
+
+Sau khi áp dụng schema, có thể tạo bộ tài khoản mẫu bằng lệnh:
+
+```powershell
+npm run seed:demo-accounts -w @clinic/auth-service
+```
+
+Script tạo `manager.demo`, `doctor.demo`, `nurse.demo`, `receptionist.demo`,
+`pharmacist.demo`, `cashier.demo`, `lab.demo` và `patient.demo`. Nếu database
+hoàn toàn trống, script tạo thêm `admin.demo`; nếu không, script dùng Admin toàn
+cục đang hoạt động để cấp quyền. Mật khẩu chung mặc định là `ClinicDemo@2026!`;
+có thể truyền mật khẩu khác qua biến `DEMO_ACCOUNT_PASSWORD`. Script chỉ chạy ở
+development, có thể chạy lại mà không tạo trùng và không ghi đè tài khoản đã có.
+
 ## Chạy dự án
 
 ```powershell
