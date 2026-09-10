@@ -5,7 +5,8 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import {
   LoginScreen,
   PatientHomeScreen,
@@ -104,7 +105,9 @@ function MobileApp() {
 }
 
 export default function App() {
-  return <QueryClientProvider client={queryClient}><MobileApp /></QueryClientProvider>;
+  return <SafeAreaProvider>
+    <QueryClientProvider client={queryClient}><MobileApp /></QueryClientProvider>
+  </SafeAreaProvider>;
 }
 
 const styles = StyleSheet.create({

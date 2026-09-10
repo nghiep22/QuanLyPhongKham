@@ -5,14 +5,15 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiClient } from '../../shared/api/client';
+import { authErrorMessage } from './auth-error-message';
 import { firstValidationMessage, type PatientRegistrationForm } from './registration-validation';
 
 export type RootStackParamList = {
@@ -25,16 +26,6 @@ export type RootStackParamList = {
 };
 
 type SessionCallback = (response: AuthResponse) => Promise<void>;
-
-function errorMessage(error: unknown, fallback: string) {
-  if (!(error instanceof ApiClientError)) return fallback;
-  if (error.code === 'INVALID_CREDENTIALS') return 'Email, số điện thoại hoặc mật khẩu không đúng.';
-  if (error.code === 'ACCOUNT_LOCKED') return 'Tài khoản đang tạm khóa. Vui lòng thử lại sau.';
-  if (error.code === 'PATIENT_ACCOUNT_REQUIRED') return 'Ứng dụng này chỉ dành cho tài khoản bệnh nhân.';
-  if (error.code === 'IDEMPOTENCY_KEY_REUSED') return 'Yêu cầu đăng ký đã thay đổi. Vui lòng gửi lại.';
-  if (error.code === 'INVALID_OR_EXPIRED_OTP') return 'Mã OTP không đúng, đã hết hạn hoặc đã được sử dụng.';
-  return fallback;
-}
 
 function createIdempotencyKey() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
@@ -80,7 +71,7 @@ export function LoginScreen({ navigation, route, onAuthenticated }:
       await onAuthenticated(response);
       setPassword('');
     } catch (cause) {
-      setError(errorMessage(cause, 'Không thể đăng nhập lúc này.'));
+      setError(authErrorMessage(cause, 'Không thể đăng nhập lúc này.'));
     } finally {
       setSubmitting(false);
     }
@@ -155,7 +146,7 @@ export function RegistrationScreen({ navigation }: NativeStackScreenProps<RootSt
       if (cause instanceof ApiClientError && cause.code === 'IDEMPOTENCY_KEY_REUSED') {
         idempotencyKey.current = null;
       }
-      setError(errorMessage(cause, 'Không thể gửi mã OTP lúc này.'));
+      setError(authErrorMessage(cause, 'Không thể gửi mã OTP lúc này.'));
     } finally {
       setSubmitting(false);
     }
@@ -175,7 +166,7 @@ export function RegistrationScreen({ navigation }: NativeStackScreenProps<RootSt
       setOtp('');
       setStep('DONE');
     } catch (cause) {
-      setError(errorMessage(cause, 'Không thể xác minh OTP lúc này.'));
+      setError(authErrorMessage(cause, 'Không thể xác minh OTP lúc này.'));
     } finally {
       setSubmitting(false);
     }

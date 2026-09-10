@@ -6,15 +6,20 @@ export type ApiClientOptions = {
 export function createApiClient(options: ApiClientOptions) {
   async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const accessToken = await options.getAccessToken?.();
-    const response = await fetch(`${options.baseUrl}${path}`, {
-      credentials: 'include',
-      ...init,
-      headers: {
-        'content-type': 'application/json',
-        ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {}),
-        ...init.headers,
-      },
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${options.baseUrl}${path}`, {
+        credentials: 'include',
+        ...init,
+        headers: {
+          'content-type': 'application/json',
+          ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {}),
+          ...init.headers,
+        },
+      });
+    } catch (cause) {
+      throw new ApiNetworkError(cause);
+    }
 
     if (!response.ok) {
       const body = await response.json().catch(() => undefined) as
@@ -209,6 +214,13 @@ export function createApiClient(options: ApiClientOptions) {
       ready: () => request<import('@clinic/generated-api-types').ReadinessResponse>('/health/ready'),
     },
   };
+}
+
+export class ApiNetworkError extends Error {
+  constructor(cause: unknown) {
+    super('The API could not be reached.', { cause });
+    this.name = 'ApiNetworkError';
+  }
 }
 
 export class ApiClientError extends Error {

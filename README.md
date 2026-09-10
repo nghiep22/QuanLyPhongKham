@@ -74,6 +74,15 @@ npm run dev
 npm run dev:mobile
 ```
 
+Ở chế độ development qua LAN, mobile tự thay `localhost` trong địa chỉ API bằng
+địa chỉ LAN của máy chạy Expo. Chỉ dùng gateway HTTP này với dữ liệu demo trên
+mạng riêng đáng tin cậy; điện thoại và máy tính cần ở cùng mạng và Windows
+Firewall chỉ nên cho phép cổng `5000` trên mạng Private/LocalSubnet. Có thể đặt
+`EXPO_PUBLIC_API_BASE_URL` trong `fe/mobile/.env.local` để dùng API khác (ví dụ
+`http://10.0.2.2:5000/api/v1` cho Android Emulator). Expo Tunnel không chuyển
+tiếp cổng gateway; trường hợp đó cần một API HTTPS truy cập được từ Internet.
+Bản preview/production bắt buộc cấu hình `EXPO_PUBLIC_API_BASE_URL` dùng HTTPS.
+
 - Admin Web: `http://localhost:5173`
 - Gateway: `http://localhost:5000`
 - Kiểm tra gateway: `http://localhost:5000/health/live`
