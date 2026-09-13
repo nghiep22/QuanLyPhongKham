@@ -121,12 +121,21 @@ header { display: flex; align-items: center; justify-content: space-between; gap
 .price-form { display: grid; grid-template-columns: 1fr 1fr auto auto; align-items: end; gap: 10px; margin-top: 4px; padding-top: 16px; border-top: 1px solid #e3ebef; }
 .price-form .form-error { grid-column: 1 / -1; }
 .price-form .checkbox { min-height: 46px; white-space: nowrap; }
+.patient-search-bar { display: grid; grid-template-columns: 220px minmax(260px, 1fr) 180px auto; align-items: end; gap: 14px; }
+.patient-search-bar button { min-height: 48px; }
+.patient-workspace { display: grid; grid-template-columns: minmax(300px, .85fr) minmax(440px, 1.15fr); gap: 18px; align-items: start; }
+.patient-form-panel { margin-top: 0; }
+.patient-form-panel .wide { grid-column: 1 / -1; }
+.patient-duplicate-warning { margin-top: 20px; padding: 20px; border-radius: 12px; background: #fff6df; color: #6d4d12; }
+.patient-duplicate-warning h3 { margin-top: 0; }
+.patient-duplicate-warning li { margin: 8px 0; }
+.patient-duplicate-warning button { margin-top: 14px; }
 
 @media (max-width: 900px) {
   .app-shell { grid-template-columns: 1fr; }
   aside { display: none; }
   .module-grid { grid-template-columns: 1fr; }
   .dashboard { padding: 24px; }
-  .staff-workspace, .staff-toolbar, .form-grid, .patient-link-toolbar, .patient-link-details, .catalog-columns, .price-form { grid-template-columns: 1fr; }
+  .staff-workspace, .staff-toolbar, .form-grid, .patient-link-toolbar, .patient-link-details, .catalog-columns, .price-form, .patient-search-bar, .patient-workspace { grid-template-columns: 1fr; }
   .role-grant { grid-template-columns: 1fr; }
 }

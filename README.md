@@ -141,6 +141,14 @@ nhau và giá giao dịch cũ không bị sửa ngược. Các directory công k
 `/api/v1/public/branches`, `/specialties`, `/services` và `/doctors` chỉ trả dữ
 liệu đang hoạt động, bác sĩ nhận lịch online và giá VND đang có hiệu lực.
 
+Admin/Manager/Lễ tân có permission `PATIENTS_MANAGE` mở **Bệnh nhân** trên Admin
+Web để tra cứu theo chi nhánh, kiểm tra hồ sơ có thể trùng, tạo hồ sơ hành chính
+và cập nhật với `ETag`. Hồ sơ có thể trùng cần lý do xác nhận trước khi cấp mã
+mới; số định danh đã dùng ở chi nhánh khác sẽ bị từ chối mà không trả thông tin
+chi nhánh đó. API lâm sàng `/api/v1/patients/{patientId}/clinical-summary` chỉ trả
+dị ứng/bệnh nền cho bác sĩ hoặc điều dưỡng có lượt chăm sóc đang mở, và audit
+mỗi lần đọc. Kết quả khám chưa được công bố cho patient/guardian.
+
 Nếu SQL Server local chưa bật TCP/IP và bạn dùng Windows Authentication, đặt
 `SQL_SERVER=np:\\.\pipe\sql\query` trong `.env`. Xem thêm [be/README.md](./be/README.md).
 
@@ -164,6 +172,7 @@ sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\p
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\patient-registration.test.sql
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\patient-link.test.sql
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\catalog-directory.test.sql
+sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\patient-registry.test.sql
 ```
 
 Chi tiết nghiệp vụ và thứ tự phát triển nằm trong [PROJECT_PLAN.md](./PROJECT_PLAN.md).

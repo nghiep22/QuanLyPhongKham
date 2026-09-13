@@ -6,7 +6,7 @@ import type { PrincipalAuthenticator } from '../identity/index.js';
 import { roomTypes, serviceTypes } from './catalog.types.js';
 import { CatalogService } from './catalog.service.js';
 
-const uuid = z.string().uuid();
+const uuid = z.string().regex(/^[0-9A-Fa-f]{8}-(?:[0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}$/);
 const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const money = z.string().regex(/^(0|[1-9]\d{0,16})(\.\d{1,2})?$/);
 const publicServiceQuery = z.object({

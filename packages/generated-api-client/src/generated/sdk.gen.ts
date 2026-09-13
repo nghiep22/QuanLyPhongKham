@@ -2,7 +2,7 @@
 
 import { client } from './client.gen.js';
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client/index.js';
-import type { CancelPatientLinkRequestData, CancelPatientLinkRequestErrors, CancelPatientLinkRequestResponses, ChangePasswordData, ChangePasswordErrors, ChangePasswordResponses, CreateCatalogRoomData, CreateCatalogRoomErrors, CreateCatalogRoomResponses, CreateCatalogServiceData, CreateCatalogServiceErrors, CreateCatalogServiceResponses, CreateStaffData, CreateStaffErrors, CreateStaffResponses, DecidePatientLinkRequestData, DecidePatientLinkRequestErrors, DecidePatientLinkRequestResponses, GetAuthJwksData, GetAuthJwksResponses, GetCatalogReferenceDataData, GetCatalogReferenceDataErrors, GetCatalogReferenceDataResponses, GetLivenessData, GetLivenessResponses, GetManagedPatientLinkReferenceDataData, GetManagedPatientLinkReferenceDataErrors, GetManagedPatientLinkReferenceDataResponses, GetPatientAccessData, GetPatientAccessErrors, GetPatientAccessResponses, GetPatientLinkReferenceDataData, GetPatientLinkReferenceDataErrors, GetPatientLinkReferenceDataResponses, GetReadinessData, GetReadinessErrors, GetReadinessResponses, GetStaffData, GetStaffErrors, GetStaffReferenceDataData, GetStaffReferenceDataErrors, GetStaffReferenceDataResponses, GetStaffResponses, GrantStaffRoleData, GrantStaffRoleErrors, GrantStaffRoleResponses, ListCatalogRoomsData, ListCatalogRoomsErrors, ListCatalogRoomsResponses, ListCatalogServicesData, ListCatalogServicesErrors, ListCatalogServicesResponses, ListPatientLinkRequestsData, ListPatientLinkRequestsErrors, ListPatientLinkRequestsResponses, ListPublicBranchesData, ListPublicBranchesResponses, ListPublicDoctorsData, ListPublicDoctorsErrors, ListPublicDoctorsResponses, ListPublicServicesData, ListPublicServicesErrors, ListPublicServicesResponses, ListPublicSpecialtiesData, ListPublicSpecialtiesResponses, ListStaffData, ListStaffErrors, ListStaffResponses, LoginData, LoginErrors, LoginResponses, LogoutAllData2, LogoutAllErrors, LogoutAllResponses, LogoutData2, LogoutErrors, LogoutResponses, RefreshSessionData, RefreshSessionErrors, RefreshSessionResponses, RequestPasswordResetData, RequestPasswordResetErrors, RequestPasswordResetResponses, RequestPatientLinkData, RequestPatientLinkErrors, RequestPatientLinkResponses, RequestPatientRegistrationData, RequestPatientRegistrationErrors, RequestPatientRegistrationResponses, ResetPasswordData, ResetPasswordErrors, ResetPasswordResponses, RevokeOwnPatientLinkData, RevokeOwnPatientLinkErrors, RevokeOwnPatientLinkResponses, RevokePatientLinkAsStaffData, RevokePatientLinkAsStaffErrors, RevokePatientLinkAsStaffResponses, RevokeStaffRoleData, RevokeStaffRoleErrors, RevokeStaffRoleResponses, SetCatalogBranchPriceData, SetCatalogBranchPriceErrors, SetCatalogBranchPriceResponses, SetStaffAccountStatusData, SetStaffAccountStatusErrors, SetStaffAccountStatusResponses, UnlockStaffAccountData, UnlockStaffAccountErrors, UnlockStaffAccountResponses, UpdateCatalogRoomData, UpdateCatalogRoomErrors, UpdateCatalogRoomResponses, UpdateCatalogServiceData, UpdateCatalogServiceErrors, UpdateCatalogServiceResponses, UpdateStaffData, UpdateStaffErrors, UpdateStaffResponses, VerifyPatientRegistrationData, VerifyPatientRegistrationErrors, VerifyPatientRegistrationResponses } from './types.gen.js';
+import type { CancelPatientLinkRequestData, CancelPatientLinkRequestErrors, CancelPatientLinkRequestResponses, ChangePasswordData, ChangePasswordErrors, ChangePasswordResponses, CreateCatalogRoomData, CreateCatalogRoomErrors, CreateCatalogRoomResponses, CreateCatalogServiceData, CreateCatalogServiceErrors, CreateCatalogServiceResponses, CreatePatientData, CreatePatientErrors, CreatePatientResponses, CreateStaffData, CreateStaffErrors, CreateStaffResponses, DecidePatientLinkRequestData, DecidePatientLinkRequestErrors, DecidePatientLinkRequestResponses, FindPatientDuplicatesData, FindPatientDuplicatesErrors, FindPatientDuplicatesResponses, GetAuthJwksData, GetAuthJwksResponses, GetCatalogReferenceDataData, GetCatalogReferenceDataErrors, GetCatalogReferenceDataResponses, GetLivenessData, GetLivenessResponses, GetManagedPatientLinkReferenceDataData, GetManagedPatientLinkReferenceDataErrors, GetManagedPatientLinkReferenceDataResponses, GetPatientAccessData, GetPatientAccessErrors, GetPatientAccessResponses, GetPatientClinicalSummaryData, GetPatientClinicalSummaryErrors, GetPatientClinicalSummaryResponses, GetPatientData, GetPatientErrors, GetPatientLinkReferenceDataData, GetPatientLinkReferenceDataErrors, GetPatientLinkReferenceDataResponses, GetPatientReferenceDataData, GetPatientReferenceDataErrors, GetPatientReferenceDataResponses, GetPatientResponses, GetReadinessData, GetReadinessErrors, GetReadinessResponses, GetStaffData, GetStaffErrors, GetStaffReferenceDataData, GetStaffReferenceDataErrors, GetStaffReferenceDataResponses, GetStaffResponses, GrantStaffRoleData, GrantStaffRoleErrors, GrantStaffRoleResponses, ListCatalogRoomsData, ListCatalogRoomsErrors, ListCatalogRoomsResponses, ListCatalogServicesData, ListCatalogServicesErrors, ListCatalogServicesResponses, ListPatientLinkRequestsData, ListPatientLinkRequestsErrors, ListPatientLinkRequestsResponses, ListPublicBranchesData, ListPublicBranchesResponses, ListPublicDoctorsData, ListPublicDoctorsErrors, ListPublicDoctorsResponses, ListPublicServicesData, ListPublicServicesErrors, ListPublicServicesResponses, ListPublicSpecialtiesData, ListPublicSpecialtiesResponses, ListStaffData, ListStaffErrors, ListStaffResponses, LoginData, LoginErrors, LoginResponses, LogoutAllData2, LogoutAllErrors, LogoutAllResponses, LogoutData2, LogoutErrors, LogoutResponses, RefreshSessionData, RefreshSessionErrors, RefreshSessionResponses, RequestPasswordResetData, RequestPasswordResetErrors, RequestPasswordResetResponses, RequestPatientLinkData, RequestPatientLinkErrors, RequestPatientLinkResponses, RequestPatientRegistrationData, RequestPatientRegistrationErrors, RequestPatientRegistrationResponses, ResetPasswordData, ResetPasswordErrors, ResetPasswordResponses, RevokeOwnPatientLinkData, RevokeOwnPatientLinkErrors, RevokeOwnPatientLinkResponses, RevokePatientLinkAsStaffData, RevokePatientLinkAsStaffErrors, RevokePatientLinkAsStaffResponses, RevokeStaffRoleData, RevokeStaffRoleErrors, RevokeStaffRoleResponses, SearchPatientsData, SearchPatientsErrors, SearchPatientsResponses, SetCatalogBranchPriceData, SetCatalogBranchPriceErrors, SetCatalogBranchPriceResponses, SetStaffAccountStatusData, SetStaffAccountStatusErrors, SetStaffAccountStatusResponses, UnlockStaffAccountData, UnlockStaffAccountErrors, UnlockStaffAccountResponses, UpdateCatalogRoomData, UpdateCatalogRoomErrors, UpdateCatalogRoomResponses, UpdateCatalogServiceData, UpdateCatalogServiceErrors, UpdateCatalogServiceResponses, UpdatePatientData, UpdatePatientErrors, UpdatePatientResponses, UpdateStaffData, UpdateStaffErrors, UpdateStaffResponses, VerifyPatientRegistrationData, VerifyPatientRegistrationErrors, VerifyPatientRegistrationResponses } from './types.gen.js';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -370,6 +370,89 @@ export const listPublicServices = <ThrowOnError extends boolean = false>(options
  * List active doctors who accept online booking
  */
 export const listPublicDoctors = <ThrowOnError extends boolean = false>(options?: Options<ListPublicDoctorsData, ThrowOnError>): RequestResult<ListPublicDoctorsResponses, ListPublicDoctorsErrors, ThrowOnError> => (options?.client ?? client).get<ListPublicDoctorsResponses, ListPublicDoctorsErrors, ThrowOnError>({ url: '/api/v1/public/doctors', ...options });
+
+/**
+ * List branches where the actor may manage patient administrative records
+ */
+export const getPatientReferenceData = <ThrowOnError extends boolean = false>(options?: Options<GetPatientReferenceDataData, ThrowOnError>): RequestResult<GetPatientReferenceDataResponses, GetPatientReferenceDataErrors, ThrowOnError> => (options?.client ?? client).get<GetPatientReferenceDataResponses, GetPatientReferenceDataErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/patients/reference-data',
+    ...options
+});
+
+/**
+ * Search up to 50 administrative records in one authorized branch
+ *
+ * POST keeps phone and national ID search terms out of URLs.
+ */
+export const searchPatients = <ThrowOnError extends boolean = false>(options: Options<SearchPatientsData, ThrowOnError>): RequestResult<SearchPatientsResponses, SearchPatientsErrors, ThrowOnError> => (options.client ?? client).post<SearchPatientsResponses, SearchPatientsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/patients/search',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Find likely duplicates within the selected branch before registration
+ */
+export const findPatientDuplicates = <ThrowOnError extends boolean = false>(options: Options<FindPatientDuplicatesData, ThrowOnError>): RequestResult<FindPatientDuplicatesResponses, FindPatientDuplicatesErrors, ThrowOnError> => (options.client ?? client).post<FindPatientDuplicatesResponses, FindPatientDuplicatesErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/patients/duplicates',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Register a patient after a scoped duplicate check
+ */
+export const createPatient = <ThrowOnError extends boolean = false>(options: Options<CreatePatientData, ThrowOnError>): RequestResult<CreatePatientResponses, CreatePatientErrors, ThrowOnError> => (options.client ?? client).post<CreatePatientResponses, CreatePatientErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/patients',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Read an administrative record in its registration branch
+ */
+export const getPatient = <ThrowOnError extends boolean = false>(options: Options<GetPatientData, ThrowOnError>): RequestResult<GetPatientResponses, GetPatientErrors, ThrowOnError> => (options.client ?? client).get<GetPatientResponses, GetPatientErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/patients/{patientId}',
+    ...options
+});
+
+/**
+ * Update administrative details with optimistic concurrency
+ */
+export const updatePatient = <ThrowOnError extends boolean = false>(options: Options<UpdatePatientData, ThrowOnError>): RequestResult<UpdatePatientResponses, UpdatePatientErrors, ThrowOnError> => (options.client ?? client).put<UpdatePatientResponses, UpdatePatientErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/patients/{patientId}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Read allergies and conditions for an active assigned care relationship
+ *
+ * Only an assigned doctor or nurse who created the open encounter can read. This endpoint does not return internal results or prescriptions to patients.
+ */
+export const getPatientClinicalSummary = <ThrowOnError extends boolean = false>(options: Options<GetPatientClinicalSummaryData, ThrowOnError>): RequestResult<GetPatientClinicalSummaryResponses, GetPatientClinicalSummaryErrors, ThrowOnError> => (options.client ?? client).get<GetPatientClinicalSummaryResponses, GetPatientClinicalSummaryErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/patients/{patientId}/clinical-summary',
+    ...options
+});
 
 /**
  * Get manageable branches and catalog references

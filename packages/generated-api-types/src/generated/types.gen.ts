@@ -4,6 +4,111 @@ export type ClientOptions = {
     baseUrl: 'http://localhost:5000' | (string & {});
 };
 
+export type PatientBranch = {
+    publicId: string;
+    name: string;
+};
+
+export type PatientReferenceData = {
+    branches: Array<PatientBranch>;
+};
+
+export type PatientReferenceResponse = {
+    data: PatientReferenceData;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type PatientWriteRequest = {
+    fullName: string;
+    dateOfBirth: string;
+    gender: 'MALE' | 'FEMALE' | 'OTHER';
+    nationalId?: string | null;
+    healthInsuranceNo?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    addressLine?: string | null;
+    province?: string | null;
+};
+
+export type PatientSearchRequest = {
+    branchPublicId: string;
+    query?: string;
+    dateOfBirth?: string;
+};
+
+export type PatientDuplicateRequest = PatientWriteRequest & {
+    branchPublicId: string;
+};
+
+export type CreatePatientRequest = PatientDuplicateRequest & {
+    duplicateOverride?: boolean;
+    duplicateReason?: string;
+};
+
+export type PatientSummary = {
+    publicId: string;
+    code: string;
+    fullName: string;
+    dateOfBirth: string;
+    gender: 'MALE' | 'FEMALE' | 'OTHER';
+    phone: string | null;
+    status: string;
+    nationalIdLast4: string | null;
+    rowVersion: string;
+};
+
+export type PatientDetail = PatientSummary & {
+    branch: PatientBranch;
+    nationalId: string | null;
+    healthInsuranceNo: string | null;
+    email: string | null;
+    addressLine: string | null;
+    province: string | null;
+};
+
+export type PatientSummaryListResponse = {
+    data: Array<PatientSummary>;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type PatientDetailResponse = {
+    data: PatientDetail;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type PatientClinicalSummary = {
+    patient: {
+        publicId: string;
+        code: string;
+        fullName: string;
+        dateOfBirth: string;
+        gender: 'MALE' | 'FEMALE' | 'OTHER';
+    };
+    allergies: Array<{
+        allergenName: string;
+        type: string;
+        severity: string;
+        reaction: string | null;
+        notedAt: string | null;
+    }>;
+    conditions: Array<{
+        code: string | null;
+        name: string;
+        diagnosedDate: string | null;
+        status: string;
+        notes: string | null;
+    }>;
+};
+
+export type PatientClinicalSummaryResponse = {
+    data: PatientClinicalSummary;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
 export type ResponseMeta = {
     [key: string]: unknown;
 };
@@ -788,6 +893,8 @@ export type CreateStaffRequestWritable = {
     acceptsOnlineBooking?: boolean;
     specialtyPublicId?: string;
 };
+
+export type PatientId = string;
 
 export type StaffId = string;
 
@@ -1954,6 +2061,267 @@ export type ListPublicDoctorsResponses = {
 };
 
 export type ListPublicDoctorsResponse = ListPublicDoctorsResponses[keyof ListPublicDoctorsResponses];
+
+export type GetPatientReferenceDataData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/patients/reference-data';
+};
+
+export type GetPatientReferenceDataErrors = {
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+};
+
+export type GetPatientReferenceDataError = GetPatientReferenceDataErrors[keyof GetPatientReferenceDataErrors];
+
+export type GetPatientReferenceDataResponses = {
+    /**
+     * Manageable branches.
+     */
+    200: PatientReferenceResponse;
+};
+
+export type GetPatientReferenceDataResponse = GetPatientReferenceDataResponses[keyof GetPatientReferenceDataResponses];
+
+export type SearchPatientsData = {
+    body: PatientSearchRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/patients/search';
+};
+
+export type SearchPatientsErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+};
+
+export type SearchPatientsError = SearchPatientsErrors[keyof SearchPatientsErrors];
+
+export type SearchPatientsResponses = {
+    /**
+     * Scoped matches.
+     */
+    200: PatientSummaryListResponse;
+};
+
+export type SearchPatientsResponse = SearchPatientsResponses[keyof SearchPatientsResponses];
+
+export type FindPatientDuplicatesData = {
+    body: PatientDuplicateRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/patients/duplicates';
+};
+
+export type FindPatientDuplicatesErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+};
+
+export type FindPatientDuplicatesError = FindPatientDuplicatesErrors[keyof FindPatientDuplicatesErrors];
+
+export type FindPatientDuplicatesResponses = {
+    /**
+     * Up to ten potential matches.
+     */
+    200: PatientSummaryListResponse;
+};
+
+export type FindPatientDuplicatesResponse = FindPatientDuplicatesResponses[keyof FindPatientDuplicatesResponses];
+
+export type CreatePatientData = {
+    body: CreatePatientRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/patients';
+};
+
+export type CreatePatientErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type CreatePatientError = CreatePatientErrors[keyof CreatePatientErrors];
+
+export type CreatePatientResponses = {
+    /**
+     * Patient registered.
+     */
+    201: PatientDetailResponse;
+};
+
+export type CreatePatientResponse = CreatePatientResponses[keyof CreatePatientResponses];
+
+export type GetPatientData = {
+    body?: never;
+    path: {
+        patientId: string;
+    };
+    query: {
+        branchPublicId: string;
+    };
+    url: '/api/v1/admin/patients/{patientId}';
+};
+
+export type GetPatientErrors = {
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+};
+
+export type GetPatientError = GetPatientErrors[keyof GetPatientErrors];
+
+export type GetPatientResponses = {
+    /**
+     * Patient administrative details.
+     */
+    200: PatientDetailResponse;
+};
+
+export type GetPatientResponse = GetPatientResponses[keyof GetPatientResponses];
+
+export type UpdatePatientData = {
+    body: PatientWriteRequest;
+    headers: {
+        /**
+         * Strong ETag containing the Base64 rowversion of a catalog resource.
+         */
+        'If-Match': string;
+    };
+    path: {
+        patientId: string;
+    };
+    query: {
+        branchPublicId: string;
+    };
+    url: '/api/v1/admin/patients/{patientId}';
+};
+
+export type UpdatePatientErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+    /**
+     * The If-Match precondition is required for this update.
+     */
+    428: ApiErrorResponse;
+};
+
+export type UpdatePatientError = UpdatePatientErrors[keyof UpdatePatientErrors];
+
+export type UpdatePatientResponses = {
+    /**
+     * Patient updated.
+     */
+    200: PatientDetailResponse;
+};
+
+export type UpdatePatientResponse = UpdatePatientResponses[keyof UpdatePatientResponses];
+
+export type GetPatientClinicalSummaryData = {
+    body?: never;
+    path: {
+        patientId: string;
+    };
+    query: {
+        branchPublicId: string;
+    };
+    url: '/api/v1/patients/{patientId}/clinical-summary';
+};
+
+export type GetPatientClinicalSummaryErrors = {
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+};
+
+export type GetPatientClinicalSummaryError = GetPatientClinicalSummaryErrors[keyof GetPatientClinicalSummaryErrors];
+
+export type GetPatientClinicalSummaryResponses = {
+    /**
+     * Clinical safety summary; read is audited.
+     */
+    200: PatientClinicalSummaryResponse;
+};
+
+export type GetPatientClinicalSummaryResponse = GetPatientClinicalSummaryResponses[keyof GetPatientClinicalSummaryResponses];
 
 export type GetCatalogReferenceDataData = {
     body?: never;

@@ -8,6 +8,7 @@ import { JwtPrincipalAuthenticator, SqlPrincipalRepository, type PrincipalAuthen
 import {
   CatalogService, createAdminCatalogRouter, createPublicCatalogRouter, SqlCatalogRepository,
 } from './modules/organization-catalog/index.js';
+import { createPatientAdminRouter, createPatientClinicalRouter, PatientService, SqlPatientRepository } from './modules/patients/index.js';
 import { errorHandler, HttpError, notFoundHandler } from './shared/http/errors.js';
 import { requestContext } from './shared/http/request-context.js';
 
@@ -16,6 +17,7 @@ export type AppDependencies = {
   databaseProbe?: DatabaseProbe;
   principalAuthenticator?: PrincipalAuthenticator;
   catalogService?: CatalogService;
+  patientService?: PatientService;
 };
 
 export function createApp(dependencies: AppDependencies | DatabaseProbe = {}) {
@@ -25,12 +27,14 @@ export function createApp(dependencies: AppDependencies | DatabaseProbe = {}) {
   const principalAuthenticator = resolved.principalAuthenticator
     ?? new JwtPrincipalAuthenticator(new SqlPrincipalRepository());
   const catalogService = resolved.catalogService ?? new CatalogService(new SqlCatalogRepository());
+  const patientService = resolved.patientService ?? new PatientService(new SqlPatientRepository());
 
   app.disable('x-powered-by');
   app.use(requestContext);
   app.use(pinoHttp({
     genReqId: (request) => request.headers['x-request-id']!.toString(),
     autoLogging: process.env.NODE_ENV !== 'test',
+    redact: ['req.headers.authorization', 'req.headers.cookie', 'res.headers["set-cookie"]'],
   }));
   app.use(helmet());
   app.use(cors({
@@ -73,6 +77,8 @@ export function createApp(dependencies: AppDependencies | DatabaseProbe = {}) {
 
   app.use('/api/v1/public', createPublicCatalogRouter(catalogService));
   app.use('/api/v1/admin/catalog', createAdminCatalogRouter(principalAuthenticator, catalogService));
+  app.use('/api/v1/admin/patients', createPatientAdminRouter(principalAuthenticator, patientService));
+  app.use('/api/v1/patients', createPatientClinicalRouter(principalAuthenticator, patientService));
 
   app.use(notFoundHandler);
   app.use(errorHandler);

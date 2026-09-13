@@ -730,6 +730,7 @@ BEGIN
         patient_id             bigint IDENTITY(1,1) NOT NULL,
         public_id              uniqueidentifier NOT NULL CONSTRAINT DF_patients_public_id DEFAULT NEWSEQUENTIALID(),
         patient_code           varchar(30) NOT NULL,
+        registration_branch_id bigint NULL,
         full_name              nvarchar(200) NOT NULL,
         date_of_birth          date NOT NULL,
         gender                 varchar(10) NOT NULL,
@@ -755,6 +756,7 @@ BEGIN
         CONSTRAINT UQ_patients_code UNIQUE (patient_code),
         CONSTRAINT FK_patients_merged FOREIGN KEY (merged_into_patient_id) REFERENCES dbo.patients(patient_id),
         CONSTRAINT FK_patients_creator FOREIGN KEY (created_by_user_id) REFERENCES dbo.users(user_id),
+        CONSTRAINT FK_patients_registration_branch FOREIGN KEY (registration_branch_id) REFERENCES dbo.branches(branch_id),
         CONSTRAINT CK_patients_gender CHECK (gender IN ('MALE','FEMALE','OTHER')),
         CONSTRAINT CK_patients_blood CHECK (blood_type IS NULL OR blood_type IN ('A+','A-','B+','B-','AB+','AB-','O+','O-')),
         CONSTRAINT CK_patients_status CHECK (status IN ('ACTIVE','INACTIVE','DECEASED','MERGED')),
@@ -778,6 +780,12 @@ IF NOT EXISTS (SELECT 1 FROM sys.default_constraints WHERE parent_object_id=OBJE
     EXEC sys.sp_executesql N'ALTER TABLE dbo.patients ADD CONSTRAINT DF_patients_public_id DEFAULT NEWSEQUENTIALID() FOR public_id;';
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.patients') AND name=N'UX_patients_public_id')
     EXEC sys.sp_executesql N'CREATE UNIQUE INDEX UX_patients_public_id ON dbo.patients(public_id);';
+IF COL_LENGTH(N'dbo.patients', N'registration_branch_id') IS NULL
+    ALTER TABLE dbo.patients ADD registration_branch_id bigint NULL;
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE parent_object_id=OBJECT_ID(N'dbo.patients') AND name=N'FK_patients_registration_branch')
+    ALTER TABLE dbo.patients ADD CONSTRAINT FK_patients_registration_branch FOREIGN KEY (registration_branch_id) REFERENCES dbo.branches(branch_id);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.patients') AND name=N'IX_patients_registration_branch')
+    CREATE INDEX IX_patients_registration_branch ON dbo.patients(registration_branch_id,patient_id) INCLUDE(patient_code,full_name,date_of_birth,phone,status);
 GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.patients') AND name = N'UX_patients_national_id')
@@ -2627,6 +2635,16 @@ GO
 /*=============================================================================
   11. VIEW VẬN HÀNH VÀ ĐỐI SOÁT
 =============================================================================*/
+
+-- Gán chi nhánh cho hồ sơ trước Slice 08 khi có bằng chứng từ giao dịch/link.
+-- Hồ sơ chưa suy ra được chi nhánh vẫn NULL và không xuất hiện trong API chi nhánh.
+UPDATE p SET registration_branch_id=COALESCE(
+    (SELECT TOP (1) a.branch_id FROM dbo.appointments a WHERE a.patient_id=p.patient_id ORDER BY a.created_at_utc),
+    (SELECT TOP (1) e.branch_id FROM dbo.encounters e WHERE e.patient_id=p.patient_id ORDER BY e.created_at_utc),
+    (SELECT TOP (1) l.verified_branch_id FROM dbo.user_patient_access l WHERE l.patient_id=p.patient_id AND l.verified_branch_id IS NOT NULL ORDER BY l.created_at_utc),
+    (SELECT e.primary_branch_id FROM dbo.employees e WHERE e.user_id=p.created_by_user_id)
+) FROM dbo.patients p WHERE p.registration_branch_id IS NULL;
+GO
 
 CREATE OR ALTER VIEW dbo.v_auth_patient_reference_v1
 AS
@@ -5193,8 +5211,8 @@ BEGIN
         DECLARE @business_date date;
         EXEC dbo.sp_get_branch_business_date @branch_id,NULL,@business_date OUTPUT;
         EXEC dbo.sp_next_document_number @branch_id,'PATIENT',@business_date,'BN',@patient_code OUTPUT;
-        INSERT dbo.patients(patient_code,full_name,date_of_birth,gender,phone,email,created_by_user_id)
-        VALUES(@patient_code,@full_name,@date_of_birth,@gender,
+        INSERT dbo.patients(patient_code,registration_branch_id,full_name,date_of_birth,gender,phone,email,created_by_user_id)
+        VALUES(@patient_code,@branch_id,@full_name,@date_of_birth,@gender,
                CASE WHEN @contact_channel='SMS' THEN @contact_value END,
                CASE WHEN @contact_channel='EMAIL' THEN @contact_value END,@user_id);
         DECLARE @patient_id bigint=SCOPE_IDENTITY();
@@ -5876,8 +5894,7 @@ BEGIN
         (
             SELECT 1 FROM dbo.user_roles ur JOIN dbo.roles r ON r.role_id=ur.role_id
             WHERE ur.user_id=@target_user_id AND r.role_code='ADMIN' AND ur.branch_id IS NULL
-              AND ur.is_active=1 AND ur.valid_from_utc<=SYSUTCDATETIME()
-              AND (ur.valid_to_utc IS NULL OR ur.valid_to_utc>SYSUTCDATETIME())
+              AND ur.is_active=1
         ),1,0);
         IF @target_is_global_admin=1 AND NOT EXISTS
         (
@@ -5984,8 +6001,7 @@ BEGIN
         (
             SELECT 1 FROM dbo.user_roles ur JOIN dbo.roles r ON r.role_id=ur.role_id
             WHERE ur.user_id=@target_user_id AND r.role_code='ADMIN' AND ur.branch_id IS NULL
-              AND ur.is_active=1 AND ur.valid_from_utc<=SYSUTCDATETIME()
-              AND (ur.valid_to_utc IS NULL OR ur.valid_to_utc>SYSUTCDATETIME())
+              AND ur.is_active=1
         ),1,0);
         IF @target_is_global_admin=1 AND NOT EXISTS
         (
@@ -6059,8 +6075,7 @@ BEGIN
         (
             SELECT 1 FROM dbo.user_roles ur JOIN dbo.roles r ON r.role_id=ur.role_id
             WHERE ur.user_id=@target_user_id AND r.role_code='ADMIN' AND ur.branch_id IS NULL
-              AND ur.is_active=1 AND ur.valid_from_utc<=SYSUTCDATETIME()
-              AND (ur.valid_to_utc IS NULL OR ur.valid_to_utc>SYSUTCDATETIME())
+              AND ur.is_active=1
         ) AND NOT EXISTS
         (
             SELECT 1 FROM dbo.user_roles ur JOIN dbo.roles r ON r.role_id=ur.role_id
@@ -6245,7 +6260,10 @@ CREATE OR ALTER PROCEDURE dbo.sp_create_patient
     @province nvarchar(100) = NULL,
     @portal_user_id bigint = NULL,
     @relationship_type varchar(20) = 'SELF',
-    @patient_id bigint OUTPUT
+    @duplicate_override bit = 0,
+    @duplicate_reason nvarchar(500) = NULL,
+    @patient_id bigint OUTPUT,
+    @patient_public_id uniqueidentifier = NULL OUTPUT
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -6260,23 +6278,40 @@ BEGIN
     EXEC dbo.sp_get_branch_business_date @branch_id, NULL, @business_date OUTPUT;
     IF @date_of_birth > @business_date
         THROW 53013, N'Ngày sinh không được ở tương lai.', 1;
+    IF @duplicate_override=1 AND LEN(LTRIM(RTRIM(COALESCE(@duplicate_reason,N''))))<10
+        THROW 53631, N'Ghi rõ lý do khi xác nhận tạo hồ sơ có thể trùng.', 1;
 
     BEGIN TRY
         BEGIN TRANSACTION;
+        DECLARE @lock_result int;
+        DECLARE @lock_resource nvarchar(255)=CONCAT(N'patient-registry:',@branch_id);
+        EXEC @lock_result=sys.sp_getapplock @Resource=@lock_resource,
+            @LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000;
+        IF @lock_result<0 THROW 53634,N'Không thể khóa sổ bệnh nhân để kiểm tra trùng.',1;
+        DECLARE @phone_normalized varchar(20)=NULLIF(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(@phone)),' ',''),'-',''),'.',''),'');
+        IF COALESCE(@duplicate_override,0)=0 AND EXISTS(
+            SELECT 1 FROM dbo.patients WITH (UPDLOCK,HOLDLOCK)
+            WHERE registration_branch_id=@branch_id AND status<>'MERGED'
+              AND ((@phone_normalized IS NOT NULL AND phone_normalized=@phone_normalized)
+                OR (date_of_birth=@date_of_birth AND full_name=@full_name))
+        ) THROW 53630,N'Có hồ sơ có thể trùng. Cần xem và xác nhận trước khi tạo.',1;
         DECLARE @patient_code varchar(40);
         EXEC dbo.sp_next_document_number
             @branch_id, 'PATIENT', @business_date, 'BN', @patient_code OUTPUT;
 
         INSERT dbo.patients
-            (patient_code, full_name, date_of_birth, gender, national_id,
+            (patient_code, registration_branch_id, full_name, date_of_birth, gender, national_id,
              health_insurance_no, phone, email, address_line, province, created_by_user_id)
         VALUES
-            (@patient_code, @full_name, @date_of_birth, @gender, @national_id,
+            (@patient_code, @branch_id, @full_name, @date_of_birth, @gender, @national_id,
              @health_insurance_no, @phone, @email, @address_line, @province, @actor_user_id);
         SET @patient_id = SCOPE_IDENTITY();
+        SELECT @patient_public_id=public_id FROM dbo.patients WHERE patient_id=@patient_id;
 
         DECLARE @patient_entity_id varchar(100) = CONVERT(varchar(100), @patient_id);
-        DECLARE @patient_audit_json nvarchar(max) = CONCAT(N'{"patient_code":"', @patient_code, N'"}');
+        DECLARE @patient_audit_json nvarchar(max) = CONCAT(N'{"patient_code":"', @patient_code,
+            N'","duplicateOverride":',CASE WHEN @duplicate_override=1 THEN N'true' ELSE N'false' END,
+            CASE WHEN @duplicate_override=1 THEN CONCAT(N',"reason":"',STRING_ESCAPE(@duplicate_reason,'json'),N'"') ELSE N'' END,N'}');
         EXEC dbo.sp_write_audit
             @actor_user_id, @branch_id, 'PATIENT_CREATED', 'PATIENT',
             @patient_entity_id, NULL, @patient_audit_json;
@@ -6286,6 +6321,172 @@ BEGIN
         IF XACT_STATE() <> 0 ROLLBACK TRANSACTION;
         THROW;
     END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_clinic_patient_branches
+    @actor_user_id bigint
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT CONVERT(varchar(36),b.public_id) AS publicId,b.branch_name AS name
+    FROM dbo.branches b
+    WHERE b.is_active=1 AND EXISTS(
+        SELECT 1 FROM dbo.v_clinic_principal_v1 p
+        WHERE p.user_id=@actor_user_id AND p.permission_code='PATIENTS_MANAGE'
+          AND (p.role_branch_id IS NULL OR p.role_branch_id=b.branch_id))
+    ORDER BY b.branch_name;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_clinic_search_patients
+    @actor_user_id bigint,
+    @branch_id bigint,
+    @query nvarchar(100)=NULL,
+    @date_of_birth date=NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    EXEC dbo.sp_assert_permission @actor_user_id,'PATIENTS_MANAGE',@branch_id;
+    SELECT TOP (50) CONVERT(varchar(36),public_id) AS publicId,patient_code AS code,
+        full_name AS fullName,date_of_birth AS dateOfBirth,gender,phone,status,
+        RIGHT(national_id,4) AS nationalIdLast4,row_ver AS rowVersion
+    FROM dbo.patients
+    WHERE registration_branch_id=@branch_id AND status<>'MERGED'
+      AND (@date_of_birth IS NULL OR date_of_birth=@date_of_birth)
+      AND (@query IS NULL OR patient_code LIKE '%'+CONVERT(varchar(100),@query)+'%'
+        OR full_name LIKE N'%'+@query+N'%' OR phone_normalized LIKE '%'+REPLACE(REPLACE(REPLACE(CONVERT(varchar(100),@query),' ',''),'-',''),'.','')+'%'
+        OR national_id_normalized LIKE '%'+REPLACE(REPLACE(CONVERT(varchar(100),@query),' ',''),'-','')+'%')
+    ORDER BY updated_at_utc DESC,patient_id DESC;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_clinic_find_patient_duplicates
+    @actor_user_id bigint,
+    @branch_id bigint,
+    @full_name nvarchar(200),
+    @date_of_birth date,
+    @phone varchar(20)=NULL,
+    @national_id varchar(30)=NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    EXEC dbo.sp_assert_permission @actor_user_id,'PATIENTS_MANAGE',@branch_id;
+    DECLARE @phone_normalized varchar(20)=NULLIF(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(@phone)),' ',''),'-',''),'.',''),'');
+    DECLARE @national_normalized varchar(30)=NULLIF(REPLACE(REPLACE(LTRIM(RTRIM(@national_id)),' ',''),'-',''),'');
+    SELECT TOP (10) CONVERT(varchar(36),public_id) AS publicId,patient_code AS code,
+        full_name AS fullName,date_of_birth AS dateOfBirth,gender,phone,status,
+        RIGHT(national_id,4) AS nationalIdLast4,row_ver AS rowVersion
+    FROM dbo.patients
+    WHERE registration_branch_id=@branch_id AND status<>'MERGED'
+      AND ((@national_normalized IS NOT NULL AND national_id_normalized=@national_normalized)
+        OR (@phone_normalized IS NOT NULL AND phone_normalized=@phone_normalized)
+        OR (date_of_birth=@date_of_birth AND full_name=@full_name))
+    ORDER BY CASE WHEN @national_normalized IS NOT NULL AND national_id_normalized=@national_normalized THEN 0
+                  WHEN @phone_normalized IS NOT NULL AND phone_normalized=@phone_normalized THEN 1 ELSE 2 END,
+             updated_at_utc DESC;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_clinic_get_patient
+    @actor_user_id bigint,
+    @branch_id bigint,
+    @patient_public_id uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    EXEC dbo.sp_assert_permission @actor_user_id,'PATIENTS_MANAGE',@branch_id;
+    SELECT CONVERT(varchar(36),p.public_id) AS publicId,p.patient_code AS code,
+        CONVERT(varchar(36),b.public_id) AS branchPublicId,b.branch_name AS branchName,
+        p.full_name AS fullName,p.date_of_birth AS dateOfBirth,p.gender,p.national_id AS nationalId,
+        p.health_insurance_no AS healthInsuranceNo,p.phone,p.email,p.address_line AS addressLine,
+        p.province,p.status,RIGHT(p.national_id,4) AS nationalIdLast4,p.row_ver AS rowVersion
+    FROM dbo.patients p JOIN dbo.branches b ON b.branch_id=p.registration_branch_id
+    WHERE p.public_id=@patient_public_id AND p.registration_branch_id=@branch_id AND p.status<>'MERGED';
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_update_patient
+    @actor_user_id bigint,
+    @branch_id bigint,
+    @patient_public_id uniqueidentifier,
+    @full_name nvarchar(200),
+    @date_of_birth date,
+    @gender varchar(10),
+    @national_id varchar(30)=NULL,
+    @health_insurance_no varchar(30)=NULL,
+    @phone varchar(20)=NULL,
+    @email varchar(254)=NULL,
+    @address_line nvarchar(300)=NULL,
+    @province nvarchar(100)=NULL,
+    @expected_row_ver binary(8)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    EXEC dbo.sp_assert_permission @actor_user_id,'PATIENTS_MANAGE',@branch_id;
+    DECLARE @business_date date;
+    EXEC dbo.sp_get_branch_business_date @branch_id,NULL,@business_date OUTPUT;
+    IF @date_of_birth>@business_date THROW 53013,N'Ngày sinh không được ở tương lai.',1;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        DECLARE @patient_id bigint,@stored_version binary(8);
+        SELECT @patient_id=patient_id,@stored_version=row_ver FROM dbo.patients WITH (UPDLOCK,HOLDLOCK)
+        WHERE public_id=@patient_public_id AND registration_branch_id=@branch_id AND status<>'MERGED';
+        IF @patient_id IS NULL THROW 53635,N'Không tìm thấy bệnh nhân trong chi nhánh.',1;
+        IF @expected_row_ver IS NULL OR @stored_version<>@expected_row_ver
+            THROW 53636,N'Hồ sơ đã được cập nhật bởi người khác.',1;
+        UPDATE dbo.patients SET full_name=@full_name,date_of_birth=@date_of_birth,gender=@gender,
+            national_id=@national_id,health_insurance_no=@health_insurance_no,phone=@phone,email=@email,
+            address_line=@address_line,province=@province,updated_at_utc=SYSUTCDATETIME()
+        WHERE patient_id=@patient_id;
+        DECLARE @patient_entity_id varchar(100)=CONVERT(varchar(100),@patient_public_id);
+        EXEC dbo.sp_write_audit @actor_user_id,@branch_id,'PATIENT_UPDATED','PATIENT',
+            @entity_id=@patient_entity_id,
+            @new_values_json=N'{"administrativeFieldsUpdated":true}';
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_clinic_get_patient_clinical_summary
+    @actor_user_id bigint,
+    @branch_id bigint,
+    @patient_public_id uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    EXEC dbo.sp_assert_permission @actor_user_id,'ENCOUNTERS_CLINICAL',@branch_id;
+    DECLARE @patient_id bigint=(SELECT patient_id FROM dbo.patients WHERE public_id=@patient_public_id AND status='ACTIVE');
+    IF @patient_id IS NULL THROW 53635,N'Không tìm thấy bệnh nhân.',1;
+    -- Chỉ bác sĩ phụ trách hoặc điều dưỡng đã trực tiếp tạo lượt khám đang mở.
+    IF NOT EXISTS (
+        SELECT 1 FROM dbo.encounters en
+        WHERE en.patient_id=@patient_id AND en.branch_id=@branch_id
+          AND en.status IN ('WAITING','IN_PROGRESS')
+          AND (EXISTS (SELECT 1 FROM dbo.doctors d JOIN dbo.employees e ON e.employee_id=d.employee_id
+                        WHERE d.doctor_id=en.attending_doctor_id AND e.user_id=@actor_user_id)
+               OR (en.created_by_user_id=@actor_user_id AND EXISTS(
+                    SELECT 1 FROM dbo.v_clinic_principal_v1 pr WHERE pr.user_id=@actor_user_id
+                      AND pr.role_code='NURSE' AND (pr.role_branch_id IS NULL OR pr.role_branch_id=@branch_id))))
+    ) THROW 53650,N'Không có quan hệ chăm sóc đang hiệu lực với bệnh nhân.',1;
+    BEGIN TRANSACTION;
+    DECLARE @clinical_entity_id varchar(100)=CONVERT(varchar(100),@patient_public_id);
+    EXEC dbo.sp_write_audit @actor_user_id,@branch_id,'PATIENT_CLINICAL_SUMMARY_READ','PATIENT',
+        @entity_id=@clinical_entity_id;
+    SELECT CONVERT(varchar(36),public_id) AS publicId,patient_code AS code,full_name AS fullName,
+        date_of_birth AS dateOfBirth,gender
+    FROM dbo.patients WHERE patient_id=@patient_id;
+    SELECT allergen_name AS allergenName,allergy_type AS type,severity,reaction,noted_at AS notedAt
+    FROM dbo.patient_allergies WHERE patient_id=@patient_id AND is_active=1 ORDER BY severity DESC,created_at_utc DESC;
+    SELECT condition_code AS code,condition_name AS name,diagnosed_date AS diagnosedDate,status,notes
+    FROM dbo.patient_conditions WHERE patient_id=@patient_id AND status<>'RESOLVED' ORDER BY created_at_utc DESC;
+    COMMIT TRANSACTION;
 END;
 GO
 
@@ -9206,6 +9407,12 @@ GRANT EXECUTE ON OBJECT::dbo.sp_create_medicine_batch TO clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_grant_user_role FROM clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_revoke_user_role FROM clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_create_patient TO clinic_api_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_update_patient TO clinic_api_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_clinic_patient_branches TO clinic_api_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_clinic_search_patients TO clinic_api_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_clinic_find_patient_duplicates TO clinic_api_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_clinic_get_patient TO clinic_api_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_clinic_get_patient_clinical_summary TO clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_create_patient_portal_account FROM clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_link_user_patient FROM clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_create_doctor_working_schedule TO clinic_api_executor;

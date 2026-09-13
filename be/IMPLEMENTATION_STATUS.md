@@ -1,6 +1,6 @@
 # Trạng thái triển khai backend
 
-> Cập nhật: 2026-09-10
+> Cập nhật: 2026-09-13
 
 ## DONE — Slice 01: Platform Foundation
 
@@ -140,20 +140,45 @@ Phạm vi đã hoàn thành:
   đồng bộ 12 operation; Admin Web có màn Danh mục responsive với trạng thái lỗi,
   rỗng, loading, forbidden, conflict và retry qua query invalidation.
 
+## DONE — Slice 08: Patient Registry & Scoped Clinical Summary
+
+Phạm vi đã hoàn thành:
+
+- Admin/Manager/Lễ tân có `PATIENTS_MANAGE` tra cứu tối đa 50 hồ sơ theo chi nhánh,
+  mã, tên, điện thoại chuẩn hóa, ngày sinh hoặc định danh. Từ khóa nhạy cảm đi
+  trong POST body, không đi trong URL; danh sách chỉ hiện bốn số cuối định danh.
+- Tạo hồ sơ hành chính có mã và public GUID, chi nhánh đăng ký; kiểm tra khả năng
+  trùng theo tên/ngày sinh, điện thoại hoặc định danh. Tạo trùng trong cùng chi
+  nhánh cần xác nhận và lý do tối thiểu 10 ký tự, được audit. Định danh trùng
+  toàn hệ thống bị unique constraint từ chối mà không tiết lộ hồ sơ chi nhánh khác.
+- Sửa hồ sơ dùng strong `ETag`/`If-Match` từ SQL rowversion; stale update trả 409.
+  Các read/write procedure kiểm tra actor và quyền theo chi nhánh trong SQL.
+- Bác sĩ chỉ đọc dị ứng/bệnh nền khi được phân công lượt khám đang mở; điều dưỡng
+  chỉ đọc khi trực tiếp tạo lượt khám đó. Lễ tân, bác sĩ không liên quan và
+  patient/guardian bị chặn. Mỗi lần đọc được audit; chưa xuất kết quả khám nội bộ.
+- Hồ sơ cũ chỉ được backfill chi nhánh khi có bằng chứng từ lịch hẹn, lượt khám,
+  portal link đã xác minh hoặc nhân viên tạo; bản ghi không xác định phạm vi
+  không xuất hiện ở API chi nhánh.
+- Gateway chuyển `/api/v1/admin/patients/*` sang Clinic; OpenAPI/generated client
+  đồng bộ 7 operation; Admin Web có màn Bệnh nhân với tìm kiếm, cảnh báo trùng,
+  mở hồ sơ và chỉnh sửa. SQL Server GUID từ `NEWSEQUENTIALID()` được nhận đúng
+  theo định dạng hex; log Auth/Clinic che Authorization, Cookie và Set-Cookie.
+
 ### Bằng chứng xác minh local toàn bộ
 
 | Kiểm tra | Kết quả |
 |---|---|
-| Baseline SQL chạy lại idempotent | Đạt; 70 bảng, 23 view, 81 procedure, 30 trigger |
-| SQL auth session/staff RBAC/staff safety/password lifecycle/patient registration/patient link/catalog-directory regression | PASS/PASS/PASS/PASS/PASS/PASS/PASS; rollback sạch |
+| Baseline SQL chạy lại idempotent | Đạt; 70 bảng, 23 view, 87 procedure, 30 trigger |
+| SQL auth session/staff RBAC/staff safety/password lifecycle/patient registration/patient link/catalog-directory/patient registry regression | 8/8 PASS; rollback sạch |
 | npm run openapi:check | Đạt; contract và generated code đồng bộ |
 | npm run lint | Đạt, không cảnh báo |
 | npm run typecheck | Đạt |
-| npm test | 60 test đạt (Auth 34, Mobile 14, Clinic 12) |
+| npm test | 65 test đạt (Auth 34, Mobile 14, Clinic 17) |
 | npm run build | Đạt; .NET 0 warning/0 error |
-| npm run doctor:mobile | 21/21 |
+| npm run doctor:mobile | 20/21; Expo SDK hiện yêu cầu bản vá mới hơn cho `expo`, `expo-constants`, `expo-secure-store`. Mobile build và typecheck vẫn đạt; nâng bản vá trong lát cắt Mobile tiếp theo. |
 | Gateway → Auth → SQL smoke test | Registration thiếu idempotency key trả 400; challenge lạ trả generic OTP 400; ba route patient-access mới đi đúng Auth và trả 401 + request ID + `Cache-Control: no-store` khi thiếu token |
 | Clinic Catalog → SQL smoke test | Public branch/service trả dữ liệu và giá hiệu lực từ SQL thật; Admin Catalog thiếu token trả 401; read repository trả đủ branch/service/doctor và lịch sử giá |
+| Gateway → Auth/Clinic → SQL patient smoke test | Demo Admin đăng nhập; lấy chi nhánh, tra cứu, mở hồ sơ thật đạt; đọc lâm sàng không có care relationship trả 403 |
 | npm audit --omit=dev --audit-level=high | Đạt; 0 high/critical. Còn 17 moderate từ dependency bắc cầu Expo/React Navigation, chưa có bản sửa không breaking |
 
 ## Chưa hoàn thành
@@ -162,5 +187,7 @@ Phạm vi đã hoàn thành:
 - Lần chạy GitHub Actions và branch protection chỉ xác minh được sau khi push.
 - Theo dõi bản vá upstream cho 17 cảnh báo moderate bắc cầu Expo/React Navigation;
   không dùng `npm audit fix --force` vì công cụ đề xuất hạ Expo xuống bản breaking.
+- Cập nhật ba gói Expo lên bản vá SDK mới yêu cầu để Expo Doctor trở lại 21/21.
 - Các mục Auth P1 như MFA, quản lý permission động và lịch sử session.
-- Phase 3 còn quản trị hồ sơ bệnh nhân, dedupe/search và read policy theo care relationship.
+- Phase 3 còn quản lý liên hệ khẩn cấp, ghi dị ứng/bệnh nền và chính sách công bố
+  kết quả cho patient/guardian khi có luồng khám hoàn chỉnh.

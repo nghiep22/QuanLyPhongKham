@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Private Clinic API
-  version: 0.4.0
+  version: 0.5.0
   description: Public contract for the private clinic management system.
 servers:
   - url: http://localhost:5000
@@ -864,6 +864,144 @@ paths:
                 $ref: '#/components/schemas/PublicDoctorListResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
+  /api/v1/admin/patients/reference-data:
+    get:
+      operationId: getPatientReferenceData
+      summary: List branches where the actor may manage patient administrative records
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Manageable branches.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PatientReferenceResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/admin/patients/search:
+    post:
+      operationId: searchPatients
+      summary: Search up to 50 administrative records in one authorized branch
+      description: POST keeps phone and national ID search terms out of URLs.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PatientSearchRequest' }
+      responses:
+        '200':
+          description: Scoped matches.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PatientSummaryListResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/admin/patients/duplicates:
+    post:
+      operationId: findPatientDuplicates
+      summary: Find likely duplicates within the selected branch before registration
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PatientDuplicateRequest' }
+      responses:
+        '200':
+          description: Up to ten potential matches.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PatientSummaryListResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/admin/patients:
+    post:
+      operationId: createPatient
+      summary: Register a patient after a scoped duplicate check
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreatePatientRequest' }
+      responses:
+        '201':
+          description: Patient registered.
+          headers:
+            ETag: { $ref: '#/components/headers/CatalogEtag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PatientDetailResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/admin/patients/{patientId}:
+    get:
+      operationId: getPatient
+      summary: Read an administrative record in its registration branch
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/PatientId'
+        - $ref: '#/components/parameters/BranchPublicIdQuery'
+      responses:
+        '200':
+          description: Patient administrative details.
+          headers:
+            ETag: { $ref: '#/components/headers/CatalogEtag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PatientDetailResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      operationId: updatePatient
+      summary: Update administrative details with optimistic concurrency
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/PatientId'
+        - $ref: '#/components/parameters/BranchPublicIdQuery'
+        - $ref: '#/components/parameters/CatalogIfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PatientWriteRequest' }
+      responses:
+        '200':
+          description: Patient updated.
+          headers:
+            ETag: { $ref: '#/components/headers/CatalogEtag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PatientDetailResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+  /api/v1/patients/{patientId}/clinical-summary:
+    get:
+      operationId: getPatientClinicalSummary
+      summary: Read allergies and conditions for an active assigned care relationship
+      description: Only an assigned doctor or nurse who created the open encounter can read. This endpoint does not return internal results or prescriptions to patients.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/PatientId'
+        - $ref: '#/components/parameters/BranchPublicIdQuery'
+      responses:
+        '200':
+          description: Clinical safety summary; read is audited.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PatientClinicalSummaryResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /api/v1/admin/catalog/reference-data:
     get:
       operationId: getCatalogReferenceData
@@ -1112,6 +1250,11 @@ paths:
           $ref: '#/components/responses/Conflict'
 components:
   parameters:
+    PatientId:
+      name: patientId
+      in: path
+      required: true
+      schema: { type: string, pattern: '^[0-9A-Fa-f]{8}-(?:[0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}$' }
     StaffId:
       name: staffId
       in: path
@@ -1148,7 +1291,7 @@ components:
       required: true
       schema:
         type: string
-        format: uuid
+        pattern: '^[0-9A-Fa-f]{8}-(?:[0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}$'
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -1245,6 +1388,154 @@ components:
           schema:
             $ref: '#/components/schemas/ApiErrorResponse'
   schemas:
+    PatientBranch:
+      type: object
+      additionalProperties: false
+      required: [publicId, name]
+      properties:
+        publicId: { type: string, pattern: '^[0-9A-Fa-f]{8}-(?:[0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}$' }
+        name: { type: string }
+    PatientReferenceData:
+      type: object
+      additionalProperties: false
+      required: [branches]
+      properties:
+        branches:
+          type: array
+          items: { $ref: '#/components/schemas/PatientBranch' }
+    PatientReferenceResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data: { $ref: '#/components/schemas/PatientReferenceData' }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    PatientWriteRequest:
+      type: object
+      required: [fullName, dateOfBirth, gender]
+      properties:
+        fullName: { type: string, minLength: 2, maxLength: 200 }
+        dateOfBirth: { type: string, format: date }
+        gender: { type: string, enum: [MALE, FEMALE, OTHER] }
+        nationalId: { type: [string, 'null'], maxLength: 30 }
+        healthInsuranceNo: { type: [string, 'null'], maxLength: 30 }
+        phone: { type: [string, 'null'], maxLength: 20 }
+        email: { type: [string, 'null'], maxLength: 254 }
+        addressLine: { type: [string, 'null'], maxLength: 300 }
+        province: { type: [string, 'null'], maxLength: 100 }
+    PatientSearchRequest:
+      type: object
+      additionalProperties: false
+      required: [branchPublicId]
+      properties:
+        branchPublicId: { type: string, pattern: '^[0-9A-Fa-f]{8}-(?:[0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}$' }
+        query: { type: string, minLength: 2, maxLength: 100 }
+        dateOfBirth: { type: string, format: date }
+    PatientDuplicateRequest:
+      allOf:
+        - $ref: '#/components/schemas/PatientWriteRequest'
+        - type: object
+          required: [branchPublicId]
+          properties:
+            branchPublicId: { type: string, pattern: '^[0-9A-Fa-f]{8}-(?:[0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}$' }
+    CreatePatientRequest:
+      allOf:
+        - $ref: '#/components/schemas/PatientDuplicateRequest'
+        - type: object
+          properties:
+            duplicateOverride: { type: boolean, default: false }
+            duplicateReason: { type: string, minLength: 10, maxLength: 500 }
+    PatientSummary:
+      type: object
+      required: [publicId, code, fullName, dateOfBirth, gender, phone, status, nationalIdLast4, rowVersion]
+      properties:
+        publicId: { type: string, pattern: '^[0-9A-Fa-f]{8}-(?:[0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}$' }
+        code: { type: string }
+        fullName: { type: string }
+        dateOfBirth: { type: string, format: date }
+        gender: { type: string, enum: [MALE, FEMALE, OTHER] }
+        phone: { type: [string, 'null'] }
+        status: { type: string }
+        nationalIdLast4: { type: [string, 'null'] }
+        rowVersion: { type: string, pattern: '^[A-Za-z0-9+/]{11}=$' }
+    PatientDetail:
+      allOf:
+        - $ref: '#/components/schemas/PatientSummary'
+        - type: object
+          required: [branch, nationalId, healthInsuranceNo, email, addressLine, province]
+          properties:
+            branch: { $ref: '#/components/schemas/PatientBranch' }
+            nationalId: { type: [string, 'null'] }
+            healthInsuranceNo: { type: [string, 'null'] }
+            email: { type: [string, 'null'] }
+            addressLine: { type: [string, 'null'] }
+            province: { type: [string, 'null'] }
+    PatientSummaryListResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/PatientSummary' }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    PatientDetailResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data: { $ref: '#/components/schemas/PatientDetail' }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    PatientClinicalSummary:
+      type: object
+      additionalProperties: false
+      required: [patient, allergies, conditions]
+      properties:
+        patient:
+          type: object
+          additionalProperties: false
+          required: [publicId, code, fullName, dateOfBirth, gender]
+          properties:
+            publicId: { type: string, pattern: '^[0-9A-Fa-f]{8}-(?:[0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}$' }
+            code: { type: string }
+            fullName: { type: string }
+            dateOfBirth: { type: string, format: date }
+            gender: { type: string, enum: [MALE, FEMALE, OTHER] }
+        allergies:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [allergenName, type, severity, reaction, notedAt]
+            properties:
+              allergenName: { type: string }
+              type: { type: string }
+              severity: { type: string }
+              reaction: { type: [string, 'null'] }
+              notedAt: { type: [string, 'null'], format: date }
+        conditions:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [code, name, diagnosedDate, status, notes]
+            properties:
+              code: { type: [string, 'null'] }
+              name: { type: string }
+              diagnosedDate: { type: [string, 'null'], format: date }
+              status: { type: string }
+              notes: { type: [string, 'null'] }
+    PatientClinicalSummaryResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data: { $ref: '#/components/schemas/PatientClinicalSummary' }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
     ResponseMeta:
       type: object
       additionalProperties: true

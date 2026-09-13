@@ -172,6 +172,37 @@ export function createApiClient(options: ApiClientOptions) {
         );
       },
     },
+    patients: {
+      references: () => request<import('@clinic/generated-api-types').PatientReferenceResponse>(
+        '/api/v1/admin/patients/reference-data',
+      ),
+      search: (body: import('@clinic/generated-api-types').PatientSearchRequest) =>
+        request<import('@clinic/generated-api-types').PatientSummaryListResponse>(
+          '/api/v1/admin/patients/search', { method: 'POST', body: JSON.stringify(body) },
+        ),
+      duplicates: (body: import('@clinic/generated-api-types').PatientDuplicateRequest) =>
+        request<import('@clinic/generated-api-types').PatientSummaryListResponse>(
+          '/api/v1/admin/patients/duplicates', { method: 'POST', body: JSON.stringify(body) },
+        ),
+      get: (patientId: string, branchPublicId: string) =>
+        request<import('@clinic/generated-api-types').PatientDetailResponse>(
+          `/api/v1/admin/patients/${encodeURIComponent(patientId)}?${new URLSearchParams({ branchPublicId })}`,
+        ),
+      create: (body: import('@clinic/generated-api-types').CreatePatientRequest) =>
+        request<import('@clinic/generated-api-types').PatientDetailResponse>(
+          '/api/v1/admin/patients', { method: 'POST', body: JSON.stringify(body) },
+        ),
+      update: (patientId: string, branchPublicId: string,
+        body: import('@clinic/generated-api-types').PatientWriteRequest, rowVersion: string) =>
+        request<import('@clinic/generated-api-types').PatientDetailResponse>(
+          `/api/v1/admin/patients/${encodeURIComponent(patientId)}?${new URLSearchParams({ branchPublicId })}`,
+          { method: 'PUT', headers: { 'if-match': `"${rowVersion}"` }, body: JSON.stringify(body) },
+        ),
+      clinicalSummary: (patientId: string, branchPublicId: string) =>
+        request<import('@clinic/generated-api-types').PatientClinicalSummaryResponse>(
+          `/api/v1/patients/${encodeURIComponent(patientId)}/clinical-summary?${new URLSearchParams({ branchPublicId })}`,
+        ),
+    },
     catalog: {
       references: () => request<import('@clinic/generated-api-types').CatalogReferenceResponse>(
         '/api/v1/admin/catalog/reference-data',

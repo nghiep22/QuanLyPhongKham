@@ -17,6 +17,7 @@ sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\tests\password-life
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\tests\patient-registration.test.sql
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\tests\patient-link.test.sql
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\tests\catalog-directory.test.sql
+sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\tests\patient-registry.test.sql
 ```
 
 Mọi test dùng transaction và rollback; không để lại tài khoản, session hoặc

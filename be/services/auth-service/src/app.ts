@@ -38,6 +38,7 @@ export function createApp(dependencies: AppDependencies = {}) {
   app.use(pinoHttp({
     genReqId: (request) => request.headers['x-request-id']!.toString(),
     autoLogging: process.env.NODE_ENV !== 'test',
+    redact: ['req.headers.authorization', 'req.headers.cookie', 'res.headers["set-cookie"]'],
   }));
   app.use(helmet());
   app.use(cors({
