@@ -18,7 +18,20 @@ sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\tests\patient-regis
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\tests\patient-link.test.sql
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\tests\catalog-directory.test.sql
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\tests\patient-registry.test.sql
+sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\tests\scheduling-appointments.test.sql
+sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\tests\reception-queue.test.sql
+sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\tests\clinical-core.test.sql
+sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\tests\pharmacy-core.test.sql
+sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\tests\pharmacy-fefo.test.sql
+sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\tests\pharmacy-allergy.test.sql
+sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\tests\billing-core.test.sql
+sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\tests\reports-core.test.sql
+sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\tests\notifications-outbox.test.sql
+.\tests\reception-queue.concurrent.ps1
+.\tests\billing-payment.concurrent.ps1
 ```
 
 Mọi test dùng transaction và rollback; không để lại tài khoản, session hoặc
 password reset/patient registration challenge hoặc patient link thử nghiệm.
+Các harness concurrency tạo rồi xóa đúng dữ liệu fixture của chúng; audit record
+queue và billing được giữ lại vì audit log là append-only theo thiết kế.

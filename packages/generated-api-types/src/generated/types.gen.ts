@@ -858,6 +858,1065 @@ export type SetCatalogBranchPriceRequest = {
     isAvailable: boolean;
 };
 
+export type AppointmentStatus = 'PENDING' | 'CONFIRMED' | 'CHECKED_IN' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW' | 'EXPIRED';
+
+export type AppointmentChannel = 'ONLINE' | 'PHONE' | 'COUNTER';
+
+export type AvailabilitySlot = {
+    publicId: string;
+    branch: {
+        publicId: string;
+        code: string;
+        name: string;
+        timezoneName: string;
+    };
+    doctor: {
+        publicId: string;
+        name: string;
+    };
+    service: {
+        publicId: string;
+        code: string;
+        name: string;
+        price: {
+            amount: string;
+            currency: 'VND';
+        };
+    };
+    room: {
+        publicId: string;
+        code: string;
+        name: string;
+    };
+    serviceDateLocal: string;
+    startTimeLocal: string;
+    endTimeLocal: string;
+    startsAtUtc: string;
+    endsAtUtc: string;
+};
+
+export type AvailabilityListResponse = {
+    data: Array<AvailabilitySlot>;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type Appointment = {
+    publicId: string;
+    code: string;
+    status: AppointmentStatus;
+    bookingChannel: AppointmentChannel;
+    scheduledStartUtc: string;
+    scheduledEndUtc: string;
+    serviceDateLocal: string;
+    startTimeLocal: string;
+    endTimeLocal: string;
+    holdExpiresAtUtc: string | null;
+    chiefComplaint: string | null;
+    patientNote: string | null;
+    cancellationReason: string | null;
+    slotPublicId: string;
+    branch: {
+        publicId: string;
+        name: string;
+        timezoneName: string;
+    };
+    patient: {
+        publicId: string;
+        code: string;
+        fullName: string;
+    };
+    doctor: {
+        publicId: string;
+        fullName: string;
+    };
+    service: {
+        publicId: string;
+        code: string;
+        name: string;
+    };
+    roomName: string;
+    rowVersion: string;
+};
+
+export type AppointmentResponse = {
+    data: Appointment;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type AppointmentListResponse = {
+    data: Array<Appointment>;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type BookAppointmentRequest = {
+    patientPublicId: string;
+    slotPublicId: string;
+    servicePublicId: string;
+    chiefComplaint?: string | null;
+    patientNote?: string | null;
+};
+
+export type BookStaffAppointmentRequest = {
+    patientPublicId: string;
+    slotPublicId: string;
+    servicePublicId: string;
+    bookingChannel: 'PHONE' | 'COUNTER';
+    chiefComplaint?: string | null;
+    patientNote?: string | null;
+};
+
+export type RescheduleAppointmentRequest = {
+    newSlotPublicId: string;
+    newServicePublicId?: string;
+    reason: string;
+};
+
+export type AppointmentReasonRequest = {
+    reason: string;
+};
+
+export type OptionalAppointmentReasonRequest = {
+    reason?: string;
+};
+
+export type ScheduleBreak = {
+    localStartTime: string;
+    localEndTime: string;
+    breakName?: string | null;
+};
+
+export type CreateWorkingScheduleRequest = {
+    branchPublicId: string;
+    doctorPublicId: string;
+    roomPublicId: string;
+    weekdayIso: number;
+    localStartTime: string;
+    localEndTime: string;
+    slotDurationMinutes: number;
+    effectiveFrom: string;
+    effectiveTo?: string | null;
+    bookingHorizonDays?: number | null;
+    breaks: Array<ScheduleBreak>;
+};
+
+export type SchedulingData = {
+    branch: {
+        publicId: string;
+        code: string;
+        name: string;
+        timezoneName: string;
+        bookingHorizonDays: number;
+    };
+    doctors: Array<{
+        publicId: string;
+        fullName: string;
+        defaultSlotMinutes: number;
+        acceptsOnlineBooking: boolean;
+    }>;
+    rooms: Array<{
+        publicId: string;
+        code: string;
+        name: string;
+        type: string;
+    }>;
+    schedules: Array<{
+        publicId: string;
+        doctorPublicId: string;
+        doctorName: string;
+        roomPublicId: string;
+        roomName: string;
+        weekdayIso: number;
+        localStartTime: string;
+        localEndTime: string;
+        slotDurationMinutes: number;
+        bookingHorizonDays: number | null;
+        effectiveFrom: string;
+        effectiveTo: string | null;
+        isActive: boolean;
+        breaks: Array<ScheduleBreak>;
+        slotCount: number;
+        rowVersion: string;
+    }>;
+};
+
+export type SchedulingResponse = {
+    data: SchedulingData;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type CreatedScheduleResponse = {
+    data: {
+        publicId: string;
+    };
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type GenerateSlotsRequest = {
+    fromDate: string;
+    toDate: string;
+};
+
+export type GeneratedSlotsResponse = {
+    data: {
+        createdCount: number;
+    };
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type ReceptionBranch = {
+    publicId: string;
+    code: string;
+    name: string;
+    timezoneName: string;
+};
+
+export type ReceptionBranchListResponse = {
+    data: Array<ReceptionBranch>;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type QueueStatus = 'WAITING' | 'CALLED' | 'SERVING';
+
+export type QueueTicket = {
+    publicId: string;
+    encounterPublicId: string;
+    displayNumber: string;
+    priorityLevel: number;
+    status: QueueStatus;
+    issuedAtUtc: string;
+    calledAtUtc: string | null;
+    serviceStartedAtUtc: string | null;
+    encounterCode: string;
+    encounterSource: 'APPOINTMENT' | 'WALK_IN';
+    patient: {
+        publicId: string;
+        code: string;
+        fullName: string;
+    };
+    doctor: {
+        publicId: string;
+        fullName: string;
+    };
+    room: {
+        publicId: string;
+        name: string;
+    } | null;
+};
+
+export type CheckInCandidate = {
+    publicId: string;
+    code: string;
+    patient: {
+        publicId: string;
+        code: string;
+        fullName: string;
+    };
+    doctor: {
+        publicId: string;
+        fullName: string;
+    };
+    service: {
+        publicId: string;
+        name: string;
+    };
+    room: {
+        publicId: string;
+        name: string;
+    };
+    scheduledStartUtc: string;
+    scheduledEndUtc: string;
+    startTimeLocal: string;
+    chiefComplaint: string | null;
+};
+
+export type ReceptionPatient = {
+    publicId: string;
+    code: string;
+    fullName: string;
+    dateOfBirth: string;
+    gender: 'MALE' | 'FEMALE' | 'OTHER';
+    phone: string | null;
+};
+
+export type ReceptionPatientListResponse = {
+    data: Array<ReceptionPatient>;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type ReceptionWorkspace = {
+    branch: {
+        publicId: string;
+        code: string;
+        name: string;
+        timezoneName: string;
+        businessDate: string;
+        checkInEarlyMinutes: number;
+        checkInLateMinutes: number;
+    };
+    queue: Array<QueueTicket>;
+    appointments: Array<CheckInCandidate>;
+    doctors: Array<{
+        publicId: string;
+        fullName: string;
+    }>;
+    rooms: Array<{
+        publicId: string;
+        code: string;
+        name: string;
+    }>;
+    services: Array<{
+        publicId: string;
+        code: string;
+        name: string;
+        priceAmount: string;
+        currencyCode: 'VND';
+    }>;
+    doctorServices: Array<{
+        doctorPublicId: string;
+        servicePublicId: string;
+    }>;
+};
+
+export type ReceptionWorkspaceResponse = {
+    data: ReceptionWorkspace;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type AppointmentCheckInRequest = {
+    priorityLevel?: number;
+};
+
+export type CreateWalkInRequest = {
+    branchPublicId: string;
+    patientPublicId: string;
+    doctorPublicId: string;
+    roomPublicId: string;
+    servicePublicId: string;
+    chiefComplaint?: string | null;
+    priorityLevel: number;
+};
+
+export type CallNextQueueRequest = {
+    branchPublicId: string;
+};
+
+export type QueueCommandResult = {
+    queueTicketPublicId: string;
+    encounterPublicId: string;
+    displayNumber: string;
+};
+
+export type QueueCommandResponse = {
+    data: QueueCommandResult;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type NullableQueueCommandResponse = {
+    data: QueueCommandResult | null;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type ClinicalBranchListResponse = {
+    data: Array<ReceptionBranch>;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type ClinicalEncounterStatus = 'WAITING' | 'IN_PROGRESS' | 'COMPLETED' | 'SIGNED' | 'CANCELLED';
+
+export type ClinicalEncounterSummary = {
+    publicId: string;
+    code: string;
+    source: 'APPOINTMENT' | 'WALK_IN';
+    status: ClinicalEncounterStatus;
+    arrivedAtUtc: string;
+    startedAtUtc: string | null;
+    completedAtUtc: string | null;
+    chiefComplaint: string | null;
+    patient: {
+        publicId: string;
+        code: string;
+        fullName: string;
+        dateOfBirth: string;
+        gender: 'MALE' | 'FEMALE' | 'OTHER';
+    };
+    doctor: {
+        publicId: string;
+        fullName: string;
+    };
+    room: {
+        publicId: string;
+        name: string;
+    } | null;
+    queue: {
+        displayNumber: string;
+        status: string;
+    } | null;
+};
+
+export type ClinicalEncounterListResponse = {
+    data: Array<ClinicalEncounterSummary>;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type ClinicalNotesRequest = {
+    historyOfPresentIllness?: string | null;
+    physicalExamination?: string | null;
+    clinicalAssessment?: string | null;
+    treatmentPlan?: string | null;
+    followUpInstructions?: string | null;
+    followUpDate?: string | null;
+};
+
+export type ClinicalStartRequest = {
+    roomPublicId?: string | null;
+};
+
+export type ClinicalVitalSignsRequest = {
+    temperatureC?: number | null;
+    pulseBpm?: number | null;
+    respiratoryRateBpm?: number | null;
+    systolicBpMmhg?: number | null;
+    diastolicBpMmhg?: number | null;
+    spo2Percent?: number | null;
+    heightCm?: number | null;
+    weightKg?: number | null;
+    painScore?: number | null;
+    notes?: string | null;
+};
+
+export type ClinicalDiagnosisRequest = {
+    code: string;
+    name: string;
+    type?: 'PROVISIONAL' | 'DIFFERENTIAL' | 'FINAL';
+    isPrimary?: boolean;
+    notes?: string | null;
+};
+
+export type ClinicalOrderServiceRequest = {
+    servicePublicId: string;
+    quantity?: number;
+    notes?: string | null;
+};
+
+export type ClinicalFinalizeResultRequest = {
+    summary?: string | null;
+    conclusion?: string | null;
+    result?: {
+        [key: string]: unknown;
+    } | Array<unknown> | null;
+};
+
+export type ClinicalAmendmentRequest = {
+    reason: string;
+    content: string;
+};
+
+export type ClinicalEncounterDetail = ClinicalEncounterSummary & {
+    signedAtUtc: string | null;
+    signature: {
+        schemaVersion: string;
+        sha256: string;
+        signedAtUtc: string;
+    } | null;
+    historyOfPresentIllness: string | null;
+    physicalExamination: string | null;
+    clinicalAssessment: string | null;
+    treatmentPlan: string | null;
+    followUpInstructions: string | null;
+    followUpDate: string | null;
+    vitalSigns: Array<ClinicalVitalSignsRequest & {
+        publicId: string;
+        measuredAtUtc: string;
+        bmi: number | null;
+        measuredBy: string;
+    }>;
+    diagnoses: Array<ClinicalDiagnosisRequest & {
+        publicId: string;
+        createdAtUtc: string;
+        recordedBy: string;
+    }>;
+    services: Array<{
+        publicId: string;
+        catalogPublicId: string;
+        code: string;
+        name: string;
+        type: string;
+        quantity: string;
+        unitPrice: string;
+        status: 'ORDERED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+        notes: string | null;
+        result: {
+            publicId: string;
+            version: number;
+            status: 'FINAL';
+            summary: string | null;
+            conclusion: string | null;
+            result: unknown;
+            finalizedAtUtc: string;
+        } | null;
+    }>;
+    amendments: Array<{
+        publicId: string;
+        number: number;
+        reason: string;
+        content: string;
+        hash: string;
+        amendedAtUtc: string;
+        amendedBy: string;
+    }>;
+    availableServices: Array<{
+        publicId: string;
+        code: string;
+        name: string;
+        type: string;
+        priceAmount: string;
+    }>;
+};
+
+export type ClinicalEncounterResponse = {
+    data: ClinicalEncounterDetail;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type ClinicalCommandResponse = {
+    data: {
+        publicId: string;
+        sha256?: string;
+    };
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type PharmacyBranch = {
+    publicId: string;
+    code: string;
+    name: string;
+    timezoneName: string;
+};
+
+export type PharmacyBranchListResponse = {
+    data: Array<PharmacyBranch>;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type PharmacyLocation = {
+    publicId: string;
+    code: string;
+    name: string;
+    type: 'WAREHOUSE' | 'PHARMACY' | 'CABINET' | 'QUARANTINE';
+    isDispensing: boolean;
+};
+
+export type PharmacyMedicine = {
+    publicId: string;
+    code: string;
+    genericName: string;
+    brandName: string | null;
+    activeIngredient: string;
+    strength: string;
+    dosageForm: string;
+    route: string;
+    baseUnit: string;
+    salePrice: string;
+    isActive: boolean;
+};
+
+export type PharmacyBatch = {
+    publicId: string;
+    medicinePublicId: string;
+    locationPublicId: string;
+    batchNumber: string;
+    expiryDate: string;
+    status: string;
+    salePrice: string;
+    quantityOnHand: string;
+    availableQuantity: string;
+};
+
+export type PharmacyPrescriptionSummary = {
+    publicId: string;
+    code: string;
+    status: 'DRAFT' | 'ISSUED' | 'PARTIALLY_DISPENSED' | 'DISPENSED' | 'CANCELLED' | 'EXPIRED';
+    encounterPublicId: string;
+    patientPublicId: string;
+    patientCode: string;
+    patientName: string;
+    issuedAtUtc: string | null;
+    validUntil: string | null;
+    itemCount: number;
+};
+
+export type PharmacyWorkspace = {
+    locations: Array<PharmacyLocation>;
+    medicines: Array<PharmacyMedicine>;
+    batches: Array<PharmacyBatch>;
+    prescriptions: Array<PharmacyPrescriptionSummary>;
+    lowStock: Array<{
+        medicinePublicId: string;
+        medicineName: string;
+        availableQuantity: string;
+        reorderLevel: string;
+    }>;
+};
+
+export type PharmacyWorkspaceResponse = {
+    data: PharmacyWorkspace;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type PrescriptionDetail = PharmacyPrescriptionSummary & {
+    clinicalNotes: string | null;
+    generalInstructions: string | null;
+    items: Array<{
+        publicId: string;
+        medicinePublicId: string;
+        medicineName: string;
+        strength: string;
+        dosageForm: string;
+        route: string;
+        prescribedQuantity: string;
+        dispensedQuantity: string;
+        dose: string;
+        frequency: string;
+        durationDays: number | null;
+        timingInstruction: string | null;
+        usageInstruction: string;
+    }>;
+    dispensations: Array<{
+        publicId: string;
+        code: string;
+        status: 'DRAFT' | 'COMPLETED' | 'CANCELLED';
+        locationPublicId: string;
+        openedAtUtc: string;
+        completedAtUtc: string | null;
+    }>;
+    dispensedItems: Array<{
+        publicId: string;
+        dispensationPublicId: string;
+        prescriptionItemPublicId: string;
+        batchPublicId: string;
+        batchNumber: string;
+        quantity: string;
+        unitPrice: string;
+        dispensedAtUtc: string;
+        reversed: boolean;
+    }>;
+    drugAllergies: Array<{
+        allergenName: string;
+        severity: string;
+        reaction: string | null;
+    }>;
+};
+
+export type PrescriptionDetailResponse = {
+    data: PrescriptionDetail;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type PharmacyResourceResponse = {
+    data: {
+        publicId: string;
+    };
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type PharmacyStatusResponse = {
+    data: {
+        status: 'COMPLETED' | 'CANCELLED';
+    };
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type PharmacyReconciliationResponse = {
+    data: Array<{
+        locationPublicId: string;
+        batchPublicId: string;
+        batchNumber: string;
+        balanceQuantity: string;
+        ledgerQuantity: string;
+    }>;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type CreateMedicineRequest = {
+    code: string;
+    genericName: string;
+    activeIngredient: string;
+    strength: string;
+    dosageForm: string;
+    route: string;
+    baseUnit: string;
+    salePrice: number;
+};
+
+export type CreateMedicineBatchRequest = {
+    branchPublicId: string;
+    medicinePublicId: string;
+    batchNumber: string;
+    expiryDate: string;
+    purchasePrice: number;
+    salePrice: number;
+};
+
+export type CreatePharmacyLocationRequest = {
+    branchPublicId: string;
+    code: string;
+    name: string;
+    type: 'WAREHOUSE' | 'PHARMACY' | 'CABINET' | 'QUARANTINE';
+    isDispensing: boolean;
+};
+
+export type ReceiveStockRequest = {
+    locationPublicId: string;
+    batchPublicId: string;
+    quantity: number;
+    reason?: string | null;
+};
+
+export type CreatePrescriptionRequest = {
+    validDays?: number;
+    clinicalNotes?: string | null;
+    generalInstructions?: string | null;
+};
+
+export type AddPrescriptionItemRequest = {
+    medicinePublicId: string;
+    prescribedQuantity: number;
+    dose: string;
+    frequency: string;
+    durationDays?: number | null;
+    timingInstruction?: string | null;
+    usageInstruction: string;
+    sortOrder?: number;
+    allergyOverrideReason?: string | null;
+};
+
+export type PharmacyReasonRequest = {
+    reason: string;
+};
+
+export type OpenDispensationRequest = {
+    locationPublicId: string;
+};
+
+export type DispenseItemRequest = {
+    prescriptionItemPublicId: string;
+    batchPublicId: string;
+    quantity: number;
+};
+
+export type ReverseDispensationRequest = {
+    returnLocationPublicId: string;
+    disposition: 'SELLABLE' | 'QUARANTINE';
+    reason: string;
+};
+
+/**
+ * Exact decimal amount encoded as a JSON string.
+ */
+export type MoneyDecimal = string;
+
+/**
+ * Exact signed decimal amount encoded as a JSON string.
+ */
+export type SignedMoneyDecimal = string;
+
+export type BillingBranch = {
+    publicId: string;
+    code: string;
+    name: string;
+    timezoneName: string;
+};
+
+export type BillingBranchListResponse = {
+    data: Array<BillingBranch>;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type BillableEncounter = {
+    publicId: string;
+    code: string;
+    status: 'IN_PROGRESS' | 'COMPLETED' | 'SIGNED';
+    completedAtUtc: string | null;
+    patientPublicId: string;
+    patientCode: string;
+    patientName: string;
+    activeInvoicePublicId: string | null;
+    activeInvoiceStatus: 'DRAFT' | 'ISSUED' | 'PARTIALLY_PAID' | 'PAID' | 'VOID' | null;
+};
+
+export type InvoiceSummary = {
+    publicId: string;
+    number: string;
+    status: 'DRAFT' | 'ISSUED' | 'PARTIALLY_PAID' | 'PAID' | 'VOID';
+    encounterPublicId: string;
+    encounterCode: string;
+    patientPublicId: string;
+    patientCode: string;
+    patientName: string;
+    currency: 'VND';
+    patientPayableAmount: MoneyDecimal;
+    paidAmount: MoneyDecimal;
+    refundedAmount: MoneyDecimal;
+    balanceDue: MoneyDecimal;
+    issuedAtUtc: string | null;
+    createdAtUtc: string;
+};
+
+export type BillingWorkspace = {
+    encounters: Array<BillableEncounter>;
+    invoices: Array<InvoiceSummary>;
+};
+
+export type BillingWorkspaceResponse = {
+    data: BillingWorkspace;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type InvoiceItem = {
+    publicId: string;
+    type: 'SERVICE' | 'MEDICINE' | 'OTHER';
+    code: string | null;
+    name: string;
+    quantity: string;
+    unitPrice: MoneyDecimal;
+    discountAmount: MoneyDecimal;
+    taxRatePercent: string;
+    lineTotal: MoneyDecimal;
+};
+
+export type InvoicePaymentAllocation = {
+    publicId: string;
+    paymentPublicId: string;
+    number: string;
+    amount: MoneyDecimal;
+    method: PaymentMethod;
+    status: 'PENDING' | 'SUCCEEDED' | 'FAILED' | 'VOIDED';
+    externalTransactionId: string | null;
+    paidAtUtc: string;
+    refundableAmount: MoneyDecimal;
+};
+
+export type InvoiceRefund = {
+    publicId: string;
+    allocationPublicId: string;
+    paymentAllocationPublicId: string;
+    number: string;
+    amount: MoneyDecimal;
+    method: PaymentMethod;
+    status: 'PENDING' | 'SUCCEEDED' | 'FAILED';
+    reason: string;
+    refundedAtUtc: string;
+};
+
+export type InvoiceDetail = InvoiceSummary & {
+    supersedesInvoicePublicId: string | null;
+    subtotalAmount: MoneyDecimal;
+    discountAmount: MoneyDecimal;
+    taxAmount: MoneyDecimal;
+    totalAmount: MoneyDecimal;
+    insuranceAmount: MoneyDecimal;
+    dueAtUtc: string | null;
+    voidedAtUtc: string | null;
+    voidReason: string | null;
+    items: Array<InvoiceItem>;
+    payments: Array<InvoicePaymentAllocation>;
+    refunds: Array<InvoiceRefund>;
+};
+
+export type InvoiceDetailResponse = {
+    data: InvoiceDetail;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type BillingResourceResponse = {
+    data: {
+        publicId: string;
+    };
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type CreateInvoiceRequest = {
+    supersedesInvoicePublicId?: string | null;
+};
+
+export type ManualInvoiceItemRequest = {
+    code?: string | null;
+    name: string;
+    quantity: number;
+    unitPrice: number;
+    discountAmount?: number;
+    taxRatePercent?: number;
+};
+
+export type InvoiceInsuranceRequest = {
+    amount: number;
+};
+
+export type IssueInvoiceRequest = {
+    dueAtUtc?: string | null;
+};
+
+export type PaymentMethod = 'CASH' | 'CARD' | 'BANK_TRANSFER' | 'EWALLET' | 'OTHER';
+
+export type InvoicePaymentRequest = {
+    amount: number;
+    method: PaymentMethod;
+    externalTransactionId?: string | null;
+    notes?: string | null;
+};
+
+export type PaymentRefundRequest = {
+    amount: number;
+    method: PaymentMethod;
+    externalTransactionId?: string | null;
+    reason: string;
+};
+
+export type BillingReasonRequest = {
+    reason: string;
+};
+
+export type ReportBranch = {
+    publicId: string;
+    code: string;
+    name: string;
+    timezoneName: string;
+    canViewOperations: boolean;
+    canViewRevenue: boolean;
+    canViewInventory: boolean;
+};
+
+export type ReportBranchListResponse = {
+    data: Array<ReportBranch>;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type OperationsReportSummary = {
+    appointmentCount: number;
+    confirmedCount: number;
+    cancelledCount: number;
+    noShowCount: number;
+    encounterCount: number;
+    completedEncounterCount: number;
+    averageWaitMinutes: number | null;
+};
+
+export type OperationsReportDay = {
+    date: string;
+    appointmentCount: number;
+    arrivedCount: number;
+    completedCount: number;
+    cancelledCount: number;
+    noShowCount: number;
+};
+
+export type OperationsReport = {
+    summary: OperationsReportSummary;
+    daily: Array<OperationsReportDay>;
+};
+
+export type OperationsReportResponse = {
+    data: OperationsReport;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type RevenueReportSummary = {
+    invoicedAmount: MoneyDecimal;
+    collectedAmount: MoneyDecimal;
+    refundedAmount: MoneyDecimal;
+    netCollectedAmount: SignedMoneyDecimal;
+};
+
+export type RevenueReportDay = {
+    date: string;
+    method: PaymentMethod;
+    collectedAmount: MoneyDecimal;
+    refundedAmount: MoneyDecimal;
+    netCollectedAmount: SignedMoneyDecimal;
+};
+
+export type RevenueReport = {
+    summary: RevenueReportSummary;
+    daily: Array<RevenueReportDay>;
+};
+
+export type RevenueReportResponse = {
+    data: RevenueReport;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type UsageReportItem = {
+    code: string;
+    name: string;
+    quantity: string;
+    amount: MoneyDecimal;
+};
+
+export type LowStockReportItem = {
+    code: string;
+    name: string;
+    availableQuantity: string;
+    reorderLevel: string;
+};
+
+export type ExpiringBatchReportItem = {
+    medicineCode: string;
+    medicineName: string;
+    batchNumber: string;
+    expiryDate: string;
+    availableQuantity: string;
+    daysToExpiry: number;
+};
+
+export type InventoryReportSummary = {
+    serviceQuantity: string;
+    medicineQuantity: string;
+    lowStockCount: number;
+    expiringBatchCount: number;
+};
+
+export type InventoryReport = {
+    summary: InventoryReportSummary;
+    services: Array<UsageReportItem>;
+    medicines: Array<UsageReportItem>;
+    lowStock: Array<LowStockReportItem>;
+    expiringBatches: Array<ExpiringBatchReportItem>;
+};
+
+export type InventoryReportResponse = {
+    data: InventoryReport;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
 export type ApiErrorResponse = {
     error: ApiError;
     requestId: RequestId;
@@ -894,6 +1953,20 @@ export type CreateStaffRequestWritable = {
     specialtyPublicId?: string;
 };
 
+export type InvoiceId = string;
+
+export type PaymentAllocationId = string;
+
+export type PrescriptionId = string;
+
+export type DispensationId = string;
+
+export type EncounterId = string;
+
+export type EncounterServiceId = string;
+
+export type AppointmentId = string;
+
 export type PatientId = string;
 
 export type StaffId = string;
@@ -911,6 +1984,10 @@ export type IfMatch = string;
 export type CatalogIfMatch = string;
 
 export type BranchPublicIdQuery = string;
+
+export type ReportFromDate = string;
+
+export type ReportToDate = string;
 
 /**
  * UUID that makes retries with the same operation payload return the original result.
@@ -2652,3 +3729,2277 @@ export type SetCatalogBranchPriceResponses = {
 };
 
 export type SetCatalogBranchPriceResponse = SetCatalogBranchPriceResponses[keyof SetCatalogBranchPriceResponses];
+
+export type ListPublicAvailabilityData = {
+    body?: never;
+    path?: never;
+    query: {
+        branchPublicId: string;
+        servicePublicId: string;
+        doctorPublicId?: string;
+        fromDate: string;
+        toDate: string;
+    };
+    url: '/api/v1/public/availability';
+};
+
+export type ListPublicAvailabilityErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+};
+
+export type ListPublicAvailabilityError = ListPublicAvailabilityErrors[keyof ListPublicAvailabilityErrors];
+
+export type ListPublicAvailabilityResponses = {
+    /**
+     * Slots still inside their public booking window.
+     */
+    200: AvailabilityListResponse;
+};
+
+export type ListPublicAvailabilityResponse = ListPublicAvailabilityResponses[keyof ListPublicAvailabilityResponses];
+
+export type ListMyAppointmentsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/appointments';
+};
+
+export type ListMyAppointmentsErrors = {
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+};
+
+export type ListMyAppointmentsError = ListMyAppointmentsErrors[keyof ListMyAppointmentsErrors];
+
+export type ListMyAppointmentsResponses = {
+    /**
+     * Authorized appointment history and upcoming appointments.
+     */
+    200: AppointmentListResponse;
+};
+
+export type ListMyAppointmentsResponse = ListMyAppointmentsResponses[keyof ListMyAppointmentsResponses];
+
+export type BookOnlineAppointmentData = {
+    body: BookAppointmentRequest;
+    headers: {
+        /**
+         * UUID that makes retries with the same operation payload return the original result.
+         */
+        'Idempotency-Key': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/appointments';
+};
+
+export type BookOnlineAppointmentErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type BookOnlineAppointmentError = BookOnlineAppointmentErrors[keyof BookOnlineAppointmentErrors];
+
+export type BookOnlineAppointmentResponses = {
+    /**
+     * Slot held in PENDING state until staff confirmation or expiry.
+     */
+    201: AppointmentResponse;
+};
+
+export type BookOnlineAppointmentResponse = BookOnlineAppointmentResponses[keyof BookOnlineAppointmentResponses];
+
+export type RescheduleMyAppointmentData = {
+    body: RescheduleAppointmentRequest;
+    headers: {
+        /**
+         * UUID that makes retries with the same operation payload return the original result.
+         */
+        'Idempotency-Key': string;
+    };
+    path: {
+        appointmentId: string;
+    };
+    query?: never;
+    url: '/api/v1/appointments/{appointmentId}/reschedule';
+};
+
+export type RescheduleMyAppointmentErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type RescheduleMyAppointmentError = RescheduleMyAppointmentErrors[keyof RescheduleMyAppointmentErrors];
+
+export type RescheduleMyAppointmentResponses = {
+    /**
+     * Appointment moved without releasing the old slot early.
+     */
+    200: AppointmentResponse;
+};
+
+export type RescheduleMyAppointmentResponse = RescheduleMyAppointmentResponses[keyof RescheduleMyAppointmentResponses];
+
+export type CancelMyAppointmentData = {
+    body: AppointmentReasonRequest;
+    path: {
+        appointmentId: string;
+    };
+    query?: never;
+    url: '/api/v1/appointments/{appointmentId}/cancel';
+};
+
+export type CancelMyAppointmentErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type CancelMyAppointmentError = CancelMyAppointmentErrors[keyof CancelMyAppointmentErrors];
+
+export type CancelMyAppointmentResponses = {
+    /**
+     * Appointment cancelled and slot released.
+     */
+    200: AppointmentResponse;
+};
+
+export type CancelMyAppointmentResponse = CancelMyAppointmentResponses[keyof CancelMyAppointmentResponses];
+
+export type ListAdminAppointmentsData = {
+    body?: never;
+    path?: never;
+    query: {
+        branchPublicId: string;
+        serviceDate: string;
+        status?: AppointmentStatus;
+        query?: string;
+    };
+    url: '/api/v1/admin/appointments';
+};
+
+export type ListAdminAppointmentsErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+};
+
+export type ListAdminAppointmentsError = ListAdminAppointmentsErrors[keyof ListAdminAppointmentsErrors];
+
+export type ListAdminAppointmentsResponses = {
+    /**
+     * Branch-scoped appointments.
+     */
+    200: AppointmentListResponse;
+};
+
+export type ListAdminAppointmentsResponse = ListAdminAppointmentsResponses[keyof ListAdminAppointmentsResponses];
+
+export type BookStaffAppointmentData = {
+    body: BookStaffAppointmentRequest;
+    headers: {
+        /**
+         * UUID that makes retries with the same operation payload return the original result.
+         */
+        'Idempotency-Key': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/appointments';
+};
+
+export type BookStaffAppointmentErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type BookStaffAppointmentError = BookStaffAppointmentErrors[keyof BookStaffAppointmentErrors];
+
+export type BookStaffAppointmentResponses = {
+    /**
+     * Confirmed staff booking.
+     */
+    201: AppointmentResponse;
+};
+
+export type BookStaffAppointmentResponse = BookStaffAppointmentResponses[keyof BookStaffAppointmentResponses];
+
+export type ConfirmAppointmentData = {
+    body?: never;
+    path: {
+        appointmentId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/appointments/{appointmentId}/confirm';
+};
+
+export type ConfirmAppointmentErrors = {
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type ConfirmAppointmentError = ConfirmAppointmentErrors[keyof ConfirmAppointmentErrors];
+
+export type ConfirmAppointmentResponses = {
+    /**
+     * Confirmed appointment.
+     */
+    200: AppointmentResponse;
+};
+
+export type ConfirmAppointmentResponse = ConfirmAppointmentResponses[keyof ConfirmAppointmentResponses];
+
+export type RescheduleAdminAppointmentData = {
+    body: RescheduleAppointmentRequest;
+    headers: {
+        /**
+         * UUID that makes retries with the same operation payload return the original result.
+         */
+        'Idempotency-Key': string;
+    };
+    path: {
+        appointmentId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/appointments/{appointmentId}/reschedule';
+};
+
+export type RescheduleAdminAppointmentErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type RescheduleAdminAppointmentError = RescheduleAdminAppointmentErrors[keyof RescheduleAdminAppointmentErrors];
+
+export type RescheduleAdminAppointmentResponses = {
+    /**
+     * Rescheduled appointment.
+     */
+    200: AppointmentResponse;
+};
+
+export type RescheduleAdminAppointmentResponse = RescheduleAdminAppointmentResponses[keyof RescheduleAdminAppointmentResponses];
+
+export type CancelAdminAppointmentData = {
+    body: AppointmentReasonRequest;
+    path: {
+        appointmentId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/appointments/{appointmentId}/cancel';
+};
+
+export type CancelAdminAppointmentErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type CancelAdminAppointmentError = CancelAdminAppointmentErrors[keyof CancelAdminAppointmentErrors];
+
+export type CancelAdminAppointmentResponses = {
+    /**
+     * Cancelled appointment.
+     */
+    200: AppointmentResponse;
+};
+
+export type CancelAdminAppointmentResponse = CancelAdminAppointmentResponses[keyof CancelAdminAppointmentResponses];
+
+export type MarkAppointmentNoShowData = {
+    body?: OptionalAppointmentReasonRequest;
+    path: {
+        appointmentId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/appointments/{appointmentId}/no-show';
+};
+
+export type MarkAppointmentNoShowErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type MarkAppointmentNoShowError = MarkAppointmentNoShowErrors[keyof MarkAppointmentNoShowErrors];
+
+export type MarkAppointmentNoShowResponses = {
+    /**
+     * No-show recorded.
+     */
+    200: AppointmentResponse;
+};
+
+export type MarkAppointmentNoShowResponse = MarkAppointmentNoShowResponses[keyof MarkAppointmentNoShowResponses];
+
+export type GetSchedulingData = {
+    body?: never;
+    path?: never;
+    query: {
+        branchPublicId: string;
+    };
+    url: '/api/v1/schedules';
+};
+
+export type GetSchedulingErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+};
+
+export type GetSchedulingError = GetSchedulingErrors[keyof GetSchedulingErrors];
+
+export type GetSchedulingResponses = {
+    /**
+     * Branch-scoped scheduling workspace.
+     */
+    200: SchedulingResponse;
+};
+
+export type GetSchedulingResponse = GetSchedulingResponses[keyof GetSchedulingResponses];
+
+export type CreateWorkingScheduleData = {
+    body: CreateWorkingScheduleRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/schedules';
+};
+
+export type CreateWorkingScheduleErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type CreateWorkingScheduleError = CreateWorkingScheduleErrors[keyof CreateWorkingScheduleErrors];
+
+export type CreateWorkingScheduleResponses = {
+    /**
+     * Working schedule created.
+     */
+    201: CreatedScheduleResponse;
+};
+
+export type CreateWorkingScheduleResponse = CreateWorkingScheduleResponses[keyof CreateWorkingScheduleResponses];
+
+export type GenerateWorkingScheduleSlotsData = {
+    body: GenerateSlotsRequest;
+    path: {
+        scheduleId: string;
+    };
+    query?: never;
+    url: '/api/v1/schedules/{scheduleId}/generate-slots';
+};
+
+export type GenerateWorkingScheduleSlotsErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type GenerateWorkingScheduleSlotsError = GenerateWorkingScheduleSlotsErrors[keyof GenerateWorkingScheduleSlotsErrors];
+
+export type GenerateWorkingScheduleSlotsResponses = {
+    /**
+     * Idempotent generation result.
+     */
+    200: GeneratedSlotsResponse;
+};
+
+export type GenerateWorkingScheduleSlotsResponse = GenerateWorkingScheduleSlotsResponses[keyof GenerateWorkingScheduleSlotsResponses];
+
+export type ListReceptionBranchesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/reception/branches';
+};
+
+export type ListReceptionBranchesErrors = {
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+};
+
+export type ListReceptionBranchesError = ListReceptionBranchesErrors[keyof ListReceptionBranchesErrors];
+
+export type ListReceptionBranchesResponses = {
+    /**
+     * Branch scope for the reception workspace.
+     */
+    200: ReceptionBranchListResponse;
+};
+
+export type ListReceptionBranchesResponse = ListReceptionBranchesResponses[keyof ListReceptionBranchesResponses];
+
+export type GetReceptionWorkspaceData = {
+    body?: never;
+    path?: never;
+    query: {
+        branchPublicId: string;
+    };
+    url: '/api/v1/reception';
+};
+
+export type GetReceptionWorkspaceErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+};
+
+export type GetReceptionWorkspaceError = GetReceptionWorkspaceErrors[keyof GetReceptionWorkspaceErrors];
+
+export type GetReceptionWorkspaceResponses = {
+    /**
+     * Live branch reception workspace.
+     */
+    200: ReceptionWorkspaceResponse;
+};
+
+export type GetReceptionWorkspaceResponse = GetReceptionWorkspaceResponses[keyof GetReceptionWorkspaceResponses];
+
+export type SearchReceptionPatientsData = {
+    body?: never;
+    path?: never;
+    query: {
+        branchPublicId: string;
+        query: string;
+    };
+    url: '/api/v1/reception/patients';
+};
+
+export type SearchReceptionPatientsErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+};
+
+export type SearchReceptionPatientsError = SearchReceptionPatientsErrors[keyof SearchReceptionPatientsErrors];
+
+export type SearchReceptionPatientsResponses = {
+    /**
+     * Matching active patients.
+     */
+    200: ReceptionPatientListResponse;
+};
+
+export type SearchReceptionPatientsResponse = SearchReceptionPatientsResponses[keyof SearchReceptionPatientsResponses];
+
+export type CheckInAppointmentData = {
+    body?: AppointmentCheckInRequest;
+    headers: {
+        /**
+         * UUID that makes retries with the same operation payload return the original result.
+         */
+        'Idempotency-Key': string;
+    };
+    path: {
+        appointmentId: string;
+    };
+    query?: never;
+    url: '/api/v1/check-ins/appointments/{appointmentId}';
+};
+
+export type CheckInAppointmentErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type CheckInAppointmentError = CheckInAppointmentErrors[keyof CheckInAppointmentErrors];
+
+export type CheckInAppointmentResponses = {
+    /**
+     * Appointment checked in and queue number issued.
+     */
+    201: QueueCommandResponse;
+};
+
+export type CheckInAppointmentResponse = CheckInAppointmentResponses[keyof CheckInAppointmentResponses];
+
+export type CreateWalkInEncounterData = {
+    body: CreateWalkInRequest;
+    headers: {
+        /**
+         * UUID that makes retries with the same operation payload return the original result.
+         */
+        'Idempotency-Key': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/check-ins/walk-ins';
+};
+
+export type CreateWalkInEncounterErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type CreateWalkInEncounterError = CreateWalkInEncounterErrors[keyof CreateWalkInEncounterErrors];
+
+export type CreateWalkInEncounterResponses = {
+    /**
+     * Walk-in accepted and queue number issued.
+     */
+    201: QueueCommandResponse;
+};
+
+export type CreateWalkInEncounterResponse = CreateWalkInEncounterResponses[keyof CreateWalkInEncounterResponses];
+
+export type CallNextQueueTicketData = {
+    body: CallNextQueueRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/queues/call-next';
+};
+
+export type CallNextQueueTicketErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+};
+
+export type CallNextQueueTicketError = CallNextQueueTicketErrors[keyof CallNextQueueTicketErrors];
+
+export type CallNextQueueTicketResponses = {
+    /**
+     * Claimed queue ticket, or null when the queue is empty.
+     */
+    200: NullableQueueCommandResponse;
+};
+
+export type CallNextQueueTicketResponse = CallNextQueueTicketResponses[keyof CallNextQueueTicketResponses];
+
+export type ListClinicalBranchesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/clinical/branches';
+};
+
+export type ListClinicalBranchesErrors = {
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+};
+
+export type ListClinicalBranchesError = ListClinicalBranchesErrors[keyof ListClinicalBranchesErrors];
+
+export type ListClinicalBranchesResponses = {
+    /**
+     * Authorized clinical branches.
+     */
+    200: ClinicalBranchListResponse;
+};
+
+export type ListClinicalBranchesResponse = ListClinicalBranchesResponses[keyof ListClinicalBranchesResponses];
+
+export type ListClinicalEncountersData = {
+    body?: never;
+    path?: never;
+    query: {
+        branchPublicId: string;
+        /**
+         * Comma-separated encounter statuses.
+         */
+        status?: string;
+    };
+    url: '/api/v1/encounters';
+};
+
+export type ListClinicalEncountersErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+};
+
+export type ListClinicalEncountersError = ListClinicalEncountersErrors[keyof ListClinicalEncountersErrors];
+
+export type ListClinicalEncountersResponses = {
+    /**
+     * Up to 100 encounters, newest first.
+     */
+    200: ClinicalEncounterListResponse;
+};
+
+export type ListClinicalEncountersResponse = ListClinicalEncountersResponses[keyof ListClinicalEncountersResponses];
+
+export type GetClinicalEncounterData = {
+    body?: never;
+    path: {
+        encounterId: string;
+    };
+    query?: never;
+    url: '/api/v1/encounters/{encounterId}';
+};
+
+export type GetClinicalEncounterErrors = {
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+};
+
+export type GetClinicalEncounterError = GetClinicalEncounterErrors[keyof GetClinicalEncounterErrors];
+
+export type GetClinicalEncounterResponses = {
+    /**
+     * Encounter, measurements, diagnoses, orders, results and amendments.
+     */
+    200: ClinicalEncounterResponse;
+};
+
+export type GetClinicalEncounterResponse = GetClinicalEncounterResponses[keyof GetClinicalEncounterResponses];
+
+export type StartClinicalEncounterData = {
+    body?: ClinicalStartRequest;
+    path: {
+        encounterId: string;
+    };
+    query?: never;
+    url: '/api/v1/encounters/{encounterId}/start';
+};
+
+export type StartClinicalEncounterErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type StartClinicalEncounterError = StartClinicalEncounterErrors[keyof StartClinicalEncounterErrors];
+
+export type StartClinicalEncounterResponses = {
+    /**
+     * Started encounter.
+     */
+    200: ClinicalEncounterResponse;
+};
+
+export type StartClinicalEncounterResponse = StartClinicalEncounterResponses[keyof StartClinicalEncounterResponses];
+
+export type UpdateClinicalNotesData = {
+    body: ClinicalNotesRequest;
+    path: {
+        encounterId: string;
+    };
+    query?: never;
+    url: '/api/v1/encounters/{encounterId}/clinical-notes';
+};
+
+export type UpdateClinicalNotesErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type UpdateClinicalNotesError = UpdateClinicalNotesErrors[keyof UpdateClinicalNotesErrors];
+
+export type UpdateClinicalNotesResponses = {
+    /**
+     * Updated encounter.
+     */
+    200: ClinicalEncounterResponse;
+};
+
+export type UpdateClinicalNotesResponse = UpdateClinicalNotesResponses[keyof UpdateClinicalNotesResponses];
+
+export type AddClinicalVitalSignsData = {
+    body: ClinicalVitalSignsRequest;
+    path: {
+        encounterId: string;
+    };
+    query?: never;
+    url: '/api/v1/encounters/{encounterId}/vital-signs';
+};
+
+export type AddClinicalVitalSignsErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type AddClinicalVitalSignsError = AddClinicalVitalSignsErrors[keyof AddClinicalVitalSignsErrors];
+
+export type AddClinicalVitalSignsResponses = {
+    /**
+     * Measurement created.
+     */
+    201: ClinicalCommandResponse;
+};
+
+export type AddClinicalVitalSignsResponse = AddClinicalVitalSignsResponses[keyof AddClinicalVitalSignsResponses];
+
+export type AddClinicalDiagnosisData = {
+    body: ClinicalDiagnosisRequest;
+    path: {
+        encounterId: string;
+    };
+    query?: never;
+    url: '/api/v1/encounters/{encounterId}/diagnoses';
+};
+
+export type AddClinicalDiagnosisErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type AddClinicalDiagnosisError = AddClinicalDiagnosisErrors[keyof AddClinicalDiagnosisErrors];
+
+export type AddClinicalDiagnosisResponses = {
+    /**
+     * Diagnosis created.
+     */
+    201: ClinicalCommandResponse;
+};
+
+export type AddClinicalDiagnosisResponse = AddClinicalDiagnosisResponses[keyof AddClinicalDiagnosisResponses];
+
+export type OrderClinicalServiceData = {
+    body: ClinicalOrderServiceRequest;
+    path: {
+        encounterId: string;
+    };
+    query?: never;
+    url: '/api/v1/encounters/{encounterId}/services';
+};
+
+export type OrderClinicalServiceErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type OrderClinicalServiceError = OrderClinicalServiceErrors[keyof OrderClinicalServiceErrors];
+
+export type OrderClinicalServiceResponses = {
+    /**
+     * Service order created.
+     */
+    201: ClinicalCommandResponse;
+};
+
+export type OrderClinicalServiceResponse = OrderClinicalServiceResponses[keyof OrderClinicalServiceResponses];
+
+export type FinalizeClinicalServiceResultData = {
+    body: ClinicalFinalizeResultRequest;
+    path: {
+        serviceId: string;
+    };
+    query?: never;
+    url: '/api/v1/clinical/services/{serviceId}/results/finalize';
+};
+
+export type FinalizeClinicalServiceResultErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type FinalizeClinicalServiceResultError = FinalizeClinicalServiceResultErrors[keyof FinalizeClinicalServiceResultErrors];
+
+export type FinalizeClinicalServiceResultResponses = {
+    /**
+     * Result finalized.
+     */
+    201: ClinicalCommandResponse;
+};
+
+export type FinalizeClinicalServiceResultResponse = FinalizeClinicalServiceResultResponses[keyof FinalizeClinicalServiceResultResponses];
+
+export type CompleteClinicalEncounterData = {
+    body?: never;
+    path: {
+        encounterId: string;
+    };
+    query?: never;
+    url: '/api/v1/encounters/{encounterId}/complete';
+};
+
+export type CompleteClinicalEncounterErrors = {
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type CompleteClinicalEncounterError = CompleteClinicalEncounterErrors[keyof CompleteClinicalEncounterErrors];
+
+export type CompleteClinicalEncounterResponses = {
+    /**
+     * Completed encounter.
+     */
+    200: ClinicalEncounterResponse;
+};
+
+export type CompleteClinicalEncounterResponse = CompleteClinicalEncounterResponses[keyof CompleteClinicalEncounterResponses];
+
+export type SignClinicalEncounterData = {
+    body?: never;
+    path: {
+        encounterId: string;
+    };
+    query?: never;
+    url: '/api/v1/encounters/{encounterId}/sign';
+};
+
+export type SignClinicalEncounterErrors = {
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type SignClinicalEncounterError = SignClinicalEncounterErrors[keyof SignClinicalEncounterErrors];
+
+export type SignClinicalEncounterResponses = {
+    /**
+     * SHA-256 hash attestation stored on the encounter.
+     */
+    200: ClinicalCommandResponse;
+};
+
+export type SignClinicalEncounterResponse = SignClinicalEncounterResponses[keyof SignClinicalEncounterResponses];
+
+export type AmendClinicalEncounterData = {
+    body: ClinicalAmendmentRequest;
+    path: {
+        encounterId: string;
+    };
+    query?: never;
+    url: '/api/v1/encounters/{encounterId}/amendments';
+};
+
+export type AmendClinicalEncounterErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type AmendClinicalEncounterError = AmendClinicalEncounterErrors[keyof AmendClinicalEncounterErrors];
+
+export type AmendClinicalEncounterResponses = {
+    /**
+     * Amendment appended.
+     */
+    201: ClinicalCommandResponse;
+};
+
+export type AmendClinicalEncounterResponse = AmendClinicalEncounterResponses[keyof AmendClinicalEncounterResponses];
+
+export type ListPharmacyBranchesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/pharmacy/branches';
+};
+
+export type ListPharmacyBranchesErrors = {
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+};
+
+export type ListPharmacyBranchesError = ListPharmacyBranchesErrors[keyof ListPharmacyBranchesErrors];
+
+export type ListPharmacyBranchesResponses = {
+    /**
+     * Scoped branches.
+     */
+    200: PharmacyBranchListResponse;
+};
+
+export type ListPharmacyBranchesResponse = ListPharmacyBranchesResponses[keyof ListPharmacyBranchesResponses];
+
+export type GetPharmacyWorkspaceData = {
+    body?: never;
+    path?: never;
+    query: {
+        branchPublicId: string;
+    };
+    url: '/api/v1/pharmacy/workspace';
+};
+
+export type GetPharmacyWorkspaceErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+};
+
+export type GetPharmacyWorkspaceError = GetPharmacyWorkspaceErrors[keyof GetPharmacyWorkspaceErrors];
+
+export type GetPharmacyWorkspaceResponses = {
+    /**
+     * Workspace for the actor's permitted branch and role.
+     */
+    200: PharmacyWorkspaceResponse;
+};
+
+export type GetPharmacyWorkspaceResponse = GetPharmacyWorkspaceResponses[keyof GetPharmacyWorkspaceResponses];
+
+export type ReconcilePharmacyStockData = {
+    body?: never;
+    path?: never;
+    query: {
+        branchPublicId: string;
+    };
+    url: '/api/v1/pharmacy/reconciliation';
+};
+
+export type ReconcilePharmacyStockErrors = {
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+};
+
+export type ReconcilePharmacyStockError = ReconcilePharmacyStockErrors[keyof ReconcilePharmacyStockErrors];
+
+export type ReconcilePharmacyStockResponses = {
+    /**
+     * Empty data means every branch balance reconciles.
+     */
+    200: PharmacyReconciliationResponse;
+};
+
+export type ReconcilePharmacyStockResponse = ReconcilePharmacyStockResponses[keyof ReconcilePharmacyStockResponses];
+
+export type CreatePharmacyMedicineData = {
+    body: CreateMedicineRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/pharmacy/medicines';
+};
+
+export type CreatePharmacyMedicineErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type CreatePharmacyMedicineError = CreatePharmacyMedicineErrors[keyof CreatePharmacyMedicineErrors];
+
+export type CreatePharmacyMedicineResponses = {
+    /**
+     * Medicine created.
+     */
+    201: PharmacyResourceResponse;
+};
+
+export type CreatePharmacyMedicineResponse = CreatePharmacyMedicineResponses[keyof CreatePharmacyMedicineResponses];
+
+export type CreatePharmacyBatchData = {
+    body: CreateMedicineBatchRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/pharmacy/batches';
+};
+
+export type CreatePharmacyBatchErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type CreatePharmacyBatchError = CreatePharmacyBatchErrors[keyof CreatePharmacyBatchErrors];
+
+export type CreatePharmacyBatchResponses = {
+    /**
+     * Batch registered; no stock received yet.
+     */
+    201: PharmacyResourceResponse;
+};
+
+export type CreatePharmacyBatchResponse = CreatePharmacyBatchResponses[keyof CreatePharmacyBatchResponses];
+
+export type CreatePharmacyLocationData = {
+    body: CreatePharmacyLocationRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/pharmacy/locations';
+};
+
+export type CreatePharmacyLocationErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type CreatePharmacyLocationError = CreatePharmacyLocationErrors[keyof CreatePharmacyLocationErrors];
+
+export type CreatePharmacyLocationResponses = {
+    /**
+     * Inventory location created.
+     */
+    201: PharmacyResourceResponse;
+};
+
+export type CreatePharmacyLocationResponse = CreatePharmacyLocationResponses[keyof CreatePharmacyLocationResponses];
+
+export type ReceivePharmacyStockData = {
+    body: ReceiveStockRequest;
+    headers: {
+        /**
+         * UUID that makes retries with the same operation payload return the original result.
+         */
+        'Idempotency-Key': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/pharmacy/receipts';
+};
+
+export type ReceivePharmacyStockErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type ReceivePharmacyStockError = ReceivePharmacyStockErrors[keyof ReceivePharmacyStockErrors];
+
+export type ReceivePharmacyStockResponses = {
+    /**
+     * Receipt movement created.
+     */
+    201: PharmacyResourceResponse;
+};
+
+export type ReceivePharmacyStockResponse = ReceivePharmacyStockResponses[keyof ReceivePharmacyStockResponses];
+
+export type CreateEncounterPrescriptionData = {
+    body: CreatePrescriptionRequest;
+    path: {
+        encounterId: string;
+    };
+    query?: never;
+    url: '/api/v1/encounters/{encounterId}/prescriptions';
+};
+
+export type CreateEncounterPrescriptionErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type CreateEncounterPrescriptionError = CreateEncounterPrescriptionErrors[keyof CreateEncounterPrescriptionErrors];
+
+export type CreateEncounterPrescriptionResponses = {
+    /**
+     * Draft prescription.
+     */
+    201: PrescriptionDetailResponse;
+};
+
+export type CreateEncounterPrescriptionResponse = CreateEncounterPrescriptionResponses[keyof CreateEncounterPrescriptionResponses];
+
+export type GetPharmacyPrescriptionData = {
+    body?: never;
+    path: {
+        prescriptionId: string;
+    };
+    query?: never;
+    url: '/api/v1/prescriptions/{prescriptionId}';
+};
+
+export type GetPharmacyPrescriptionErrors = {
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+};
+
+export type GetPharmacyPrescriptionError = GetPharmacyPrescriptionErrors[keyof GetPharmacyPrescriptionErrors];
+
+export type GetPharmacyPrescriptionResponses = {
+    /**
+     * Prescription with items, dispensing history and drug allergy alerts.
+     */
+    200: PrescriptionDetailResponse;
+};
+
+export type GetPharmacyPrescriptionResponse = GetPharmacyPrescriptionResponses[keyof GetPharmacyPrescriptionResponses];
+
+export type AddPrescriptionMedicineData = {
+    body: AddPrescriptionItemRequest;
+    path: {
+        prescriptionId: string;
+    };
+    query?: never;
+    url: '/api/v1/prescriptions/{prescriptionId}/items';
+};
+
+export type AddPrescriptionMedicineErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type AddPrescriptionMedicineError = AddPrescriptionMedicineErrors[keyof AddPrescriptionMedicineErrors];
+
+export type AddPrescriptionMedicineResponses = {
+    /**
+     * Updated prescription.
+     */
+    201: PrescriptionDetailResponse;
+};
+
+export type AddPrescriptionMedicineResponse = AddPrescriptionMedicineResponses[keyof AddPrescriptionMedicineResponses];
+
+export type IssuePharmacyPrescriptionData = {
+    body?: never;
+    path: {
+        prescriptionId: string;
+    };
+    query?: never;
+    url: '/api/v1/prescriptions/{prescriptionId}/issue';
+};
+
+export type IssuePharmacyPrescriptionErrors = {
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type IssuePharmacyPrescriptionError = IssuePharmacyPrescriptionErrors[keyof IssuePharmacyPrescriptionErrors];
+
+export type IssuePharmacyPrescriptionResponses = {
+    /**
+     * Issued prescription.
+     */
+    200: PrescriptionDetailResponse;
+};
+
+export type IssuePharmacyPrescriptionResponse = IssuePharmacyPrescriptionResponses[keyof IssuePharmacyPrescriptionResponses];
+
+export type CancelPharmacyPrescriptionData = {
+    body: PharmacyReasonRequest;
+    path: {
+        prescriptionId: string;
+    };
+    query?: never;
+    url: '/api/v1/prescriptions/{prescriptionId}/cancel';
+};
+
+export type CancelPharmacyPrescriptionErrors = {
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type CancelPharmacyPrescriptionError = CancelPharmacyPrescriptionErrors[keyof CancelPharmacyPrescriptionErrors];
+
+export type CancelPharmacyPrescriptionResponses = {
+    /**
+     * Cancelled prescription.
+     */
+    200: PrescriptionDetailResponse;
+};
+
+export type CancelPharmacyPrescriptionResponse = CancelPharmacyPrescriptionResponses[keyof CancelPharmacyPrescriptionResponses];
+
+export type OpenPharmacyDispensationData = {
+    body: OpenDispensationRequest;
+    path: {
+        prescriptionId: string;
+    };
+    query?: never;
+    url: '/api/v1/prescriptions/{prescriptionId}/dispensations';
+};
+
+export type OpenPharmacyDispensationErrors = {
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type OpenPharmacyDispensationError = OpenPharmacyDispensationErrors[keyof OpenPharmacyDispensationErrors];
+
+export type OpenPharmacyDispensationResponses = {
+    /**
+     * Dispensing session opened.
+     */
+    201: PharmacyResourceResponse;
+};
+
+export type OpenPharmacyDispensationResponse = OpenPharmacyDispensationResponses[keyof OpenPharmacyDispensationResponses];
+
+export type DispensePharmacyItemData = {
+    body: DispenseItemRequest;
+    headers: {
+        /**
+         * UUID that makes retries with the same operation payload return the original result.
+         */
+        'Idempotency-Key': string;
+    };
+    path: {
+        dispensationId: string;
+    };
+    query?: never;
+    url: '/api/v1/dispensations/{dispensationId}/items';
+};
+
+export type DispensePharmacyItemErrors = {
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type DispensePharmacyItemError = DispensePharmacyItemErrors[keyof DispensePharmacyItemErrors];
+
+export type DispensePharmacyItemResponses = {
+    /**
+     * Dispensed item and ledger movement created.
+     */
+    201: PharmacyResourceResponse;
+};
+
+export type DispensePharmacyItemResponse = DispensePharmacyItemResponses[keyof DispensePharmacyItemResponses];
+
+export type CompletePharmacyDispensationData = {
+    body?: never;
+    path: {
+        dispensationId: string;
+    };
+    query?: never;
+    url: '/api/v1/dispensations/{dispensationId}/complete';
+};
+
+export type CompletePharmacyDispensationErrors = {
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type CompletePharmacyDispensationError = CompletePharmacyDispensationErrors[keyof CompletePharmacyDispensationErrors];
+
+export type CompletePharmacyDispensationResponses = {
+    /**
+     * Session completed.
+     */
+    200: PharmacyStatusResponse;
+};
+
+export type CompletePharmacyDispensationResponse = CompletePharmacyDispensationResponses[keyof CompletePharmacyDispensationResponses];
+
+export type CancelPharmacyDispensationData = {
+    body: PharmacyReasonRequest;
+    path: {
+        dispensationId: string;
+    };
+    query?: never;
+    url: '/api/v1/dispensations/{dispensationId}/cancel';
+};
+
+export type CancelPharmacyDispensationErrors = {
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type CancelPharmacyDispensationError = CancelPharmacyDispensationErrors[keyof CancelPharmacyDispensationErrors];
+
+export type CancelPharmacyDispensationResponses = {
+    /**
+     * Session cancelled.
+     */
+    200: PharmacyStatusResponse;
+};
+
+export type CancelPharmacyDispensationResponse = CancelPharmacyDispensationResponses[keyof CancelPharmacyDispensationResponses];
+
+export type ReversePharmacyDispensationItemData = {
+    body: ReverseDispensationRequest;
+    path: {
+        itemId: string;
+    };
+    query?: never;
+    url: '/api/v1/pharmacy/dispensation-items/{itemId}/reverse';
+};
+
+export type ReversePharmacyDispensationItemErrors = {
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type ReversePharmacyDispensationItemError = ReversePharmacyDispensationItemErrors[keyof ReversePharmacyDispensationItemErrors];
+
+export type ReversePharmacyDispensationItemResponses = {
+    /**
+     * Reversal movement created.
+     */
+    200: PharmacyResourceResponse;
+};
+
+export type ReversePharmacyDispensationItemResponse = ReversePharmacyDispensationItemResponses[keyof ReversePharmacyDispensationItemResponses];
+
+export type ListBillingBranchesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/billing/branches';
+};
+
+export type ListBillingBranchesErrors = {
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+};
+
+export type ListBillingBranchesError = ListBillingBranchesErrors[keyof ListBillingBranchesErrors];
+
+export type ListBillingBranchesResponses = {
+    /**
+     * Scoped billing branches.
+     */
+    200: BillingBranchListResponse;
+};
+
+export type ListBillingBranchesResponse = ListBillingBranchesResponses[keyof ListBillingBranchesResponses];
+
+export type GetBillingWorkspaceData = {
+    body?: never;
+    path?: never;
+    query: {
+        branchPublicId: string;
+    };
+    url: '/api/v1/billing/workspace';
+};
+
+export type GetBillingWorkspaceErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+};
+
+export type GetBillingWorkspaceError = GetBillingWorkspaceErrors[keyof GetBillingWorkspaceErrors];
+
+export type GetBillingWorkspaceResponses = {
+    /**
+     * Branch billing workspace.
+     */
+    200: BillingWorkspaceResponse;
+};
+
+export type GetBillingWorkspaceResponse = GetBillingWorkspaceResponses[keyof GetBillingWorkspaceResponses];
+
+export type CreateEncounterInvoiceData = {
+    body?: CreateInvoiceRequest;
+    path: {
+        encounterId: string;
+    };
+    query?: never;
+    url: '/api/v1/encounters/{encounterId}/invoices';
+};
+
+export type CreateEncounterInvoiceErrors = {
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type CreateEncounterInvoiceError = CreateEncounterInvoiceErrors[keyof CreateEncounterInvoiceErrors];
+
+export type CreateEncounterInvoiceResponses = {
+    /**
+     * Draft invoice created or returned.
+     */
+    201: InvoiceDetailResponse;
+};
+
+export type CreateEncounterInvoiceResponse = CreateEncounterInvoiceResponses[keyof CreateEncounterInvoiceResponses];
+
+export type GetInvoiceData = {
+    body?: never;
+    path: {
+        invoiceId: string;
+    };
+    query?: never;
+    url: '/api/v1/invoices/{invoiceId}';
+};
+
+export type GetInvoiceErrors = {
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+};
+
+export type GetInvoiceError = GetInvoiceErrors[keyof GetInvoiceErrors];
+
+export type GetInvoiceResponses = {
+    /**
+     * Invoice details.
+     */
+    200: InvoiceDetailResponse;
+};
+
+export type GetInvoiceResponse = GetInvoiceResponses[keyof GetInvoiceResponses];
+
+export type SynchronizeInvoiceChargesData = {
+    body?: never;
+    path: {
+        invoiceId: string;
+    };
+    query?: never;
+    url: '/api/v1/invoices/{invoiceId}/synchronize';
+};
+
+export type SynchronizeInvoiceChargesErrors = {
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type SynchronizeInvoiceChargesError = SynchronizeInvoiceChargesErrors[keyof SynchronizeInvoiceChargesErrors];
+
+export type SynchronizeInvoiceChargesResponses = {
+    /**
+     * Invoice charges synchronized.
+     */
+    200: InvoiceDetailResponse;
+};
+
+export type SynchronizeInvoiceChargesResponse = SynchronizeInvoiceChargesResponses[keyof SynchronizeInvoiceChargesResponses];
+
+export type AddManualInvoiceItemData = {
+    body: ManualInvoiceItemRequest;
+    path: {
+        invoiceId: string;
+    };
+    query?: never;
+    url: '/api/v1/invoices/{invoiceId}/items';
+};
+
+export type AddManualInvoiceItemErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type AddManualInvoiceItemError = AddManualInvoiceItemErrors[keyof AddManualInvoiceItemErrors];
+
+export type AddManualInvoiceItemResponses = {
+    /**
+     * Manual charge added.
+     */
+    201: InvoiceDetailResponse;
+};
+
+export type AddManualInvoiceItemResponse = AddManualInvoiceItemResponses[keyof AddManualInvoiceItemResponses];
+
+export type SetInvoiceInsuranceAmountData = {
+    body: InvoiceInsuranceRequest;
+    path: {
+        invoiceId: string;
+    };
+    query?: never;
+    url: '/api/v1/invoices/{invoiceId}/insurance';
+};
+
+export type SetInvoiceInsuranceAmountErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type SetInvoiceInsuranceAmountError = SetInvoiceInsuranceAmountErrors[keyof SetInvoiceInsuranceAmountErrors];
+
+export type SetInvoiceInsuranceAmountResponses = {
+    /**
+     * Insurance amount updated.
+     */
+    200: InvoiceDetailResponse;
+};
+
+export type SetInvoiceInsuranceAmountResponse = SetInvoiceInsuranceAmountResponses[keyof SetInvoiceInsuranceAmountResponses];
+
+export type IssueInvoiceData = {
+    body?: IssueInvoiceRequest;
+    headers: {
+        /**
+         * UUID that makes retries with the same operation payload return the original result.
+         */
+        'Idempotency-Key': string;
+    };
+    path: {
+        invoiceId: string;
+    };
+    query?: never;
+    url: '/api/v1/invoices/{invoiceId}/issue';
+};
+
+export type IssueInvoiceErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type IssueInvoiceError = IssueInvoiceErrors[keyof IssueInvoiceErrors];
+
+export type IssueInvoiceResponses = {
+    /**
+     * Invoice issued; an identical retry returns the same invoice.
+     */
+    200: InvoiceDetailResponse;
+};
+
+export type IssueInvoiceResponse = IssueInvoiceResponses[keyof IssueInvoiceResponses];
+
+export type RecordInvoicePaymentData = {
+    body: InvoicePaymentRequest;
+    headers: {
+        /**
+         * UUID that makes retries with the same operation payload return the original result.
+         */
+        'Idempotency-Key': string;
+    };
+    path: {
+        invoiceId: string;
+    };
+    query?: never;
+    url: '/api/v1/invoices/{invoiceId}/payments';
+};
+
+export type RecordInvoicePaymentErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type RecordInvoicePaymentError = RecordInvoicePaymentErrors[keyof RecordInvoicePaymentErrors];
+
+export type RecordInvoicePaymentResponses = {
+    /**
+     * Payment recorded and allocated.
+     */
+    201: InvoiceDetailResponse;
+};
+
+export type RecordInvoicePaymentResponse = RecordInvoicePaymentResponses[keyof RecordInvoicePaymentResponses];
+
+export type RefundPaymentAllocationData = {
+    body: PaymentRefundRequest;
+    headers: {
+        /**
+         * UUID that makes retries with the same operation payload return the original result.
+         */
+        'Idempotency-Key': string;
+    };
+    path: {
+        allocationId: string;
+    };
+    query?: never;
+    url: '/api/v1/payment-allocations/{allocationId}/refunds';
+};
+
+export type RefundPaymentAllocationErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type RefundPaymentAllocationError = RefundPaymentAllocationErrors[keyof RefundPaymentAllocationErrors];
+
+export type RefundPaymentAllocationResponses = {
+    /**
+     * Refund recorded.
+     */
+    201: BillingResourceResponse;
+};
+
+export type RefundPaymentAllocationResponse = RefundPaymentAllocationResponses[keyof RefundPaymentAllocationResponses];
+
+export type VoidInvoiceData = {
+    body: BillingReasonRequest;
+    path: {
+        invoiceId: string;
+    };
+    query?: never;
+    url: '/api/v1/invoices/{invoiceId}/void';
+};
+
+export type VoidInvoiceErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type VoidInvoiceError = VoidInvoiceErrors[keyof VoidInvoiceErrors];
+
+export type VoidInvoiceResponses = {
+    /**
+     * Invoice voided.
+     */
+    200: InvoiceDetailResponse;
+};
+
+export type VoidInvoiceResponse = VoidInvoiceResponses[keyof VoidInvoiceResponses];
+
+export type ListReportBranchesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/reports/branches';
+};
+
+export type ListReportBranchesErrors = {
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+};
+
+export type ListReportBranchesError = ListReportBranchesErrors[keyof ListReportBranchesErrors];
+
+export type ListReportBranchesResponses = {
+    /**
+     * Branch-scoped reporting capabilities.
+     */
+    200: ReportBranchListResponse;
+};
+
+export type ListReportBranchesResponse = ListReportBranchesResponses[keyof ListReportBranchesResponses];
+
+export type GetOperationsReportData = {
+    body?: never;
+    path?: never;
+    query: {
+        branchPublicId: string;
+        from: string;
+        to: string;
+    };
+    url: '/api/v1/reports/operations';
+};
+
+export type GetOperationsReportErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+};
+
+export type GetOperationsReportError = GetOperationsReportErrors[keyof GetOperationsReportErrors];
+
+export type GetOperationsReportResponses = {
+    /**
+     * Operational report in the branch business timezone.
+     */
+    200: OperationsReportResponse;
+};
+
+export type GetOperationsReportResponse = GetOperationsReportResponses[keyof GetOperationsReportResponses];
+
+export type GetRevenueReportData = {
+    body?: never;
+    path?: never;
+    query: {
+        branchPublicId: string;
+        from: string;
+        to: string;
+    };
+    url: '/api/v1/reports/revenue';
+};
+
+export type GetRevenueReportErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+};
+
+export type GetRevenueReportError = GetRevenueReportErrors[keyof GetRevenueReportErrors];
+
+export type GetRevenueReportResponses = {
+    /**
+     * Revenue report grouped by business date and payment method.
+     */
+    200: RevenueReportResponse;
+};
+
+export type GetRevenueReportResponse = GetRevenueReportResponses[keyof GetRevenueReportResponses];
+
+export type GetInventoryReportData = {
+    body?: never;
+    path?: never;
+    query: {
+        branchPublicId: string;
+        from: string;
+        to: string;
+    };
+    url: '/api/v1/reports/inventory';
+};
+
+export type GetInventoryReportErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+};
+
+export type GetInventoryReportError = GetInventoryReportErrors[keyof GetInventoryReportErrors];
+
+export type GetInventoryReportResponses = {
+    /**
+     * Usage and inventory alert report.
+     */
+    200: InventoryReportResponse;
+};
+
+export type GetInventoryReportResponse = GetInventoryReportResponses[keyof GetInventoryReportResponses];

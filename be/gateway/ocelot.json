@@ -61,6 +61,26 @@
       "Priority": 20
     },
     {
+      "UpstreamPathTemplate": "/api/v1/admin/appointments",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS" ],
+      "DownstreamPathTemplate": "/api/v1/admin/appointments",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        { "Host": "localhost", "Port": 4002 }
+      ],
+      "Priority": 21
+    },
+    {
+      "UpstreamPathTemplate": "/api/v1/admin/appointments/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS" ],
+      "DownstreamPathTemplate": "/api/v1/admin/appointments/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        { "Host": "localhost", "Port": 4002 }
+      ],
+      "Priority": 20
+    },
+    {
       "UpstreamPathTemplate": "/api/v1/admin/{everything}",
       "UpstreamHttpMethod": [ "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS" ],
       "DownstreamPathTemplate": "/api/v1/admin/{everything}",

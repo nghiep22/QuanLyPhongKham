@@ -21,6 +21,8 @@ const environmentSchema = z.object({
   SQL_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(5_000),
   SQL_USER: z.string().optional(),
   SQL_PASSWORD: z.string().optional(),
+  SQL_REPORT_USER: z.string().optional(),
+  SQL_REPORT_PASSWORD: z.string().optional(),
   JWT_ISSUER: z.string().min(3).default('private-clinic-auth'),
   JWT_AUDIENCE: z.string().min(3).default('private-clinic-api'),
   JWT_PUBLIC_KEY_PATH: z.string().default(fileURLToPath(new URL('../../../../.runtime/auth-public.pem', import.meta.url))),

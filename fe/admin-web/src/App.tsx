@@ -14,6 +14,13 @@ import { StaffPage } from './features/staff/staff-page'
 import { PatientLinksPage } from './features/patient-links/patient-links-page'
 import { CatalogPage } from './features/catalog/catalog-page'
 import { PatientsPage } from './features/patients/patients-page'
+import { AppointmentsPage } from './features/appointments/appointments-page'
+import { SchedulingPage } from './features/appointments/scheduling-page'
+import { ReceptionPage } from './features/reception/reception-page'
+import { ClinicalPage } from './features/clinical/clinical-page'
+import { PharmacyPage } from './features/pharmacy/pharmacy-page'
+import { BillingPage } from './features/billing/billing-page'
+import { ReportsPage } from './features/reports/reports-page'
 
 const loginSchema = z.object({
   identifier: z.string().trim().min(3, 'Nhập tài khoản, email hoặc số điện thoại.'),
@@ -101,6 +108,20 @@ function AdminLayout() {
     || user?.permissions.includes('MASTER_DATA_MANAGE')
   const canManagePatients = user?.roles.some((role) => role.code === 'ADMIN')
     || user?.permissions.includes('PATIENTS_MANAGE')
+  const canManageAppointments = user?.roles.some((role) => role.code === 'ADMIN')
+    || user?.permissions.includes('APPOINTMENTS_MANAGE')
+  const canManageSchedules = user?.roles.some((role) => role.code === 'ADMIN')
+    || user?.permissions.includes('SCHEDULES_MANAGE')
+  const canManageReception = user?.roles.some((role) => role.code === 'ADMIN')
+    || user?.permissions.includes('QUEUE_MANAGE') || user?.permissions.includes('ENCOUNTERS_CREATE')
+  const canUseClinical = user?.permissions.includes('ENCOUNTERS_CLINICAL')
+  const canUsePharmacy = user?.permissions.some((permission) =>
+    ['PRESCRIPTIONS_WRITE', 'PHARMACY_DISPENSE', 'INVENTORY_MANAGE'].includes(permission))
+  const canUseBilling = user?.roles.some((role) => role.code === 'ADMIN')
+    || user?.permissions.some((permission) =>
+      ['BILLING_MANAGE', 'PAYMENT_COLLECT', 'PAYMENT_REFUND'].includes(permission))
+  const canViewReports = user?.roles.some((role) => role.code === 'ADMIN')
+    || user?.permissions.includes('REPORTS_VIEW')
 
   const onLogout = async () => {
     setIsLoggingOut(true)
@@ -117,10 +138,14 @@ function AdminLayout() {
           {canManagePatientLinks && <NavLink to="/patient-links">Liên kết hồ sơ</NavLink>}
           {canManageCatalog && <NavLink to="/catalog">Danh mục</NavLink>}
           {canManagePatients && <NavLink to="/patients">Bệnh nhân</NavLink>}
+          {canManageAppointments && <NavLink to="/appointments">Lịch hẹn</NavLink>}
+          {canManageSchedules && <NavLink to="/schedules">Ca & slot</NavLink>}
+          {canManageReception && <NavLink to="/reception">Tiếp nhận</NavLink>}
+          {canUseClinical && <NavLink to="/clinical">Khám bệnh</NavLink>}
+          {canUsePharmacy && <NavLink to="/pharmacy">Nhà thuốc</NavLink>}
+          {canUseBilling && <NavLink to="/billing">Thu ngân</NavLink>}
+          {canViewReports && <NavLink to="/reports">Báo cáo</NavLink>}
           <NavLink to="/change-password">Đổi mật khẩu</NavLink>
-          <a href="#appointments">Lịch hẹn</a>
-          <a href="#medical-records">Khám bệnh</a>
-          <a href="#billing">Thu ngân</a>
         </nav>
         <div className="sidebar-user">
           <strong>{user?.displayName}</strong>
@@ -182,6 +207,13 @@ export default function App() {
         <Route path="/patient-links" element={<PatientLinksPage />} />
         <Route path="/catalog" element={<CatalogPage />} />
         <Route path="/patients" element={<PatientsPage />} />
+        <Route path="/appointments" element={<AppointmentsPage />} />
+        <Route path="/schedules" element={<SchedulingPage />} />
+        <Route path="/reception" element={<ReceptionPage />} />
+        <Route path="/clinical" element={<ClinicalPage />} />
+        <Route path="/pharmacy" element={<PharmacyPage />} />
+        <Route path="/billing" element={<BillingPage />} />
+        <Route path="/reports" element={<ReportsPage />} />
         <Route path="/change-password" element={<ChangePasswordPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

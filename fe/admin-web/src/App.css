@@ -4,6 +4,21 @@
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
+.report-toolbar { display: flex; align-items: end; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.report-toolbar label { min-width: 170px; flex: 1; }
+.report-section { margin-top: 1rem; }
+.report-kpis { margin: 1rem 0; }
+.report-table-wrap { overflow-x: auto; }
+.report-table { width: 100%; border-collapse: collapse; min-width: 620px; }
+.report-table th, .report-table td { padding: .75rem; text-align: left; border-bottom: 1px solid #e2e8f0; }
+.report-table th { color: #475569; font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; }
+.report-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: 1rem; }
+.report-row { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: .75rem 0; border-bottom: 1px solid #e2e8f0; }
+.report-row > span:first-child { display: flex; flex-direction: column; }
+.report-row small { color: #64748b; margin-top: .2rem; }
+.alert-row > span:last-child { color: #b45309; font-weight: 700; text-align: right; }
+@media (max-width: 800px) { .report-columns { grid-template-columns: 1fr; } }
+
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; min-height: 100vh; }
 a { color: inherit; text-decoration: none; }
@@ -130,12 +145,90 @@ header { display: flex; align-items: center; justify-content: space-between; gap
 .patient-duplicate-warning h3 { margin-top: 0; }
 .patient-duplicate-warning li { margin: 8px 0; }
 .patient-duplicate-warning button { margin-top: 14px; }
+.schedule-toolbar { max-width: 520px; }
+.schedule-workspace { display: grid; grid-template-columns: minmax(360px, .8fr) minmax(480px, 1.2fr); gap: 22px; align-items: start; }
+.schedule-form { margin-top: 0; }
+.schedule-list { display: grid; gap: 14px; }
+.schedule-list > h2, .appointment-list > h2 { margin-top: 0; }
+.schedule-card, .appointment-card { padding: 20px; border: 1px solid #dce7ec; border-radius: 15px; background: white; box-shadow: 0 8px 24px rgba(26, 65, 86, .05); }
+.schedule-card h3, .appointment-card h3 { margin: 10px 0 3px; }
+.schedule-card p, .appointment-card p { margin: 5px 0; }
+.schedule-card small { display: block; color: #657a87; margin-top: 6px; }
+.generate-row { display: grid; grid-template-columns: 1fr 1fr auto; align-items: end; gap: 10px; margin-top: 16px; }
+.generate-row button { min-height: 46px; }
+.appointment-toolbar { display: grid; grid-template-columns: 1fr 180px 190px minmax(220px, 1fr); gap: 14px; align-items: end; }
+.appointment-list { display: grid; gap: 14px; margin-top: 24px; }
+.appointment-actions, .choice-list { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+.appointment-warning { color: #805910; font-weight: 700; }
+.counter-booking { margin-bottom: 22px; }
+.counter-flow { display: grid; gap: 14px; padding-top: 18px; border-top: 1px solid #dce7ec; }
+.inline-search { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 10px; }
+.inline-search button { min-height: 48px; }
+.booking-fields { display: grid; grid-template-columns: 1fr 1fr auto; align-items: end; gap: 12px; }
+.booking-fields button { min-height: 48px; }
+.choice-list button { width: auto; }
+.selected-choice { background: #153849; }
+.status-pending { background: #fff6df; color: #805910; }
+.status-confirmed { background: #dff3ec; color: #17614f; }
+.status-cancelled, .status-expired, .status-no_show { background: #fff0f1; color: #a12431; }
+.reception-toolbar { display: grid; grid-template-columns: minmax(260px, .7fr) minmax(360px, 1.3fr) auto; align-items: end; gap: 16px; }
+.reception-toolbar > button { min-height: 48px; }
+.policy-note { display: grid; gap: 5px; padding: 11px 14px; border-radius: 10px; background: #eef8f5; }
+.policy-note span { color: #5e7182; font-size: 13px; }
+.reception-grid { display: grid; grid-template-columns: minmax(540px, 1.35fr) minmax(340px, .65fr); gap: 20px; align-items: start; }
+.reception-grid > .panel { margin-top: 0; }
+.queue-columns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.queue-columns h3 { margin: 12px 0 10px; font-size: 14px; }
+.queue-ticket { display: grid; grid-template-columns: auto 1fr; gap: 10px; margin-bottom: 9px; padding: 12px; border: 1px solid #dce7ec; border-radius: 11px; }
+.queue-ticket > strong { align-self: start; padding: 7px 9px; border-radius: 8px; background: #e4edf2; font-size: 17px; }
+.queue-ticket div { display: grid; gap: 3px; min-width: 0; }
+.queue-ticket span, .queue-ticket small, .arrival-card span, .arrival-card small { color: #687c89; font-size: 12px; }
+.queue-serving { border-color: #71b7a6; background: #eef9f6; }
+.queue-called { border-color: #e4ba61; background: #fff9e9; }
+.empty-column { padding: 20px 10px; border: 1px dashed #cbd9e1; border-radius: 10px; color: #6b7f8c; text-align: center; }
+.arrival-list { display: grid; gap: 10px; }
+.arrival-list > p { margin-top: -6px; }
+.arrival-card { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; padding: 13px; border: 1px solid #dce7ec; border-radius: 11px; }
+.arrival-card div { display: grid; gap: 4px; }
+.arrival-card button { padding: 10px 12px; }
+.walk-in-panel { margin-top: 20px; }
+.walk-in-fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; gap: 12px; margin-top: 18px; }
+.walk-in-fields .wide { grid-column: span 3; }
+.walk-in-fields > button { min-height: 48px; }
+.clinical-toolbar { display: grid; grid-template-columns: minmax(240px, 1fr) minmax(280px, 1fr) auto; align-items: end; gap: 14px; }
+.clinical-toolbar button { min-height: 48px; }
+.clinical-workspace { display: grid; grid-template-columns: minmax(290px, .65fr) minmax(520px, 1.35fr); gap: 20px; align-items: start; }
+.clinical-list-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+.summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 18px 0; }
+.summary-grid > div { display: grid; gap: 5px; padding: 12px; border-radius: 10px; background: #eef5f7; }
+.summary-grid span { color: #687c89; font-size: 12px; }
+.summary-grid strong { font-size: 16px; }
+.clinical-list { display: grid; gap: 8px; margin-top: 0; }
+.clinical-list-item { display: grid; gap: 5px; width: 100%; padding: 14px; border: 1px solid #dce7ec; border-radius: 12px; background: white; color: #17324d; text-align: left; }
+.clinical-list-item.selected, .clinical-list-item:hover { border-color: #69af9e; background: #eef8f5; }
+.clinical-list-item small { color: #687c89; }
+.clinical-detail > .panel:first-child { margin-top: 0; }
+.clinical-facts { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 16px; color: #536b78; }
+.clinical-actions { display: flex; gap: 8px; }
+.clinical-form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; gap: 12px; margin-top: 18px; }
+.clinical-form-grid button { min-height: 48px; }
+.clinical-notes { display: grid; gap: 12px; margin-top: 16px; }
+.clinical-notes textarea { resize: vertical; }
+.clinical-record { padding: 12px; border: 1px solid #e1e9ec; border-radius: 10px; background: #f7fafb; }
+.clinical-service { padding: 16px 0; border-top: 1px solid #e1e9ec; }
+.clinical-service p { margin-bottom: 0; }
+.clinical-signature { display: grid; gap: 6px; margin-top: 16px; padding: 12px; border-radius: 10px; background: #eef8f5; }
+.clinical-signature code { overflow-wrap: anywhere; font-size: 12px; }
+.status-in_progress { background: #fff6df; color: #805910; }
+.status-completed { background: #e5efff; color: #3657a5; }
+.status-signed { background: #dff3ec; color: #17614f; }
 
 @media (max-width: 900px) {
   .app-shell { grid-template-columns: 1fr; }
   aside { display: none; }
   .module-grid { grid-template-columns: 1fr; }
   .dashboard { padding: 24px; }
-  .staff-workspace, .staff-toolbar, .form-grid, .patient-link-toolbar, .patient-link-details, .catalog-columns, .price-form, .patient-search-bar, .patient-workspace { grid-template-columns: 1fr; }
+  .staff-workspace, .staff-toolbar, .form-grid, .patient-link-toolbar, .patient-link-details, .catalog-columns, .price-form, .patient-search-bar, .patient-workspace, .schedule-workspace, .generate-row, .appointment-toolbar, .inline-search, .booking-fields, .reception-toolbar, .reception-grid, .queue-columns, .walk-in-fields, .clinical-toolbar, .clinical-workspace, .clinical-form-grid, .summary-grid { grid-template-columns: 1fr; }
+  .walk-in-fields .wide { grid-column: auto; }
   .role-grant { grid-template-columns: 1fr; }
 }

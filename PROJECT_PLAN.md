@@ -25,15 +25,15 @@ Tài liệu này không thay thế đặc tả chi tiết của từng màn hìn
 |---|---|
 | Thư mục `fe/` và `be/` | Đã tạo |
 | SQL Server `quan_ly_phong_kham.sql` | Baseline candidate: đã có luồng lõi, còn gap/defect P0 tại mục 8.12 |
-| Database objects | 70 bảng, 23 view, 87 stored procedure, 30 trigger |
-| Kiểm thử database | Baseline idempotent; 8 regression suite cho session, staff/RBAC, bảo vệ Admin, password lifecycle, patient registration, portal link, catalog/directory và patient registry đều đạt; chưa coi production-ready trước khi hoàn tất mọi ca P0 |
+| Database objects | 70 bảng, 23 view, 158 stored procedure, 30 trigger |
+| Kiểm thử database | Baseline idempotent; 17 regression suite đến reports/outbox-notification đều đạt, cùng harness đồng thời queue và payment; chưa coi production-ready trước khi hoàn tất mọi ca P0 |
 | Gateway | Đã scaffold; live/ready, request ID và route Auth/Clinic hoạt động |
 | Auth Service | Slice 06 hoàn tất: auth/session, workforce/RBAC, OTP và yêu cầu/duyệt/thu hồi patient portal link |
-| Clinic Service | Slice 08 hoàn tất: danh mục/directory, hồ sơ hành chính bệnh nhân theo chi nhánh, cảnh báo trùng, cập nhật có rowversion và đọc tóm tắt lâm sàng theo quan hệ chăm sóc |
-| Scheduler Worker | Đã scaffold; process lifecycle và health hoạt động |
-| Admin Web | Đã có đăng nhập/protected session, Nhân sự, password lifecycle, duyệt liên kết hồ sơ, quản trị Danh mục và hồ sơ hành chính bệnh nhân |
-| Mobile | Đã có đăng ký/OTP, đăng nhập, SecureStore, danh sách hồ sơ, yêu cầu/hủy/thu hồi liên kết |
-| OpenAPI contract | OpenAPI 3.1 đã mô tả health, Auth, Workforce/RBAC, patient portal link, catalog/public directory và patient registry/clinical summary; lint và generated types/fetch SDK hoạt động |
+| Clinic Service | Slice 13 hoàn tất: tiếp nhận, khám, nhà thuốc và hóa đơn/thanh toán/hoàn tiền theo chi nhánh |
+| Scheduler Worker | Tự động hết hạn giữ chỗ mỗi phút và sinh trước slot định kỳ; readiness kiểm tra SQL, liveness độc lập |
+| Admin Web | Đã có các màn Nhân sự, liên kết hồ sơ, Danh mục, Bệnh nhân, Lịch hẹn, Ca/slot, Tiếp nhận, Khám bệnh, Nhà thuốc và Thu ngân |
+| Mobile | Đã có onboarding/portal link và đặt, xem, đổi, hủy lịch cho hồ sơ được ủy quyền |
+| OpenAPI contract | OpenAPI 3.1 v0.9 đã mô tả health, Auth, Workforce/RBAC và các luồng Clinic đến billing/payment/refund; lint và generated types/fetch SDK hoạt động |
 
 Trong Phase 0, sửa các defect P0 ngay trên baseline candidate, chạy lại toàn bộ test rồi mới chuyển đúng một lần sang `be/database/baseline/001_initial.sql` và ghi checksum. Sau khi baseline đã dùng ở môi trường chung hoặc production, không sửa ngược; mọi thay đổi phải đi qua migration mới.
 
@@ -120,13 +120,13 @@ Hai service dùng chung một SQL Server trong giai đoạn đầu, nhưng **kh�
 - `sp_auth_verify_patient_registration` là transaction boundary ngoại lệ của workflow onboarding trong shared SQL baseline: chỉ được tạo mới đồng thời user PATIENT, patient và SELF link sau OTP; không được dùng để claim/cập nhật hồ sơ có sẵn. Nếu tách database, thay transaction này bằng orchestration idempotent Auth → Clinic → Auth có trạng thái và bước bù.
 - Cross-service read contract phải đủ hai chiều: Clinic đọc principal/doctor/patient-access của Auth; Auth đọc reference tối thiểu về branch/specialty/service/patient của Clinic để validate staff assignment và portal link. Chỉ dùng versioned view/read procedure có caller `GRANT` rõ, không đọc bảng owner trực tiếp.
 - Outbox là ngoại lệ có chủ sở hữu theo thao tác: Auth/Clinic chỉ **append** event trong transaction domain; Worker chỉ **claim/publish/mark retry/dead-letter**. Notification delivery thuộc Worker. Audit chỉ append qua `sp_write_audit` từ command owner.
-- Tạo `be/database/ownership.yml` ánh xạ toàn bộ bảng/view và 78 procedure hiện có sang owner/caller; CI từ chối procedure chưa được khai báo hoặc `GRANT` vượt quyền.
+- Tạo `be/database/ownership.yml` ánh xạ toàn bộ bảng/view và 118 procedure hiện có sang owner/caller; CI từ chối procedure chưa được khai báo hoặc `GRANT` vượt quyền.
 - `clinic-service` có thể xác thực JWT cục bộ bằng public key/JWKS và kiểm tra token version theo cơ chế đã chốt; không gọi Auth cho từng request.
 - Nếu một use case mới buộc ghi xuyên hai ownership, ưu tiên chuyển command trọn vẹn về một owner hoặc dùng orchestration có idempotency/outbox và bước bù; không giả định transaction phân tán.
 - Mỗi service có database login riêng. CI kiểm tra Auth không `EXECUTE` được procedure Clinic và ngược lại.
 - `/api/v1/reports/*` và `/api/v1/audit/*` vẫn do Clinic phục vụ nhưng dùng connection pool `clinic_report_reader`; principal/permission lấy từ token đã xác minh và `SESSION_CONTEXT`, dữ liệu trả về luôn scope tại read procedure.
 
-### 4.4 Phân nhóm ownership cho 78 procedure hiện có
+### 4.4 Phân nhóm ownership cho 78 procedure ban đầu
 
 Bảng này là inventory khởi tạo cho `be/database/ownership.yml`. “Owner” là nơi được phép thay đổi logic; caller thực tế còn phải được giới hạn bằng `GRANT`.
 
@@ -979,7 +979,10 @@ Response lỗi:
 
 ## 14. Outbox, notification và worker
 
-Danh sách event mục tiêu cho MVP/P1 dưới đây là contract cần triển khai. Baseline hiện mới ghi `APPOINTMENT_CREATED`; tất cả event còn lại cần migration/procedure và test bảo đảm được ghi cùng transaction nghiệp vụ.
+Danh sách event mục tiêu cho MVP/P1 dưới đây là contract tiến hóa. Các lát cắt hiện
+đã ghi event cho vòng đời appointment, encounter, prescription, dispensation,
+invoice và payment/refund; event chưa có producer nghiệp vụ vẫn cần procedure và
+test bảo đảm được ghi cùng transaction trước khi publisher xử lý.
 
 Envelope bắt buộc, được version từ đầu:
 
@@ -1038,7 +1041,10 @@ Worker jobs:
 
 Mỗi worker instance phải có `workerId`, lease expiry và heartbeat. Không dùng `setInterval` đơn giản cho job quan trọng nếu có nhiều instance.
 
-Riêng job sinh slot chưa được chạy bằng `clinic_job_executor` của baseline vì `sp_generate_doctor_slots` còn yêu cầu actor có `SCHEDULES_MANAGE`. Phase 0 phải tạo system command/audit phù hợp và chỉ cấp đúng quyền cần thiết trước khi bật job tự động.
+Job sinh slot, hết hạn hold, lập lịch reminder, claim/complete/fail outbox và
+notification đều chạy qua system procedure chỉ cấp cho `clinic_job_executor`.
+Timer trong process chỉ kích hoạt poll; khóa ứng dụng hoặc lease trong SQL là nơi
+bảo đảm idempotency và loại trừ giữa nhiều instance.
 
 ## 15. Chiến lược kiểm thử
 
@@ -1158,6 +1164,13 @@ Health readiness phải kiểm tra dependency cần thiết nhưng có timeout n
 | Slice 06 — Patient Portal Linking | **DONE** | 2026-09-10 | SEC-10/SEC-13 và PAT-08/09: patient gửi/hủy/theo dõi yêu cầu claim hồ sơ cũ/người thân; decoy chống enumeration; nhân viên duyệt/từ chối theo chi nhánh bằng permission riêng + rowversion; kích hoạt/thu hồi link có audit; Mobile và Admin Web hoàn chỉnh; 6 SQL regression + 40 application test đạt. |
 | Slice 07 — Organization Catalog & Public Directory | **DONE** | 2026-09-10 | ADM-02/04 và public directory: branch/specialty/service/doctor read API; phòng theo chi nhánh; dịch vụ cấp tổ chức; giá/khả dụng VND theo hiệu lực không chồng nhau; JWT Clinic xác minh cục bộ và kiểm tra token version; branch-scoped RBAC, ETag/If-Match, Gateway/generated client/Admin Web; 7 SQL regression + 60 application test đạt. |
 | Slice 08 — Patient Registry & Scoped Clinical Summary | **DONE** | 2026-09-13 | PAT-01/02/03: tạo, tìm, xem, sửa hồ sơ hành chính theo chi nhánh; đối chiếu trùng tên/ngày sinh/điện thoại/định danh, override có lý do audit; `If-Match` chống ghi đè. Đọc dị ứng/bệnh nền chỉ cho bác sĩ phụ trách hoặc điều dưỡng tạo lượt khám đang mở, audit mỗi lần đọc; không trả kết quả nội bộ cho patient. Gateway, OpenAPI/generated client, Admin Web; 8 SQL regression + 65 application test và smoke Gateway → Auth/Clinic → SQL đạt. |
+| Slice 09 — Scheduling & Appointments Core | **DONE** | 2026-09-13 | SCH-01/02/05/06/08 và APT-01–09 lõi: tạo ca/khoảng nghỉ, sinh slot idempotent theo múi giờ, availability công khai theo bác sĩ/dịch vụ/giá hiệu lực; bệnh nhân đặt/xem/đổi/hủy lịch được ủy quyền, nhân viên đặt tại quầy/xác nhận/hủy/no-show theo scope chi nhánh. Booking/reschedule khóa slot, chống double-booking và retry bằng idempotency key; history, audit và outbox cùng transaction. Worker hết hạn hold/sinh slot; Gateway, OpenAPI/client, Mobile và Admin Web hoàn chỉnh; 9 SQL regression + 75 application test đạt. |
+| Slice 10 — Reception & Queue | **DONE** | 2026-09-13 | QUE-01–06 lõi: check-in CONFIRMED và walk-in tạo nguyên tử Encounter + dịch vụ đầu + QueueTicket; cửa sổ check-in cấu hình theo chi nhánh; chặn bác sĩ ngừng hoạt động/hết giấy phép/hết phân công và chụp đúng giá hiệu lực. Public UUID tại biên API, idempotency, audit/outbox; số tăng đơn điệu; call-next dùng khóa dòng, ưu tiên rồi FIFO, hai request đồng thời nhận ticket khác nhau; chỉ ticket CALLED mới được SERVING. Admin Web có quầy tiếp nhận realtime; 10 SQL regression + 84 application test và smoke Gateway → Clinic → SQL đạt. |
+| Slice 11 — Clinical Core | **DONE** | 2026-09-13 | CLI-01–08/10–11/13 lõi: bác sĩ chỉ bắt đầu lượt đã CALLED, sinh hiệu/ghi chú/chẩn đoán chính duy nhất, chỉ định giá chi nhánh và chốt kết quả FINAL không rỗng; hoàn tất khi hết tác vụ, ký SHA-256 và phụ lục nối hash. Public UUID, read theo bác sĩ phụ trách, API role chỉ gọi wrapper public, SQL chặn sửa dữ liệu đã ký. Admin Web có màn Khám bệnh; OpenAPI v0.7 và client đồng bộ; 11 SQL regression + 89 application test, build và Gateway → Auth/Clinic → SQL smoke đạt. |
+| Slice 12 — Prescription & Pharmacy Core | **DONE** | 2026-09-14 | RX-01–10 và INV-01/03–06 lõi: bác sĩ kê đơn DRAFT, cảnh báo dị ứng hoạt chất với override có quyền/lý do/audit, phát hành khóa nội dung; Admin tạo thuốc cấp tổ chức, dược sĩ tạo lô/vị trí, nhập kho, cấp từng phần theo FEFO và đảo vào cách ly. Public UUID, branch scope, idempotency cho nhập/cấp, ledger append-only và đối soát. Admin Web, OpenAPI v0.8/client đồng bộ; 14 SQL regression + 93 application test, lint/typecheck/build đạt. Nhà cung cấp và cảnh báo lô sắp hết hạn còn mở. |
+| Slice 13 — Billing & Payments Core | **DONE** | 2026-09-14 | BIL-01–11/15: hóa đơn DRAFT theo lượt khám, đồng bộ dịch vụ hoàn tất và thuốc đã cấp, dòng thủ công/bảo hiểm, completeness gate nguyên tử khi phát hành, thu từng phần, hoàn theo allocation, VOID sau khi thu ròng về 0 và hóa đơn thay thế. Public UUID, branch scope, idempotency issue/payment/refund, outbox/audit bằng public ID và khóa ứng dụng chống hai quầy thu vượt. Admin Web, OpenAPI v0.9/client đồng bộ; 15 SQL regression + harness payment race + 97 application test, lint/typecheck/build và Gateway smoke đạt. In hóa đơn và cổng thanh toán còn P1. |
+| Slice 14 — Operational Reports Core | **DONE** | 2026-09-14 | RPT-01–03: báo cáo vận hành lịch/lượt đến/no-show/thời gian chờ, doanh thu thu ròng theo ngày/phương thức, dịch vụ và thuốc sử dụng, tồn thấp/lô hết hạn 90 ngày. Khoảng ngày theo timezone chi nhánh, tối đa 366 ngày; capability tách Manager/Admin, Cashier và Pharmacist theo branch scope. API dùng pool `clinic_report_reader` riêng, fail closed khi thiếu credentials và mutation role không được cấp report procedure. Admin Web, OpenAPI v0.10/client đồng bộ; 16 SQL regression + 101 application test đạt. Export CSV/XLSX và worker thông báo còn mở. |
+| Slice 15 — Outbox Publisher & Appointment Reminders | **DONE** | 2026-09-14 | Outbox có envelope/version/event ID/dedupe/correlation, claim lease an toàn nhiều worker, retry exponential và dead-letter. Scheduler tạo reminder idempotent theo appointment + thời điểm + lead time; materializer bỏ reminder stale và hủy bản còn chờ khi reschedule/cancel/expire. Publisher và notification adapter hỗ trợ console metadata-only ở development, webhook HTTPS + bearer ở production; SQL login worker riêng fail closed. 17 SQL regression + 113 application test đạt. Replay dead-letter thủ công và export CSV/XLSX còn P1. |
 
 Phase 1 và Slice 02–07 đã hoàn thành về source code và kiểm thử local. Phase 2
 đã đạt luồng MVP về source code và kiểm thử local. Các
@@ -1168,6 +1181,25 @@ Phase 3 đã hoàn thành Catalog/Directory và phần hồ sơ hành chính, ch
 đọc tóm tắt lâm sàng theo care relationship của Slice 08. Quản lý liên hệ khẩn cấp,
 ghi dị ứng/bệnh nền và chính sách công bố kết quả cho patient/guardian vẫn cần
 lát cắt riêng khi có luồng khám và trạng thái công bố.
+Phase 4 đã có lát cắt dọc đặt lịch online/tại quầy dùng được từ UI đến SQL, đạt
+điều kiện double-booking/idempotency và có reminder email/SMS qua delivery adapter.
+Time-off, ngày nghỉ/lịch đặc biệt và quy trình duyệt ca còn dành cho lát cắt sau.
+Phase 5 đã có quầy tiếp nhận dùng được từ Admin Web đến SQL: check-in, walk-in,
+cấp số và call-next an toàn khi nhiều quầy cùng gọi. Recall/skip/cancel/transfer
+ticket, bảng hiển thị công khai và ước lượng thời gian chờ vẫn thuộc P1/P2.
+Phase 6 đã có luồng bác sĩ hoàn tất và ký hồ sơ từ Admin Web đến SQL. Hủy lượt,
+truy cập lịch sử cho bệnh nhân, kết quả nhiều phiên bản, chữ ký số được xác minh
+và đính kèm tệp sẽ được triển khai ở lát cắt tiếp theo.
+Phase 7 đã có luồng từ kê đơn đến nhập kho/cấp phát/đảo cấp và đối soát tồn. Quản lý
+nhà cung cấp, cập nhật danh mục thuốc, cảnh báo lô sắp hết hạn và kiểm thử hai quầy
+cấp phát đồng thời còn dành cho lát cắt hardening tiếp theo.
+Phase 8 đã có màn Thu ngân từ lượt khám đến hóa đơn, thu nhiều lần, hoàn tiền,
+VOID và hóa đơn thay thế. In/xuất hóa đơn, tích hợp payment gateway/webhook và
+claim bảo hiểm còn dành cho P1/P2.
+Phase 9 đã có lõi báo cáo vận hành/doanh thu/sử dụng-tồn kho từ Admin Web đến
+pool SQL read-only riêng, đúng capability và branch scope; outbox publisher,
+reminder đa kênh, retry tự động và dead-letter cũng đã hoàn thành. Replay thủ
+công cho dead-letter và export CSV/XLSX còn thuộc P1.
 
 ### 17.2 Thứ tự ưu tiên trong mỗi phase
 
@@ -1257,7 +1289,7 @@ Mọi phát hiện lệch tài liệu phải được sửa trong cùng pull req
 - [ ] Khởi tạo Git và branch protection.
 - [x] Tạo npm workspace/orchestrator ở root.
 - [ ] Tạo đúng cấu trúc thư mục mục 6.
-- [ ] Tạo và kiểm tra `be/database/ownership.yml` cho mọi bảng/view/78 procedure và database role.
+- [ ] Tạo và kiểm tra `be/database/ownership.yml` cho mọi bảng/view/118 procedure và database role.
 - [ ] Sửa nhóm P0 ảnh hưởng baseline/foundation được nêu dưới mục 8.12; tạo owner/milestone cho mọi P0 còn lại trước phase domain tương ứng.
 - [ ] Chạy clean install, workflow, negative, concurrency, signature-recompute và `DBCC CHECKDB`; tất cả đạt mới freeze.
 - [ ] Chuyển SQL đã sửa vào `be/database/baseline/001_initial.sql` và ghi checksum.

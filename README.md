@@ -149,6 +149,69 @@ chi nhánh đó. API lâm sàng `/api/v1/patients/{patientId}/clinical-summary` 
 dị ứng/bệnh nền cho bác sĩ hoặc điều dưỡng có lượt chăm sóc đang mở, và audit
 mỗi lần đọc. Kết quả khám chưa được công bố cho patient/guardian.
 
+Bệnh nhân mở **Đặt lịch khám** trên Mobile để chọn hồ sơ được ủy quyền, chi nhánh,
+dịch vụ, ngày và slot còn trống; sau đó có thể xem, đổi hoặc hủy lịch. Admin/Manager/
+Lễ tân có permission phù hợp mở **Lịch hẹn** để đặt lịch tại quầy, xác nhận, hủy và
+ghi no-show. Admin/Manager mở **Ca & slot** để tạo ca có khoảng nghỉ và sinh slot.
+Booking/reschedule yêu cầu idempotency key; hệ thống khóa slot trong SQL để chống
+double-booking. Worker tự hết hạn hold, sinh trước slot và lập lịch reminder theo
+chu kỳ cấu hình bởi `APPOINTMENT_HOLD_SWEEP_MS`, `SLOT_GENERATION_SWEEP_MS` và
+`APPOINTMENT_REMINDER_SWEEP_MS`.
+
+Worker publish outbox và gửi notification theo batch bằng lease trong SQL, vì vậy
+nhiều instance không xử lý đồng thời cùng một bản ghi. Lỗi được retry exponential
+rồi chuyển dead-letter sau `DELIVERY_MAX_ATTEMPTS`; delivery là at-least-once và
+consumer outbox phải dedupe theo `eventId`. Chế độ `console` chỉ dùng development
+và không ghi payload/người nhận vào log. Production bắt buộc cấu hình hai webhook
+HTTPS có bearer token và login SQL riêng chỉ thuộc `clinic_job_executor`:
+
+```dotenv
+SQL_TRUSTED_CONNECTION=false
+SQL_WORKER_USER=clinic_job_user
+SQL_WORKER_PASSWORD=replace-with-a-secret
+OUTBOX_PUBLISH_MODE=webhook
+OUTBOX_WEBHOOK_URL=https://events.example.com/outbox
+OUTBOX_WEBHOOK_BEARER_TOKEN=replace-with-a-long-random-secret
+NOTIFICATION_DELIVERY_MODE=webhook
+NOTIFICATION_WEBHOOK_URL=https://notification.example.com/deliver
+NOTIFICATION_WEBHOOK_BEARER_TOKEN=replace-with-a-long-random-secret
+```
+
+Lễ tân/Điều dưỡng có permission phù hợp mở **Tiếp nhận** để check-in lịch
+`CONFIRMED`, tìm bệnh nhân walk-in, chọn dịch vụ/bác sĩ/phòng, cấp số và gọi người
+kế tiếp. Check-in/walk-in yêu cầu idempotency key và tạo Encounter + dịch vụ ban
+đầu + QueueTicket trong một transaction. Cửa sổ check-in lấy từ cấu hình chi
+nhánh; số tăng đơn điệu theo ngày, còn call-next xếp ưu tiên trước rồi FIFO và
+khóa ticket để hai quầy không gọi cùng một bệnh nhân.
+
+Bác sĩ được phân công mở **Khám bệnh** sau khi số đã được gọi để bắt đầu lượt,
+ghi sinh hiệu, bệnh sử, khám thực thể, chẩn đoán và chỉ định. Kết quả FINAL cần
+có nội dung trước khi hoàn tất; hệ thống yêu cầu một chẩn đoán chính và không
+còn dịch vụ bắt buộc đang mở. Sau khi ký, hồ sơ được khóa; nội dung bổ sung được
+ghi bằng phụ lục nối hash.
+
+Bác sĩ chọn **Kê đơn thuốc** trong lượt đang khám để tạo đơn DRAFT, thêm thuốc,
+liều và hướng dẫn rồi phát hành. Màn **Nhà thuốc** cho nhân viên có quyền tạo lô,
+nhập kho, mở phiên cấp, chọn lô FEFO, đảo cấp vào cách ly và đối soát ledger.
+Nhập và cấp thuốc dùng `Idempotency-Key`; dị ứng hoạt chất yêu cầu quyền override
+riêng cùng lý do được audit. Sau phát hành không sửa nội dung đơn.
+
+Nhân viên có quyền mở **Thu ngân** để tạo hóa đơn DRAFT từ lượt khám, đồng bộ
+dịch vụ hoàn tất và thuốc đã cấp, thêm khoản thu thủ công, ghi phần bảo hiểm rồi
+phát hành. Bước phát hành khóa lượt khám và tự đồng bộ charge trong cùng
+transaction để không bỏ sót. Có thể thu nhiều lần, hoàn theo đúng phân bổ gốc,
+VOID sau khi số thu ròng về 0 và tạo hóa đơn thay thế. Phát hành, thu và hoàn đều
+dùng `Idempotency-Key`; khóa ứng dụng trên hóa đơn chặn hai quầy thu vượt dư nợ.
+
+Admin/Manager và nhân viên được cấp `REPORTS_VIEW` mở **Báo cáo** để xem số lịch,
+lượt đến, no-show, thời gian chờ, thu tiền ròng, dịch vụ/thuốc sử dụng, tồn thấp
+và lô hết hạn trong 90 ngày. Khoảng ngày được tính theo múi giờ nghiệp vụ của
+chi nhánh và giới hạn tối đa 366 ngày. Cashier chỉ có nhóm doanh thu, Pharmacist
+chỉ có nhóm sử dụng/tồn kho; Manager/Admin xem đủ ba nhóm trong đúng branch scope.
+Clinic Service dùng pool báo cáo riêng; production phải cấu hình
+`SQL_REPORT_USER`/`SQL_REPORT_PASSWORD` cho login chỉ thuộc role
+`clinic_report_reader`, không dùng tài khoản mutation.
+
 Nếu SQL Server local chưa bật TCP/IP và bạn dùng Windows Authentication, đặt
 `SQL_SERVER=np:\\.\pipe\sql\query` trong `.env`. Xem thêm [be/README.md](./be/README.md).
 
@@ -156,6 +219,7 @@ Nếu SQL Server local chưa bật TCP/IP và bạn dùng Windows Authentication
 
 ```powershell
 npm run typecheck
+npm run lint
 npm run openapi:check
 npm run build
 npm test
@@ -173,6 +237,17 @@ sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\p
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\patient-link.test.sql
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\catalog-directory.test.sql
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\patient-registry.test.sql
+sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\scheduling-appointments.test.sql
+sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\reception-queue.test.sql
+sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\clinical-core.test.sql
+sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\pharmacy-core.test.sql
+sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\pharmacy-fefo.test.sql
+sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\pharmacy-allergy.test.sql
+sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\billing-core.test.sql
+sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\reports-core.test.sql
+sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\notifications-outbox.test.sql
+.\be\database\tests\reception-queue.concurrent.ps1
+.\be\database\tests\billing-payment.concurrent.ps1
 ```
 
 Chi tiết nghiệp vụ và thứ tự phát triển nằm trong [PROJECT_PLAN.md](./PROJECT_PLAN.md).

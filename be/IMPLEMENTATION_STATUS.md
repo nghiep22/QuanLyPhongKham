@@ -1,6 +1,6 @@
 # Trạng thái triển khai backend
 
-> Cập nhật: 2026-09-13
+> Cập nhật: 2026-09-14
 
 ## DONE — Slice 01: Platform Foundation
 
@@ -164,21 +164,164 @@ Phạm vi đã hoàn thành:
   mở hồ sơ và chỉnh sửa. SQL Server GUID từ `NEWSEQUENTIALID()` được nhận đúng
   theo định dạng hex; log Auth/Clinic che Authorization, Cookie và Set-Cookie.
 
+## DONE — Slice 09: Scheduling & Appointments Core
+
+Phạm vi đã hoàn thành:
+
+- Ca làm việc có public UUID, khoảng nghỉ, hiệu lực và thời lượng slot; command
+  kiểm tra bác sĩ đang hoạt động, phân công chi nhánh, phòng đúng chi nhánh và
+  chặn ca chồng bác sĩ/phòng trước khi ghi nguyên tử.
+- Slot được sinh idempotent theo múi giờ chi nhánh và chặn cả xung đột bác sĩ lẫn
+  phòng. Availability công khai chỉ trả slot còn trong booking window, bác sĩ
+  nhận lịch online, dịch vụ được phân công và giá/khả dụng chi nhánh còn hiệu lực.
+- Bệnh nhân đặt, xem, đổi và hủy lịch cho hồ sơ có quyền `bookingAllowed`;
+  booking online giữ slot ở `PENDING`, còn PHONE/COUNTER của nhân viên được xác
+  nhận ngay. Booking và reschedule dùng `Idempotency-Key` chống retry trùng.
+- Nhân viên xem lịch theo chi nhánh/ngày/trạng thái, đặt tại quầy, xác nhận, đổi,
+  hủy và ghi no-show. SQL kiểm tra permission cùng branch scope, trạng thái hợp
+  lệ và thời hạn booking/reschedule/cancel trước khi thay đổi dữ liệu.
+- Mọi transition ghi `appointment_status_history`; booking/reschedule/cancel,
+  no-show và hold expiry ghi audit/outbox bằng public ID trong cùng transaction.
+- Scheduler Worker dùng system procedure được cấp riêng để hết hạn hold mỗi phút
+  và sinh trước slot khi khởi động/mỗi sáu giờ; không giả danh Admin và không DML
+  trực tiếp bảng domain. Readiness phụ thuộc SQL, liveness vẫn độc lập.
+- Gateway, OpenAPI/generated client, Mobile và Admin Web đã đồng bộ. Mobile có
+  tìm slot/đặt/xem/đổi/hủy; Admin có quản lý ca, sinh slot và vận hành lịch tại quầy.
+
+## DONE — Slice 10: Reception & Queue
+
+Phạm vi đã hoàn thành:
+
+- Check-in chỉ nhận lịch `CONFIRMED` trong cửa sổ cấu hình của chi nhánh; một
+  transaction tạo Encounter nguồn appointment, snapshot dịch vụ theo giá chi
+  nhánh hiệu lực, cấp QueueTicket và chuyển appointment sang `CHECKED_IN`.
+- Walk-in tìm bệnh nhân trong scope chi nhánh rồi tạo trực tiếp Encounter + dịch
+  vụ đầu + QueueTicket, không tạo appointment giả. Check-in và walk-in đều dùng
+  `Idempotency-Key`, retry trả đúng public resource cũ.
+- Điều kiện hành nghề được kiểm tra tại ngày nghiệp vụ: bác sĩ/nhân viên còn hoạt
+  động, giấy phép còn hiệu lực, còn phân công chi nhánh và còn thực hiện dịch vụ;
+  phòng, chi nhánh và bảng giá cũng phải đang hợp lệ.
+- `encounters`, `queue_sessions`, `queue_tickets` có public UUID; API role chỉ
+  được gọi wrapper public, không còn quyền ba command bigint nội bộ. Audit/outbox
+  dùng public ID và nằm trong transaction nghiệp vụ.
+- Bộ cấp số khóa theo chi nhánh/ngày/loại và tăng đơn điệu. Call-next dùng khóa
+  dòng `UPDLOCK/READPAST/ROWLOCK`, ưu tiên giảm dần rồi FIFO; hai request đồng
+  thời nhận hai ticket khác nhau. Lượt khám chỉ bắt đầu khi ticket đã `CALLED`,
+  sau đó ticket/encounter/appointment chuyển `SERVING/IN_PROGRESS` nguyên tử.
+- Admin Web có màn Tiếp nhận responsive: chọn chi nhánh, xem queue tự làm mới,
+  check-in lịch trong ngày, tìm/tiếp nhận walk-in và gọi bệnh nhân kế tiếp.
+- OpenAPI 3.1 v0.6 và generated types/fetch client đồng bộ sáu operation mới.
+
+## DONE — Slice 11: Clinical Core
+
+- Chỉ bác sĩ phụ trách đọc danh sách/hồ sơ khám theo chi nhánh; số đã `CALLED`
+  mới được bắt đầu và điều kiện hành nghề được kiểm tra lại tại thời điểm bắt đầu.
+- Ghi nhiều lần sinh hiệu với BMI, bệnh sử/khám thực thể/nhận định/kế hoạch,
+  chẩn đoán sơ bộ/phân biệt/cuối cùng và duy nhất một chẩn đoán chính.
+- Chỉ định dịch vụ dùng giá chi nhánh còn hiệu lực; bác sĩ phụ trách hoặc kỹ thuật
+  viên chi nhánh đúng loại dịch vụ được chốt kết quả FINAL phiên bản 1, không rỗng.
+- Hoàn tất khi có chẩn đoán chính và không còn dịch vụ/đơn thuốc mở; ký tạo hash
+  SHA-256 của payload lâm sàng chuẩn hóa. Trigger chặn sửa lõi sau hoàn tất/ký;
+  phụ lục sau ký là append-only, nối hash chữ ký trước.
+- Mười hai SQL procedure lâm sàng dùng public UUID ở biên API. Quyền thực thi
+  command bigint nội bộ được thu hồi khỏi Clinic API role, kể cả hủy lượt chưa có
+  endpoint. OpenAPI v0.7/generated client và màn Khám bệnh trên Admin Web đã nối.
+
+## DONE — Slice 12: Prescription & Pharmacy Core
+
+- Bác sĩ phụ trách tạo đơn DRAFT trong lượt IN_PROGRESS, thêm thuốc/liều/tần suất/
+  hướng dẫn, phát hành và hủy theo state machine. Nội dung kê sau phát hành được
+  trigger bảo vệ; bệnh nhân có dị ứng hoạt chất cần quyền override riêng và lý do
+  tối thiểu 10 ký tự, ghi audit bằng public ID.
+- Admin tạo định nghĩa thuốc cấp tổ chức; nhân viên có `INVENTORY_MANAGE` tạo lô,
+  vị trí kho/quầy/khu cách ly và nhập kho. Nhập tạo balance + ledger trong cùng
+  transaction. Retry cùng `Idempotency-Key` trả movement cũ.
+- Dược sĩ mở phiên tại quầy đúng chi nhánh, cấp từng phần theo lô FEFO còn hạn và
+  không vượt lượng kê/tồn. Khóa ứng dụng theo vị trí và thuốc tuần tự hóa nhập/cấp;
+  retry cùng key trả dòng cấp cũ. Hoàn tất/hủy phiên và đảo dòng có lý do; lô hết
+  hạn/thu hồi không thể trả về kho bán.
+- Đối soát so sánh balance với tổng ledger; các bảng thuốc/đơn/cấp phát/movement
+  dùng public UUID ở biên API. Clinic API role không còn quyền gọi trực tiếp
+  command bigint nội bộ. OpenAPI v0.8/generated client và màn Nhà thuốc được nối
+  từ màn Khám bệnh của bác sĩ.
+
+## DONE — Slice 13: Billing & Payments Core
+
+- Thu ngân xem lượt khám và hóa đơn theo branch scope; tạo DRAFT idempotent theo
+  active encounter, đồng bộ dịch vụ hoàn tất/thuốc đã cấp và thêm khoản thủ công,
+  bảo hiểm trước khi phát hành.
+- Phát hành khóa encounter + invoice, yêu cầu lượt `COMPLETED/SIGNED`, mọi dịch vụ
+  terminal, không còn đơn hoặc phiên cấp nháp; charge được đồng bộ lại trong cùng
+  transaction nên không có khoảng hở bỏ sót dịch vụ/thuốc.
+- Thu nhiều lần khóa ứng dụng theo hóa đơn và không vượt dư nợ. Hoàn tiền gắn đúng
+  payment allocation, không vượt số còn hoàn; payment/allocation/refund append-only.
+  Issue/payment/refund dùng `Idempotency-Key` và retry trả resource cũ.
+- VOID chỉ khi số thu ròng bằng 0; hóa đơn thay thế tham chiếu hóa đơn VOID. Audit
+  và outbox cho issue/payment/refund/VOID dùng public UUID; Clinic API role chỉ có
+  quyền các wrapper public, không còn gọi command bigint nội bộ.
+- Admin Web có màn Thu ngân; OpenAPI 3.1 v0.9, generated types và fetch client đã
+  đồng bộ. SQL regression bao phủ toàn hành trình và harness hai phiên thật chứng
+  minh đúng một quầy thu toàn bộ thành công.
+
+## DONE — Slice 14: Operational Reports Core
+
+- Manager/Admin xem báo cáo lịch hẹn, lượt đến, hoàn tất, no-show, hủy và thời
+  gian chờ trung bình trong đúng chi nhánh được cấp.
+- Cashier xem số đã phát hành, thu, hoàn và thu ròng theo ngày/phương thức;
+  Pharmacist xem dịch vụ/thuốc sử dụng, tồn dưới mức đặt hàng và lô hết hạn trong
+  90 ngày. Manager/Admin có đủ ba capability.
+- Mọi khoảng ngày được diễn giải theo timezone nghiệp vụ của chi nhánh rồi đổi
+  sang UTC; đầu vào ngược hoặc dài hơn 366 ngày bị từ chối ở API và SQL.
+- Clinic Service dùng pool báo cáo riêng. Với SQL login, thiếu
+  `SQL_REPORT_USER`/`SQL_REPORT_PASSWORD` sẽ fail closed; bốn procedure chỉ được
+  cấp cho `clinic_report_reader`, không cấp cho role mutation Clinic API.
+- OpenAPI 3.1 v0.10/generated client và màn Báo cáo responsive trên Admin Web đã
+  đồng bộ. SQL regression kiểm tra capability Manager/Cashier/Pharmacist,
+  negative authorization và giới hạn khoảng ngày.
+
+## DONE — Slice 15: Outbox Publisher & Appointment Reminders
+
+- Outbox có event UUID ổn định, schema version, producer, correlation/causation,
+  dedupe key, lịch retry, lease owner/expiry và dead-letter timestamp. Publisher
+  giao at-least-once; consumer webhook dedupe theo event ID.
+- Claim dùng `UPDLOCK + READPAST + ROWLOCK` và lease có hạn, nên nhiều worker
+  không lấy cùng bản ghi; crash được phục hồi khi lease hết. Mỗi attempt lỗi dùng
+  exponential backoff tối đa một giờ rồi chuyển dead-letter.
+- Scheduler tạo `APPOINTMENT_REMINDER_DUE` một lần cho mỗi appointment + thời điểm
+  + lead time. Materializer tạo notification idempotent theo source event, bỏ event
+  stale sau reschedule và hủy reminder còn chờ khi lịch đổi/hủy/hết hạn.
+- Vòng đời appointment created/confirmed/rescheduled/cancelled/expired/reminder
+  được materialize sang EMAIL ưu tiên, fallback SMS. Outbox không chứa người nhận
+  hoặc nội dung notification; log worker chỉ chứa metadata không nhạy cảm.
+- Development có console adapter an toàn. Production chỉ khởi động với webhook
+  HTTPS + bearer token và `SQL_WORKER_USER`/`SQL_WORKER_PASSWORD` riêng khi dùng
+  SQL authentication; login chỉ thuộc `clinic_job_executor`.
+- SQL regression kiểm tra ownership chain thật, scheduler/dedupe, loại trừ hai
+  worker, materialize, retry/backoff/dead-letter và recovery. Unit test kiểm tra
+  thứ tự publish/complete, failure path, chống overlap và không rò dữ liệu log.
+
 ### Bằng chứng xác minh local toàn bộ
 
 | Kiểm tra | Kết quả |
 |---|---|
-| Baseline SQL chạy lại idempotent | Đạt; 70 bảng, 23 view, 87 procedure, 30 trigger |
-| SQL auth session/staff RBAC/staff safety/password lifecycle/patient registration/patient link/catalog-directory/patient registry regression | 8/8 PASS; rollback sạch |
-| npm run openapi:check | Đạt; contract và generated code đồng bộ |
+| Baseline SQL chạy lại idempotent | Đạt; 70 bảng, 23 view, 158 procedure, 30 trigger |
+| SQL auth session/staff RBAC/staff safety/password lifecycle/patient registration/patient link/catalog-directory/patient registry/scheduling-appointments/reception-queue/clinical-core/pharmacy-core/pharmacy-FEFO/pharmacy-allergy/billing-core/reports-core/notifications-outbox regression | 17/17 PASS; rollback sạch. Hai harness SQL thật xác minh queue gọi hai ticket khác nhau và payment race chỉ một quầy thu được toàn bộ dư nợ |
+| OpenAPI lint + code generation | Đạt; contract hợp lệ và generated code sinh lặp lại ổn định |
 | npm run lint | Đạt, không cảnh báo |
 | npm run typecheck | Đạt |
-| npm test | 65 test đạt (Auth 34, Mobile 14, Clinic 17) |
+| npm test | 113 test đạt (Auth 34, Mobile 14, Clinic 53, Worker 12), gồm luồng API và outbox/delivery worker |
 | npm run build | Đạt; .NET 0 warning/0 error |
-| npm run doctor:mobile | 20/21; Expo SDK hiện yêu cầu bản vá mới hơn cho `expo`, `expo-constants`, `expo-secure-store`. Mobile build và typecheck vẫn đạt; nâng bản vá trong lát cắt Mobile tiếp theo. |
+| npm run doctor:mobile | 21/21; ba gói Expo SDK 57 đã được nâng đúng patch tương thích |
 | Gateway → Auth → SQL smoke test | Registration thiếu idempotency key trả 400; challenge lạ trả generic OTP 400; ba route patient-access mới đi đúng Auth và trả 401 + request ID + `Cache-Control: no-store` khi thiếu token |
 | Clinic Catalog → SQL smoke test | Public branch/service trả dữ liệu và giá hiệu lực từ SQL thật; Admin Catalog thiếu token trả 401; read repository trả đủ branch/service/doctor và lịch sử giá |
 | Gateway → Auth/Clinic → SQL patient smoke test | Demo Admin đăng nhập; lấy chi nhánh, tra cứu, mở hồ sơ thật đạt; đọc lâm sàng không có care relationship trả 403 |
+| Gateway → Clinic → SQL scheduling smoke test | Public availability trả 200 từ SQL thật; patient/admin appointments và schedules thiếu token trả 401; route Admin đi đúng Clinic; request ID xuyên suốt; Gateway readiness trả 200 |
+| Gateway → Clinic → SQL reception smoke test | `receptionist.demo` đăng nhập qua Gateway; đọc branch/workspace từ SQL thật; queue rỗng trả `data: null` khi call-next; request ID xuyên suốt; logout đạt |
+| Gateway → Auth/Clinic → SQL clinical smoke test | `doctor.demo` đăng nhập qua Gateway; danh sách chi nhánh lâm sàng và lượt khám đọc từ SQL thật trả 200, status sai trả 400, request ID xuyên suốt và logout đạt. Luồng ghi/hoàn tất/ký được xác minh bằng regression SQL rollback sạch |
+| Gateway → Auth/Clinic → SQL pharmacy smoke test | `pharmacist.demo` và `doctor.demo` đăng nhập qua Gateway; scoped pharmacy branches, workspace và đối soát đọc SQL thật trả 200, request ID xuyên suốt. Luồng ghi nhập/cấp/đảo được kiểm tra trong SQL regression rollback sạch |
+| Gateway → Auth/Clinic → SQL billing smoke test | `cashier.demo` đăng nhập qua Gateway; billing branches/workspace đọc SQL thật trả 200 với request ID xuyên suốt; thiếu token trả 401 và logout đạt. Luồng ghi/phát hành/thu/hoàn/VOID được xác minh bằng SQL regression rollback sạch |
+| Gateway → Auth/Clinic → SQL reports smoke test | `manager.demo` nhận đủ ba capability và ba report trả 200; `cashier.demo` chỉ đọc revenue, `pharmacist.demo` chỉ đọc inventory, nhóm trái quyền trả 403; request ID xuyên suốt và logout đạt |
+| Scheduler Worker smoke test | Worker khởi động đủ năm job hold/slot/reminder/outbox/notification; sinh slot hệ thống đạt và `/health/live`, `/health/ready` cùng trả 200 với SQL thật |
 | npm audit --omit=dev --audit-level=high | Đạt; 0 high/critical. Còn 17 moderate từ dependency bắc cầu Expo/React Navigation, chưa có bản sửa không breaking |
 
 ## Chưa hoàn thành
@@ -187,7 +330,20 @@ Phạm vi đã hoàn thành:
 - Lần chạy GitHub Actions và branch protection chỉ xác minh được sau khi push.
 - Theo dõi bản vá upstream cho 17 cảnh báo moderate bắc cầu Expo/React Navigation;
   không dùng `npm audit fix --force` vì công cụ đề xuất hạ Expo xuống bản breaking.
-- Cập nhật ba gói Expo lên bản vá SDK mới yêu cầu để Expo Doctor trở lại 21/21.
 - Các mục Auth P1 như MFA, quản lý permission động và lịch sử session.
 - Phase 3 còn quản lý liên hệ khẩn cấp, ghi dị ứng/bệnh nền và chính sách công bố
   kết quả cho patient/guardian khi có luồng khám hoàn chỉnh.
+- Phase 4 còn time-off, ngày nghỉ/lịch đặc biệt và quy trình duyệt ca; core đặt
+  lịch online/tại quầy và reminder đa kênh đã hoàn thành qua Slice 09/15.
+- Phase 5 còn recall/skip/cancel/transfer ticket có lý do, đóng phiên, bảng hiển
+  thị công khai và ước lượng thời gian chờ; lõi Reception & Queue của Slice 10 đã hoàn thành.
+- Phase 6 còn hủy lượt, lịch sử khám cho bệnh nhân theo chính sách công bố, kết quả
+  nhiều phiên bản, đính kèm tệp và chữ ký số có kiểm chứng certificate; lõi bác sĩ
+  hoàn tất/ký/bổ sung của Slice 11 đã hoàn thành.
+- Phase 7 còn quản lý nhà cung cấp, cập nhật/khóa danh mục thuốc, cảnh báo lô sắp
+  hết hạn và harness hai quầy cấp đồng thời; lõi kê đơn–nhập kho–cấp–đảo–đối soát
+  của Slice 12 đã hoàn thành.
+- Phase 8 còn in/xuất hóa đơn, tích hợp payment gateway/webhook và hồ sơ claim bảo
+  hiểm; lõi hóa đơn–thu–hoàn–VOID của Slice 13 đã hoàn thành.
+- Phase 9 còn replay dead-letter thủ công và export CSV/XLSX; lõi báo cáo,
+  outbox publisher, reminder, retry tự động và dead-letter đã hoàn thành.

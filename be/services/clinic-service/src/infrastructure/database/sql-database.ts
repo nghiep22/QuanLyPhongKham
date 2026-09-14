@@ -28,8 +28,17 @@ const databaseConfig: SqlConfig = {
   pool: { min: 0, max: 20, idleTimeoutMillis: 30_000 },
 };
 
+const reportDatabaseConfig: SqlConfig = {
+  ...databaseConfig,
+  user: env.SQL_TRUSTED_CONNECTION ? undefined : env.SQL_REPORT_USER,
+  password: env.SQL_TRUSTED_CONNECTION ? undefined : env.SQL_REPORT_PASSWORD,
+  pool: { min: 0, max: 5, idleTimeoutMillis: 30_000 },
+};
+
 let pool: ConnectionPool | undefined;
 let connecting: Promise<ConnectionPool> | undefined;
+let reportPool: ConnectionPool | undefined;
+let reportConnecting: Promise<ConnectionPool> | undefined;
 
 export async function getSqlPool(): Promise<ConnectionPool> {
   if (pool?.connected) return pool;
@@ -47,17 +56,42 @@ export async function getSqlPool(): Promise<ConnectionPool> {
   return connecting;
 }
 
+export async function getReportSqlPool(): Promise<ConnectionPool> {
+  if (!env.SQL_TRUSTED_CONNECTION && (!env.SQL_REPORT_USER || !env.SQL_REPORT_PASSWORD)) {
+    throw new Error('SQL report-reader credentials are required when trusted connection is disabled.');
+  }
+  if (reportPool?.connected) return reportPool;
+  if (!reportConnecting) {
+    const candidate = new sql.ConnectionPool(reportDatabaseConfig);
+    reportConnecting = candidate.connect()
+      .then((connectedPool) => {
+        reportPool = connectedPool;
+        return connectedPool;
+      })
+      .finally(() => {
+        reportConnecting = undefined;
+      });
+  }
+  return reportConnecting;
+}
+
 export async function probeDatabase() {
-  const connectedPool = await getSqlPool();
-  const result = await connectedPool.request().query<{ databaseName: string }>(
-    'SELECT DB_NAME() AS databaseName;',
-  );
-  return { database: result.recordset[0]?.databaseName ?? env.SQL_DATABASE };
+  const [connectedPool, connectedReportPool] = await Promise.all([getSqlPool(), getReportSqlPool()]);
+  const [result, reportResult] = await Promise.all([
+    connectedPool.request().query<{ databaseName: string }>('SELECT DB_NAME() AS databaseName;'),
+    connectedReportPool.request().query<{ databaseName: string }>('SELECT DB_NAME() AS databaseName;'),
+  ]);
+  const database = result.recordset[0]?.databaseName ?? env.SQL_DATABASE;
+  if ((reportResult.recordset[0]?.databaseName ?? env.SQL_DATABASE) !== database)
+    throw new Error('Core and reporting pools are connected to different databases.');
+  return { database };
 }
 
 export async function closeSqlPool() {
   if (pool) await pool.close();
+  if (reportPool) await reportPool.close();
   pool = undefined;
+  reportPool = undefined;
 }
 
 export type CommandContext = {
@@ -118,6 +152,30 @@ export async function executeCommand<T>(
     return result;
   } catch (error) {
     try { await clearSessionContext(transaction); } catch { /* rollback still releases the reserved connection */ }
+    try { await transaction.rollback(); } catch { /* keep the original database error */ }
+    throw error;
+  }
+}
+
+export async function executeReport<T>(
+  procedure: string,
+  parameters: SqlParameter[],
+  context: CommandContext,
+): Promise<IProcedureResult<T>> {
+  const connectedPool = await getReportSqlPool();
+  const transaction = new sql.Transaction(connectedPool);
+  await transaction.begin(sql.ISOLATION_LEVEL.READ_COMMITTED);
+
+  try {
+    await setSessionContext(transaction, context);
+    const request: Request = transaction.request();
+    for (const parameter of parameters) request.input(parameter.name, parameter.type, parameter.value);
+    const result = await request.execute<T>(procedure);
+    await clearSessionContext(transaction);
+    await transaction.commit();
+    return result;
+  } catch (error) {
+    try { await clearSessionContext(transaction); } catch { /* rollback releases the reserved connection */ }
     try { await transaction.rollback(); } catch { /* keep the original database error */ }
     throw error;
   }

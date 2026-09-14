@@ -2,7 +2,7 @@
 
 import { client } from './client.gen.js';
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client/index.js';
-import type { CancelPatientLinkRequestData, CancelPatientLinkRequestErrors, CancelPatientLinkRequestResponses, ChangePasswordData, ChangePasswordErrors, ChangePasswordResponses, CreateCatalogRoomData, CreateCatalogRoomErrors, CreateCatalogRoomResponses, CreateCatalogServiceData, CreateCatalogServiceErrors, CreateCatalogServiceResponses, CreatePatientData, CreatePatientErrors, CreatePatientResponses, CreateStaffData, CreateStaffErrors, CreateStaffResponses, DecidePatientLinkRequestData, DecidePatientLinkRequestErrors, DecidePatientLinkRequestResponses, FindPatientDuplicatesData, FindPatientDuplicatesErrors, FindPatientDuplicatesResponses, GetAuthJwksData, GetAuthJwksResponses, GetCatalogReferenceDataData, GetCatalogReferenceDataErrors, GetCatalogReferenceDataResponses, GetLivenessData, GetLivenessResponses, GetManagedPatientLinkReferenceDataData, GetManagedPatientLinkReferenceDataErrors, GetManagedPatientLinkReferenceDataResponses, GetPatientAccessData, GetPatientAccessErrors, GetPatientAccessResponses, GetPatientClinicalSummaryData, GetPatientClinicalSummaryErrors, GetPatientClinicalSummaryResponses, GetPatientData, GetPatientErrors, GetPatientLinkReferenceDataData, GetPatientLinkReferenceDataErrors, GetPatientLinkReferenceDataResponses, GetPatientReferenceDataData, GetPatientReferenceDataErrors, GetPatientReferenceDataResponses, GetPatientResponses, GetReadinessData, GetReadinessErrors, GetReadinessResponses, GetStaffData, GetStaffErrors, GetStaffReferenceDataData, GetStaffReferenceDataErrors, GetStaffReferenceDataResponses, GetStaffResponses, GrantStaffRoleData, GrantStaffRoleErrors, GrantStaffRoleResponses, ListCatalogRoomsData, ListCatalogRoomsErrors, ListCatalogRoomsResponses, ListCatalogServicesData, ListCatalogServicesErrors, ListCatalogServicesResponses, ListPatientLinkRequestsData, ListPatientLinkRequestsErrors, ListPatientLinkRequestsResponses, ListPublicBranchesData, ListPublicBranchesResponses, ListPublicDoctorsData, ListPublicDoctorsErrors, ListPublicDoctorsResponses, ListPublicServicesData, ListPublicServicesErrors, ListPublicServicesResponses, ListPublicSpecialtiesData, ListPublicSpecialtiesResponses, ListStaffData, ListStaffErrors, ListStaffResponses, LoginData, LoginErrors, LoginResponses, LogoutAllData2, LogoutAllErrors, LogoutAllResponses, LogoutData2, LogoutErrors, LogoutResponses, RefreshSessionData, RefreshSessionErrors, RefreshSessionResponses, RequestPasswordResetData, RequestPasswordResetErrors, RequestPasswordResetResponses, RequestPatientLinkData, RequestPatientLinkErrors, RequestPatientLinkResponses, RequestPatientRegistrationData, RequestPatientRegistrationErrors, RequestPatientRegistrationResponses, ResetPasswordData, ResetPasswordErrors, ResetPasswordResponses, RevokeOwnPatientLinkData, RevokeOwnPatientLinkErrors, RevokeOwnPatientLinkResponses, RevokePatientLinkAsStaffData, RevokePatientLinkAsStaffErrors, RevokePatientLinkAsStaffResponses, RevokeStaffRoleData, RevokeStaffRoleErrors, RevokeStaffRoleResponses, SearchPatientsData, SearchPatientsErrors, SearchPatientsResponses, SetCatalogBranchPriceData, SetCatalogBranchPriceErrors, SetCatalogBranchPriceResponses, SetStaffAccountStatusData, SetStaffAccountStatusErrors, SetStaffAccountStatusResponses, UnlockStaffAccountData, UnlockStaffAccountErrors, UnlockStaffAccountResponses, UpdateCatalogRoomData, UpdateCatalogRoomErrors, UpdateCatalogRoomResponses, UpdateCatalogServiceData, UpdateCatalogServiceErrors, UpdateCatalogServiceResponses, UpdatePatientData, UpdatePatientErrors, UpdatePatientResponses, UpdateStaffData, UpdateStaffErrors, UpdateStaffResponses, VerifyPatientRegistrationData, VerifyPatientRegistrationErrors, VerifyPatientRegistrationResponses } from './types.gen.js';
+import type { AddClinicalDiagnosisData, AddClinicalDiagnosisErrors, AddClinicalDiagnosisResponses, AddClinicalVitalSignsData, AddClinicalVitalSignsErrors, AddClinicalVitalSignsResponses, AddManualInvoiceItemData, AddManualInvoiceItemErrors, AddManualInvoiceItemResponses, AddPrescriptionMedicineData, AddPrescriptionMedicineErrors, AddPrescriptionMedicineResponses, AmendClinicalEncounterData, AmendClinicalEncounterErrors, AmendClinicalEncounterResponses, BookOnlineAppointmentData, BookOnlineAppointmentErrors, BookOnlineAppointmentResponses, BookStaffAppointmentData, BookStaffAppointmentErrors, BookStaffAppointmentResponses, CallNextQueueTicketData, CallNextQueueTicketErrors, CallNextQueueTicketResponses, CancelAdminAppointmentData, CancelAdminAppointmentErrors, CancelAdminAppointmentResponses, CancelMyAppointmentData, CancelMyAppointmentErrors, CancelMyAppointmentResponses, CancelPatientLinkRequestData, CancelPatientLinkRequestErrors, CancelPatientLinkRequestResponses, CancelPharmacyDispensationData, CancelPharmacyDispensationErrors, CancelPharmacyDispensationResponses, CancelPharmacyPrescriptionData, CancelPharmacyPrescriptionErrors, CancelPharmacyPrescriptionResponses, ChangePasswordData, ChangePasswordErrors, ChangePasswordResponses, CheckInAppointmentData, CheckInAppointmentErrors, CheckInAppointmentResponses, CompleteClinicalEncounterData, CompleteClinicalEncounterErrors, CompleteClinicalEncounterResponses, CompletePharmacyDispensationData, CompletePharmacyDispensationErrors, CompletePharmacyDispensationResponses, ConfirmAppointmentData, ConfirmAppointmentErrors, ConfirmAppointmentResponses, CreateCatalogRoomData, CreateCatalogRoomErrors, CreateCatalogRoomResponses, CreateCatalogServiceData, CreateCatalogServiceErrors, CreateCatalogServiceResponses, CreateEncounterInvoiceData, CreateEncounterInvoiceErrors, CreateEncounterInvoiceResponses, CreateEncounterPrescriptionData, CreateEncounterPrescriptionErrors, CreateEncounterPrescriptionResponses, CreatePatientData, CreatePatientErrors, CreatePatientResponses, CreatePharmacyBatchData, CreatePharmacyBatchErrors, CreatePharmacyBatchResponses, CreatePharmacyLocationData, CreatePharmacyLocationErrors, CreatePharmacyLocationResponses, CreatePharmacyMedicineData, CreatePharmacyMedicineErrors, CreatePharmacyMedicineResponses, CreateStaffData, CreateStaffErrors, CreateStaffResponses, CreateWalkInEncounterData, CreateWalkInEncounterErrors, CreateWalkInEncounterResponses, CreateWorkingScheduleData, CreateWorkingScheduleErrors, CreateWorkingScheduleResponses, DecidePatientLinkRequestData, DecidePatientLinkRequestErrors, DecidePatientLinkRequestResponses, DispensePharmacyItemData, DispensePharmacyItemErrors, DispensePharmacyItemResponses, FinalizeClinicalServiceResultData, FinalizeClinicalServiceResultErrors, FinalizeClinicalServiceResultResponses, FindPatientDuplicatesData, FindPatientDuplicatesErrors, FindPatientDuplicatesResponses, GenerateWorkingScheduleSlotsData, GenerateWorkingScheduleSlotsErrors, GenerateWorkingScheduleSlotsResponses, GetAuthJwksData, GetAuthJwksResponses, GetBillingWorkspaceData, GetBillingWorkspaceErrors, GetBillingWorkspaceResponses, GetCatalogReferenceDataData, GetCatalogReferenceDataErrors, GetCatalogReferenceDataResponses, GetClinicalEncounterData, GetClinicalEncounterErrors, GetClinicalEncounterResponses, GetInventoryReportData, GetInventoryReportErrors, GetInventoryReportResponses, GetInvoiceData, GetInvoiceErrors, GetInvoiceResponses, GetLivenessData, GetLivenessResponses, GetManagedPatientLinkReferenceDataData, GetManagedPatientLinkReferenceDataErrors, GetManagedPatientLinkReferenceDataResponses, GetOperationsReportData, GetOperationsReportErrors, GetOperationsReportResponses, GetPatientAccessData, GetPatientAccessErrors, GetPatientAccessResponses, GetPatientClinicalSummaryData, GetPatientClinicalSummaryErrors, GetPatientClinicalSummaryResponses, GetPatientData, GetPatientErrors, GetPatientLinkReferenceDataData, GetPatientLinkReferenceDataErrors, GetPatientLinkReferenceDataResponses, GetPatientReferenceDataData, GetPatientReferenceDataErrors, GetPatientReferenceDataResponses, GetPatientResponses, GetPharmacyPrescriptionData, GetPharmacyPrescriptionErrors, GetPharmacyPrescriptionResponses, GetPharmacyWorkspaceData, GetPharmacyWorkspaceErrors, GetPharmacyWorkspaceResponses, GetReadinessData, GetReadinessErrors, GetReadinessResponses, GetReceptionWorkspaceData, GetReceptionWorkspaceErrors, GetReceptionWorkspaceResponses, GetRevenueReportData, GetRevenueReportErrors, GetRevenueReportResponses, GetSchedulingData, GetSchedulingErrors, GetSchedulingResponses, GetStaffData, GetStaffErrors, GetStaffReferenceDataData, GetStaffReferenceDataErrors, GetStaffReferenceDataResponses, GetStaffResponses, GrantStaffRoleData, GrantStaffRoleErrors, GrantStaffRoleResponses, IssueInvoiceData, IssueInvoiceErrors, IssueInvoiceResponses, IssuePharmacyPrescriptionData, IssuePharmacyPrescriptionErrors, IssuePharmacyPrescriptionResponses, ListAdminAppointmentsData, ListAdminAppointmentsErrors, ListAdminAppointmentsResponses, ListBillingBranchesData, ListBillingBranchesErrors, ListBillingBranchesResponses, ListCatalogRoomsData, ListCatalogRoomsErrors, ListCatalogRoomsResponses, ListCatalogServicesData, ListCatalogServicesErrors, ListCatalogServicesResponses, ListClinicalBranchesData, ListClinicalBranchesErrors, ListClinicalBranchesResponses, ListClinicalEncountersData, ListClinicalEncountersErrors, ListClinicalEncountersResponses, ListMyAppointmentsData, ListMyAppointmentsErrors, ListMyAppointmentsResponses, ListPatientLinkRequestsData, ListPatientLinkRequestsErrors, ListPatientLinkRequestsResponses, ListPharmacyBranchesData, ListPharmacyBranchesErrors, ListPharmacyBranchesResponses, ListPublicAvailabilityData, ListPublicAvailabilityErrors, ListPublicAvailabilityResponses, ListPublicBranchesData, ListPublicBranchesResponses, ListPublicDoctorsData, ListPublicDoctorsErrors, ListPublicDoctorsResponses, ListPublicServicesData, ListPublicServicesErrors, ListPublicServicesResponses, ListPublicSpecialtiesData, ListPublicSpecialtiesResponses, ListReceptionBranchesData, ListReceptionBranchesErrors, ListReceptionBranchesResponses, ListReportBranchesData, ListReportBranchesErrors, ListReportBranchesResponses, ListStaffData, ListStaffErrors, ListStaffResponses, LoginData, LoginErrors, LoginResponses, LogoutAllData2, LogoutAllErrors, LogoutAllResponses, LogoutData2, LogoutErrors, LogoutResponses, MarkAppointmentNoShowData, MarkAppointmentNoShowErrors, MarkAppointmentNoShowResponses, OpenPharmacyDispensationData, OpenPharmacyDispensationErrors, OpenPharmacyDispensationResponses, OrderClinicalServiceData, OrderClinicalServiceErrors, OrderClinicalServiceResponses, ReceivePharmacyStockData, ReceivePharmacyStockErrors, ReceivePharmacyStockResponses, ReconcilePharmacyStockData, ReconcilePharmacyStockErrors, ReconcilePharmacyStockResponses, RecordInvoicePaymentData, RecordInvoicePaymentErrors, RecordInvoicePaymentResponses, RefreshSessionData, RefreshSessionErrors, RefreshSessionResponses, RefundPaymentAllocationData, RefundPaymentAllocationErrors, RefundPaymentAllocationResponses, RequestPasswordResetData, RequestPasswordResetErrors, RequestPasswordResetResponses, RequestPatientLinkData, RequestPatientLinkErrors, RequestPatientLinkResponses, RequestPatientRegistrationData, RequestPatientRegistrationErrors, RequestPatientRegistrationResponses, RescheduleAdminAppointmentData, RescheduleAdminAppointmentErrors, RescheduleAdminAppointmentResponses, RescheduleMyAppointmentData, RescheduleMyAppointmentErrors, RescheduleMyAppointmentResponses, ResetPasswordData, ResetPasswordErrors, ResetPasswordResponses, ReversePharmacyDispensationItemData, ReversePharmacyDispensationItemErrors, ReversePharmacyDispensationItemResponses, RevokeOwnPatientLinkData, RevokeOwnPatientLinkErrors, RevokeOwnPatientLinkResponses, RevokePatientLinkAsStaffData, RevokePatientLinkAsStaffErrors, RevokePatientLinkAsStaffResponses, RevokeStaffRoleData, RevokeStaffRoleErrors, RevokeStaffRoleResponses, SearchPatientsData, SearchPatientsErrors, SearchPatientsResponses, SearchReceptionPatientsData, SearchReceptionPatientsErrors, SearchReceptionPatientsResponses, SetCatalogBranchPriceData, SetCatalogBranchPriceErrors, SetCatalogBranchPriceResponses, SetInvoiceInsuranceAmountData, SetInvoiceInsuranceAmountErrors, SetInvoiceInsuranceAmountResponses, SetStaffAccountStatusData, SetStaffAccountStatusErrors, SetStaffAccountStatusResponses, SignClinicalEncounterData, SignClinicalEncounterErrors, SignClinicalEncounterResponses, StartClinicalEncounterData, StartClinicalEncounterErrors, StartClinicalEncounterResponses, SynchronizeInvoiceChargesData, SynchronizeInvoiceChargesErrors, SynchronizeInvoiceChargesResponses, UnlockStaffAccountData, UnlockStaffAccountErrors, UnlockStaffAccountResponses, UpdateCatalogRoomData, UpdateCatalogRoomErrors, UpdateCatalogRoomResponses, UpdateCatalogServiceData, UpdateCatalogServiceErrors, UpdateCatalogServiceResponses, UpdateClinicalNotesData, UpdateClinicalNotesErrors, UpdateClinicalNotesResponses, UpdatePatientData, UpdatePatientErrors, UpdatePatientResponses, UpdateStaffData, UpdateStaffErrors, UpdateStaffResponses, VerifyPatientRegistrationData, VerifyPatientRegistrationErrors, VerifyPatientRegistrationResponses, VoidInvoiceData, VoidInvoiceErrors, VoidInvoiceResponses } from './types.gen.js';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -546,4 +546,726 @@ export const setCatalogBranchPrice = <ThrowOnError extends boolean = false>(opti
         'Content-Type': 'application/json',
         ...options.headers
     }
+});
+
+/**
+ * Find online-bookable appointment slots for a branch and service
+ */
+export const listPublicAvailability = <ThrowOnError extends boolean = false>(options: Options<ListPublicAvailabilityData, ThrowOnError>): RequestResult<ListPublicAvailabilityResponses, ListPublicAvailabilityErrors, ThrowOnError> => (options.client ?? client).get<ListPublicAvailabilityResponses, ListPublicAvailabilityErrors, ThrowOnError>({ url: '/api/v1/public/availability', ...options });
+
+/**
+ * List appointments for patient profiles the signed-in user may book for
+ */
+export const listMyAppointments = <ThrowOnError extends boolean = false>(options?: Options<ListMyAppointmentsData, ThrowOnError>): RequestResult<ListMyAppointmentsResponses, ListMyAppointmentsErrors, ThrowOnError> => (options?.client ?? client).get<ListMyAppointmentsResponses, ListMyAppointmentsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/appointments',
+    ...options
+});
+
+/**
+ * Hold a public slot for an authorized patient profile
+ */
+export const bookOnlineAppointment = <ThrowOnError extends boolean = false>(options: Options<BookOnlineAppointmentData, ThrowOnError>): RequestResult<BookOnlineAppointmentResponses, BookOnlineAppointmentErrors, ThrowOnError> => (options.client ?? client).post<BookOnlineAppointmentResponses, BookOnlineAppointmentErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/appointments',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Atomically move an authorized appointment to another public slot
+ */
+export const rescheduleMyAppointment = <ThrowOnError extends boolean = false>(options: Options<RescheduleMyAppointmentData, ThrowOnError>): RequestResult<RescheduleMyAppointmentResponses, RescheduleMyAppointmentErrors, ThrowOnError> => (options.client ?? client).post<RescheduleMyAppointmentResponses, RescheduleMyAppointmentErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/appointments/{appointmentId}/reschedule',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Cancel an authorized appointment before the branch deadline
+ */
+export const cancelMyAppointment = <ThrowOnError extends boolean = false>(options: Options<CancelMyAppointmentData, ThrowOnError>): RequestResult<CancelMyAppointmentResponses, CancelMyAppointmentErrors, ThrowOnError> => (options.client ?? client).post<CancelMyAppointmentResponses, CancelMyAppointmentErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/appointments/{appointmentId}/cancel',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List a branch appointment day for operational staff
+ */
+export const listAdminAppointments = <ThrowOnError extends boolean = false>(options: Options<ListAdminAppointmentsData, ThrowOnError>): RequestResult<ListAdminAppointmentsResponses, ListAdminAppointmentsErrors, ThrowOnError> => (options.client ?? client).get<ListAdminAppointmentsResponses, ListAdminAppointmentsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/appointments',
+    ...options
+});
+
+/**
+ * Book and immediately confirm a phone or counter appointment
+ */
+export const bookStaffAppointment = <ThrowOnError extends boolean = false>(options: Options<BookStaffAppointmentData, ThrowOnError>): RequestResult<BookStaffAppointmentResponses, BookStaffAppointmentErrors, ThrowOnError> => (options.client ?? client).post<BookStaffAppointmentResponses, BookStaffAppointmentErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/appointments',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Confirm a PENDING appointment before its hold expires
+ */
+export const confirmAppointment = <ThrowOnError extends boolean = false>(options: Options<ConfirmAppointmentData, ThrowOnError>): RequestResult<ConfirmAppointmentResponses, ConfirmAppointmentErrors, ThrowOnError> => (options.client ?? client).post<ConfirmAppointmentResponses, ConfirmAppointmentErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/appointments/{appointmentId}/confirm',
+    ...options
+});
+
+/**
+ * Atomically move an appointment as operational staff
+ */
+export const rescheduleAdminAppointment = <ThrowOnError extends boolean = false>(options: Options<RescheduleAdminAppointmentData, ThrowOnError>): RequestResult<RescheduleAdminAppointmentResponses, RescheduleAdminAppointmentErrors, ThrowOnError> => (options.client ?? client).post<RescheduleAdminAppointmentResponses, RescheduleAdminAppointmentErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/appointments/{appointmentId}/reschedule',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Cancel an appointment as operational staff
+ */
+export const cancelAdminAppointment = <ThrowOnError extends boolean = false>(options: Options<CancelAdminAppointmentData, ThrowOnError>): RequestResult<CancelAdminAppointmentResponses, CancelAdminAppointmentErrors, ThrowOnError> => (options.client ?? client).post<CancelAdminAppointmentResponses, CancelAdminAppointmentErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/appointments/{appointmentId}/cancel',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Mark a confirmed appointment as no-show after its scheduled end
+ */
+export const markAppointmentNoShow = <ThrowOnError extends boolean = false>(options: Options<MarkAppointmentNoShowData, ThrowOnError>): RequestResult<MarkAppointmentNoShowResponses, MarkAppointmentNoShowErrors, ThrowOnError> => (options.client ?? client).post<MarkAppointmentNoShowResponses, MarkAppointmentNoShowErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/appointments/{appointmentId}/no-show',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Get branch doctors, rooms and recurring working schedules
+ */
+export const getScheduling = <ThrowOnError extends boolean = false>(options: Options<GetSchedulingData, ThrowOnError>): RequestResult<GetSchedulingResponses, GetSchedulingErrors, ThrowOnError> => (options.client ?? client).get<GetSchedulingResponses, GetSchedulingErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/schedules',
+    ...options
+});
+
+/**
+ * Create a non-overlapping recurring doctor and room schedule
+ */
+export const createWorkingSchedule = <ThrowOnError extends boolean = false>(options: Options<CreateWorkingScheduleData, ThrowOnError>): RequestResult<CreateWorkingScheduleResponses, CreateWorkingScheduleErrors, ThrowOnError> => (options.client ?? client).post<CreateWorkingScheduleResponses, CreateWorkingScheduleErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/schedules',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Generate timezone-correct slots for a recurring schedule
+ */
+export const generateWorkingScheduleSlots = <ThrowOnError extends boolean = false>(options: Options<GenerateWorkingScheduleSlotsData, ThrowOnError>): RequestResult<GenerateWorkingScheduleSlotsResponses, GenerateWorkingScheduleSlotsErrors, ThrowOnError> => (options.client ?? client).post<GenerateWorkingScheduleSlotsResponses, GenerateWorkingScheduleSlotsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/schedules/{scheduleId}/generate-slots',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List branches where the current staff member may receive or queue patients
+ */
+export const listReceptionBranches = <ThrowOnError extends boolean = false>(options?: Options<ListReceptionBranchesData, ThrowOnError>): RequestResult<ListReceptionBranchesResponses, ListReceptionBranchesErrors, ThrowOnError> => (options?.client ?? client).get<ListReceptionBranchesResponses, ListReceptionBranchesErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/reception/branches',
+    ...options
+});
+
+/**
+ * Get today's branch queue, confirmed arrivals and walk-in reference data
+ */
+export const getReceptionWorkspace = <ThrowOnError extends boolean = false>(options: Options<GetReceptionWorkspaceData, ThrowOnError>): RequestResult<GetReceptionWorkspaceResponses, GetReceptionWorkspaceErrors, ThrowOnError> => (options.client ?? client).get<GetReceptionWorkspaceResponses, GetReceptionWorkspaceErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/reception',
+    ...options
+});
+
+/**
+ * Search active patients for walk-in reception at an authorized branch
+ */
+export const searchReceptionPatients = <ThrowOnError extends boolean = false>(options: Options<SearchReceptionPatientsData, ThrowOnError>): RequestResult<SearchReceptionPatientsResponses, SearchReceptionPatientsErrors, ThrowOnError> => (options.client ?? client).get<SearchReceptionPatientsResponses, SearchReceptionPatientsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/reception/patients',
+    ...options
+});
+
+/**
+ * Atomically create an encounter and queue ticket for a confirmed appointment
+ */
+export const checkInAppointment = <ThrowOnError extends boolean = false>(options: Options<CheckInAppointmentData, ThrowOnError>): RequestResult<CheckInAppointmentResponses, CheckInAppointmentErrors, ThrowOnError> => (options.client ?? client).post<CheckInAppointmentResponses, CheckInAppointmentErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/check-ins/appointments/{appointmentId}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Atomically create a walk-in encounter, initial service and queue ticket without a fake appointment
+ */
+export const createWalkInEncounter = <ThrowOnError extends boolean = false>(options: Options<CreateWalkInEncounterData, ThrowOnError>): RequestResult<CreateWalkInEncounterResponses, CreateWalkInEncounterErrors, ThrowOnError> => (options.client ?? client).post<CreateWalkInEncounterResponses, CreateWalkInEncounterErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/check-ins/walk-ins',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Atomically call the highest-priority then oldest waiting patient
+ *
+ * Concurrent desks lock and claim different WAITING tickets. Data is null when no patient is waiting.
+ */
+export const callNextQueueTicket = <ThrowOnError extends boolean = false>(options: Options<CallNextQueueTicketData, ThrowOnError>): RequestResult<CallNextQueueTicketResponses, CallNextQueueTicketErrors, ThrowOnError> => (options.client ?? client).post<CallNextQueueTicketResponses, CallNextQueueTicketErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/queues/call-next',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List active branches assigned to the signed-in doctor
+ */
+export const listClinicalBranches = <ThrowOnError extends boolean = false>(options?: Options<ListClinicalBranchesData, ThrowOnError>): RequestResult<ListClinicalBranchesResponses, ListClinicalBranchesErrors, ThrowOnError> => (options?.client ?? client).get<ListClinicalBranchesResponses, ListClinicalBranchesErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/clinical/branches',
+    ...options
+});
+
+/**
+ * List the doctor's encounters in one branch
+ */
+export const listClinicalEncounters = <ThrowOnError extends boolean = false>(options: Options<ListClinicalEncountersData, ThrowOnError>): RequestResult<ListClinicalEncountersResponses, ListClinicalEncountersErrors, ThrowOnError> => (options.client ?? client).get<ListClinicalEncountersResponses, ListClinicalEncountersErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/encounters',
+    ...options
+});
+
+/**
+ * Read a clinical encounter assigned to the doctor
+ */
+export const getClinicalEncounter = <ThrowOnError extends boolean = false>(options: Options<GetClinicalEncounterData, ThrowOnError>): RequestResult<GetClinicalEncounterResponses, GetClinicalEncounterErrors, ThrowOnError> => (options.client ?? client).get<GetClinicalEncounterResponses, GetClinicalEncounterErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/encounters/{encounterId}',
+    ...options
+});
+
+/**
+ * Start only a called encounter assigned to the doctor
+ */
+export const startClinicalEncounter = <ThrowOnError extends boolean = false>(options: Options<StartClinicalEncounterData, ThrowOnError>): RequestResult<StartClinicalEncounterResponses, StartClinicalEncounterErrors, ThrowOnError> => (options.client ?? client).post<StartClinicalEncounterResponses, StartClinicalEncounterErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/encounters/{encounterId}/start',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Replace clinical notes on an in-progress encounter
+ */
+export const updateClinicalNotes = <ThrowOnError extends boolean = false>(options: Options<UpdateClinicalNotesData, ThrowOnError>): RequestResult<UpdateClinicalNotesResponses, UpdateClinicalNotesErrors, ThrowOnError> => (options.client ?? client).patch<UpdateClinicalNotesResponses, UpdateClinicalNotesErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/encounters/{encounterId}/clinical-notes',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Append a vital-sign measurement while the encounter is open
+ */
+export const addClinicalVitalSigns = <ThrowOnError extends boolean = false>(options: Options<AddClinicalVitalSignsData, ThrowOnError>): RequestResult<AddClinicalVitalSignsResponses, AddClinicalVitalSignsErrors, ThrowOnError> => (options.client ?? client).post<AddClinicalVitalSignsResponses, AddClinicalVitalSignsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/encounters/{encounterId}/vital-signs',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Append a diagnosis; at most one can be primary
+ */
+export const addClinicalDiagnosis = <ThrowOnError extends boolean = false>(options: Options<AddClinicalDiagnosisData, ThrowOnError>): RequestResult<AddClinicalDiagnosisResponses, AddClinicalDiagnosisErrors, ThrowOnError> => (options.client ?? client).post<AddClinicalDiagnosisResponses, AddClinicalDiagnosisErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/encounters/{encounterId}/diagnoses',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Order an available branch service at its current branch price
+ */
+export const orderClinicalService = <ThrowOnError extends boolean = false>(options: Options<OrderClinicalServiceData, ThrowOnError>): RequestResult<OrderClinicalServiceResponses, OrderClinicalServiceErrors, ThrowOnError> => (options.client ?? client).post<OrderClinicalServiceResponses, OrderClinicalServiceErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/encounters/{encounterId}/services',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Create immutable FINAL result version 1 and complete the service
+ */
+export const finalizeClinicalServiceResult = <ThrowOnError extends boolean = false>(options: Options<FinalizeClinicalServiceResultData, ThrowOnError>): RequestResult<FinalizeClinicalServiceResultResponses, FinalizeClinicalServiceResultErrors, ThrowOnError> => (options.client ?? client).post<FinalizeClinicalServiceResultResponses, FinalizeClinicalServiceResultErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/clinical/services/{serviceId}/results/finalize',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Complete after a primary diagnosis and all required services are resolved
+ */
+export const completeClinicalEncounter = <ThrowOnError extends boolean = false>(options: Options<CompleteClinicalEncounterData, ThrowOnError>): RequestResult<CompleteClinicalEncounterResponses, CompleteClinicalEncounterErrors, ThrowOnError> => (options.client ?? client).post<CompleteClinicalEncounterResponses, CompleteClinicalEncounterErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/encounters/{encounterId}/complete',
+    ...options
+});
+
+/**
+ * Hash and lock the completed canonical clinical record
+ */
+export const signClinicalEncounter = <ThrowOnError extends boolean = false>(options: Options<SignClinicalEncounterData, ThrowOnError>): RequestResult<SignClinicalEncounterResponses, SignClinicalEncounterErrors, ThrowOnError> => (options.client ?? client).post<SignClinicalEncounterResponses, SignClinicalEncounterErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/encounters/{encounterId}/sign',
+    ...options
+});
+
+/**
+ * Append a hash-chained amendment to a signed record
+ */
+export const amendClinicalEncounter = <ThrowOnError extends boolean = false>(options: Options<AmendClinicalEncounterData, ThrowOnError>): RequestResult<AmendClinicalEncounterResponses, AmendClinicalEncounterErrors, ThrowOnError> => (options.client ?? client).post<AmendClinicalEncounterResponses, AmendClinicalEncounterErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/encounters/{encounterId}/amendments',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Branches where the actor has prescription or pharmacy permission
+ */
+export const listPharmacyBranches = <ThrowOnError extends boolean = false>(options?: Options<ListPharmacyBranchesData, ThrowOnError>): RequestResult<ListPharmacyBranchesResponses, ListPharmacyBranchesErrors, ThrowOnError> => (options?.client ?? client).get<ListPharmacyBranchesResponses, ListPharmacyBranchesErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/pharmacy/branches',
+    ...options
+});
+
+/**
+ * Branch-scoped medicines, stock, prescriptions and low-stock alerts
+ */
+export const getPharmacyWorkspace = <ThrowOnError extends boolean = false>(options: Options<GetPharmacyWorkspaceData, ThrowOnError>): RequestResult<GetPharmacyWorkspaceResponses, GetPharmacyWorkspaceErrors, ThrowOnError> => (options.client ?? client).get<GetPharmacyWorkspaceResponses, GetPharmacyWorkspaceErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/pharmacy/workspace',
+    ...options
+});
+
+/**
+ * Return balances that differ from the append-only stock ledger
+ */
+export const reconcilePharmacyStock = <ThrowOnError extends boolean = false>(options: Options<ReconcilePharmacyStockData, ThrowOnError>): RequestResult<ReconcilePharmacyStockResponses, ReconcilePharmacyStockErrors, ThrowOnError> => (options.client ?? client).get<ReconcilePharmacyStockResponses, ReconcilePharmacyStockErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/pharmacy/reconciliation',
+    ...options
+});
+
+/**
+ * Create an organization-level medicine definition
+ */
+export const createPharmacyMedicine = <ThrowOnError extends boolean = false>(options: Options<CreatePharmacyMedicineData, ThrowOnError>): RequestResult<CreatePharmacyMedicineResponses, CreatePharmacyMedicineErrors, ThrowOnError> => (options.client ?? client).post<CreatePharmacyMedicineResponses, CreatePharmacyMedicineErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/pharmacy/medicines',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Register a medicine batch with expiry and prices
+ */
+export const createPharmacyBatch = <ThrowOnError extends boolean = false>(options: Options<CreatePharmacyBatchData, ThrowOnError>): RequestResult<CreatePharmacyBatchResponses, CreatePharmacyBatchErrors, ThrowOnError> => (options.client ?? client).post<CreatePharmacyBatchResponses, CreatePharmacyBatchErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/pharmacy/batches',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Create a branch warehouse, dispensing counter or quarantine location
+ */
+export const createPharmacyLocation = <ThrowOnError extends boolean = false>(options: Options<CreatePharmacyLocationData, ThrowOnError>): RequestResult<CreatePharmacyLocationResponses, CreatePharmacyLocationErrors, ThrowOnError> => (options.client ?? client).post<CreatePharmacyLocationResponses, CreatePharmacyLocationErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/pharmacy/locations',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Atomically increase stock balance and append a receipt movement
+ */
+export const receivePharmacyStock = <ThrowOnError extends boolean = false>(options: Options<ReceivePharmacyStockData, ThrowOnError>): RequestResult<ReceivePharmacyStockResponses, ReceivePharmacyStockErrors, ThrowOnError> => (options.client ?? client).post<ReceivePharmacyStockResponses, ReceivePharmacyStockErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/pharmacy/receipts',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Attending doctor starts a draft prescription for an in-progress encounter
+ */
+export const createEncounterPrescription = <ThrowOnError extends boolean = false>(options: Options<CreateEncounterPrescriptionData, ThrowOnError>): RequestResult<CreateEncounterPrescriptionResponses, CreateEncounterPrescriptionErrors, ThrowOnError> => (options.client ?? client).post<CreateEncounterPrescriptionResponses, CreateEncounterPrescriptionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/encounters/{encounterId}/prescriptions',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Read a prescription as its attending doctor or scoped pharmacy staff
+ */
+export const getPharmacyPrescription = <ThrowOnError extends boolean = false>(options: Options<GetPharmacyPrescriptionData, ThrowOnError>): RequestResult<GetPharmacyPrescriptionResponses, GetPharmacyPrescriptionErrors, ThrowOnError> => (options.client ?? client).get<GetPharmacyPrescriptionResponses, GetPharmacyPrescriptionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/prescriptions/{prescriptionId}',
+    ...options
+});
+
+/**
+ * Add medicine to DRAFT; conflicting active-ingredient allergy needs a privileged override reason
+ */
+export const addPrescriptionMedicine = <ThrowOnError extends boolean = false>(options: Options<AddPrescriptionMedicineData, ThrowOnError>): RequestResult<AddPrescriptionMedicineResponses, AddPrescriptionMedicineErrors, ThrowOnError> => (options.client ?? client).post<AddPrescriptionMedicineResponses, AddPrescriptionMedicineErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/prescriptions/{prescriptionId}/items',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Issue and lock a nonempty draft prescription
+ */
+export const issuePharmacyPrescription = <ThrowOnError extends boolean = false>(options: Options<IssuePharmacyPrescriptionData, ThrowOnError>): RequestResult<IssuePharmacyPrescriptionResponses, IssuePharmacyPrescriptionErrors, ThrowOnError> => (options.client ?? client).post<IssuePharmacyPrescriptionResponses, IssuePharmacyPrescriptionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/prescriptions/{prescriptionId}/issue',
+    ...options
+});
+
+/**
+ * Cancel a draft or issued prescription before medicine is dispensed
+ */
+export const cancelPharmacyPrescription = <ThrowOnError extends boolean = false>(options: Options<CancelPharmacyPrescriptionData, ThrowOnError>): RequestResult<CancelPharmacyPrescriptionResponses, CancelPharmacyPrescriptionErrors, ThrowOnError> => (options.client ?? client).post<CancelPharmacyPrescriptionResponses, CancelPharmacyPrescriptionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/prescriptions/{prescriptionId}/cancel',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Open a draft dispensing session at an active pharmacy location
+ */
+export const openPharmacyDispensation = <ThrowOnError extends boolean = false>(options: Options<OpenPharmacyDispensationData, ThrowOnError>): RequestResult<OpenPharmacyDispensationResponses, OpenPharmacyDispensationErrors, ThrowOnError> => (options.client ?? client).post<OpenPharmacyDispensationResponses, OpenPharmacyDispensationErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/prescriptions/{prescriptionId}/dispensations',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Dispense from a valid FEFO batch without exceeding prescription or stock
+ */
+export const dispensePharmacyItem = <ThrowOnError extends boolean = false>(options: Options<DispensePharmacyItemData, ThrowOnError>): RequestResult<DispensePharmacyItemResponses, DispensePharmacyItemErrors, ThrowOnError> => (options.client ?? client).post<DispensePharmacyItemResponses, DispensePharmacyItemErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/dispensations/{dispensationId}/items',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Complete a session that has at least one nonreversed dispensing item
+ */
+export const completePharmacyDispensation = <ThrowOnError extends boolean = false>(options: Options<CompletePharmacyDispensationData, ThrowOnError>): RequestResult<CompletePharmacyDispensationResponses, CompletePharmacyDispensationErrors, ThrowOnError> => (options.client ?? client).post<CompletePharmacyDispensationResponses, CompletePharmacyDispensationErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/dispensations/{dispensationId}/complete',
+    ...options
+});
+
+/**
+ * Cancel a draft session only after every dispensed item has been reversed
+ */
+export const cancelPharmacyDispensation = <ThrowOnError extends boolean = false>(options: Options<CancelPharmacyDispensationData, ThrowOnError>): RequestResult<CancelPharmacyDispensationResponses, CancelPharmacyDispensationErrors, ThrowOnError> => (options.client ?? client).post<CancelPharmacyDispensationResponses, CancelPharmacyDispensationErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/dispensations/{dispensationId}/cancel',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Reverse a dispensing movement; expired or recalled stock cannot return to sellable inventory
+ */
+export const reversePharmacyDispensationItem = <ThrowOnError extends boolean = false>(options: Options<ReversePharmacyDispensationItemData, ThrowOnError>): RequestResult<ReversePharmacyDispensationItemResponses, ReversePharmacyDispensationItemErrors, ThrowOnError> => (options.client ?? client).post<ReversePharmacyDispensationItemResponses, ReversePharmacyDispensationItemErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/pharmacy/dispensation-items/{itemId}/reverse',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List branches where the actor has billing or payment permission
+ */
+export const listBillingBranches = <ThrowOnError extends boolean = false>(options?: Options<ListBillingBranchesData, ThrowOnError>): RequestResult<ListBillingBranchesResponses, ListBillingBranchesErrors, ThrowOnError> => (options?.client ?? client).get<ListBillingBranchesResponses, ListBillingBranchesErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/billing/branches',
+    ...options
+});
+
+/**
+ * List billable encounters and recent invoices for one branch
+ */
+export const getBillingWorkspace = <ThrowOnError extends boolean = false>(options: Options<GetBillingWorkspaceData, ThrowOnError>): RequestResult<GetBillingWorkspaceResponses, GetBillingWorkspaceErrors, ThrowOnError> => (options.client ?? client).get<GetBillingWorkspaceResponses, GetBillingWorkspaceErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/billing/workspace',
+    ...options
+});
+
+/**
+ * Create or return the active draft invoice for an encounter
+ */
+export const createEncounterInvoice = <ThrowOnError extends boolean = false>(options: Options<CreateEncounterInvoiceData, ThrowOnError>): RequestResult<CreateEncounterInvoiceResponses, CreateEncounterInvoiceErrors, ThrowOnError> => (options.client ?? client).post<CreateEncounterInvoiceResponses, CreateEncounterInvoiceErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/encounters/{encounterId}/invoices',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Get an invoice with charge, payment allocation and refund history
+ */
+export const getInvoice = <ThrowOnError extends boolean = false>(options: Options<GetInvoiceData, ThrowOnError>): RequestResult<GetInvoiceResponses, GetInvoiceErrors, ThrowOnError> => (options.client ?? client).get<GetInvoiceResponses, GetInvoiceErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/invoices/{invoiceId}',
+    ...options
+});
+
+/**
+ * Synchronize completed services and effective dispensations into a draft invoice
+ */
+export const synchronizeInvoiceCharges = <ThrowOnError extends boolean = false>(options: Options<SynchronizeInvoiceChargesData, ThrowOnError>): RequestResult<SynchronizeInvoiceChargesResponses, SynchronizeInvoiceChargesErrors, ThrowOnError> => (options.client ?? client).post<SynchronizeInvoiceChargesResponses, SynchronizeInvoiceChargesErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/invoices/{invoiceId}/synchronize',
+    ...options
+});
+
+/**
+ * Add an audited manual charge to a draft invoice
+ */
+export const addManualInvoiceItem = <ThrowOnError extends boolean = false>(options: Options<AddManualInvoiceItemData, ThrowOnError>): RequestResult<AddManualInvoiceItemResponses, AddManualInvoiceItemErrors, ThrowOnError> => (options.client ?? client).post<AddManualInvoiceItemResponses, AddManualInvoiceItemErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/invoices/{invoiceId}/items',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Set the insurer-covered amount on a draft invoice
+ */
+export const setInvoiceInsuranceAmount = <ThrowOnError extends boolean = false>(options: Options<SetInvoiceInsuranceAmountData, ThrowOnError>): RequestResult<SetInvoiceInsuranceAmountResponses, SetInvoiceInsuranceAmountErrors, ThrowOnError> => (options.client ?? client).patch<SetInvoiceInsuranceAmountResponses, SetInvoiceInsuranceAmountErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/invoices/{invoiceId}/insurance',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Atomically resynchronize all charges, pass completeness checks and issue the invoice
+ */
+export const issueInvoice = <ThrowOnError extends boolean = false>(options: Options<IssueInvoiceData, ThrowOnError>): RequestResult<IssueInvoiceResponses, IssueInvoiceErrors, ThrowOnError> => (options.client ?? client).post<IssueInvoiceResponses, IssueInvoiceErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/invoices/{invoiceId}/issue',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Record a partial or full payment without exceeding the locked invoice balance
+ */
+export const recordInvoicePayment = <ThrowOnError extends boolean = false>(options: Options<RecordInvoicePaymentData, ThrowOnError>): RequestResult<RecordInvoicePaymentResponses, RecordInvoicePaymentErrors, ThrowOnError> => (options.client ?? client).post<RecordInvoicePaymentResponses, RecordInvoicePaymentErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/invoices/{invoiceId}/payments',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Refund an amount that does not exceed the selected allocation's refundable balance
+ */
+export const refundPaymentAllocation = <ThrowOnError extends boolean = false>(options: Options<RefundPaymentAllocationData, ThrowOnError>): RequestResult<RefundPaymentAllocationResponses, RefundPaymentAllocationErrors, ThrowOnError> => (options.client ?? client).post<RefundPaymentAllocationResponses, RefundPaymentAllocationErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/payment-allocations/{allocationId}/refunds',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Void a draft or issued invoice only when net collected is zero
+ */
+export const voidInvoice = <ThrowOnError extends boolean = false>(options: Options<VoidInvoiceData, ThrowOnError>): RequestResult<VoidInvoiceResponses, VoidInvoiceErrors, ThrowOnError> => (options.client ?? client).post<VoidInvoiceResponses, VoidInvoiceErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/invoices/{invoiceId}/void',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List report branches and the caller's report capabilities
+ */
+export const listReportBranches = <ThrowOnError extends boolean = false>(options?: Options<ListReportBranchesData, ThrowOnError>): RequestResult<ListReportBranchesResponses, ListReportBranchesErrors, ThrowOnError> => (options?.client ?? client).get<ListReportBranchesResponses, ListReportBranchesErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/reports/branches',
+    ...options
+});
+
+/**
+ * Get appointment, arrival, completion, no-show and wait-time metrics
+ */
+export const getOperationsReport = <ThrowOnError extends boolean = false>(options: Options<GetOperationsReportData, ThrowOnError>): RequestResult<GetOperationsReportResponses, GetOperationsReportErrors, ThrowOnError> => (options.client ?? client).get<GetOperationsReportResponses, GetOperationsReportErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/reports/operations',
+    ...options
+});
+
+/**
+ * Get invoiced, collected, refunded and net-collected amounts
+ */
+export const getRevenueReport = <ThrowOnError extends boolean = false>(options: Options<GetRevenueReportData, ThrowOnError>): RequestResult<GetRevenueReportResponses, GetRevenueReportErrors, ThrowOnError> => (options.client ?? client).get<GetRevenueReportResponses, GetRevenueReportErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/reports/revenue',
+    ...options
+});
+
+/**
+ * Get service and medicine usage with low-stock and expiring-batch alerts
+ */
+export const getInventoryReport = <ThrowOnError extends boolean = false>(options: Options<GetInventoryReportData, ThrowOnError>): RequestResult<GetInventoryReportResponses, GetInventoryReportErrors, ThrowOnError> => (options.client ?? client).get<GetInventoryReportResponses, GetInventoryReportErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/reports/inventory',
+    ...options
 });

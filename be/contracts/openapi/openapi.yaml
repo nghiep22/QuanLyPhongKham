@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Private Clinic API
-  version: 0.5.0
+  version: 0.10.0
   description: Public contract for the private clinic management system.
 servers:
   - url: http://localhost:5000
@@ -1248,8 +1248,1233 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+  /api/v1/public/availability:
+    get:
+      operationId: listPublicAvailability
+      summary: Find online-bookable appointment slots for a branch and service
+      parameters:
+        - $ref: '#/components/parameters/BranchPublicIdQuery'
+        - name: servicePublicId
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+        - name: doctorPublicId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: fromDate
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: toDate
+          in: query
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Slots still inside their public booking window.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AvailabilityListResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /api/v1/appointments:
+    get:
+      operationId: listMyAppointments
+      summary: List appointments for patient profiles the signed-in user may book for
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Authorized appointment history and upcoming appointments.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AppointmentListResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: bookOnlineAppointment
+      summary: Hold a public slot for an authorized patient profile
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BookAppointmentRequest' }
+      responses:
+        '201':
+          description: Slot held in PENDING state until staff confirmation or expiry.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AppointmentResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/appointments/{appointmentId}/reschedule:
+    post:
+      operationId: rescheduleMyAppointment
+      summary: Atomically move an authorized appointment to another public slot
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/AppointmentId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RescheduleAppointmentRequest' }
+      responses:
+        '200':
+          description: Appointment moved without releasing the old slot early.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AppointmentResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/appointments/{appointmentId}/cancel:
+    post:
+      operationId: cancelMyAppointment
+      summary: Cancel an authorized appointment before the branch deadline
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/AppointmentId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AppointmentReasonRequest' }
+      responses:
+        '200':
+          description: Appointment cancelled and slot released.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AppointmentResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/admin/appointments:
+    get:
+      operationId: listAdminAppointments
+      summary: List a branch appointment day for operational staff
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/BranchPublicIdQuery'
+        - name: serviceDate
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/AppointmentStatus' }
+        - name: query
+          in: query
+          schema: { type: string, maxLength: 100 }
+      responses:
+        '200':
+          description: Branch-scoped appointments.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AppointmentListResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: bookStaffAppointment
+      summary: Book and immediately confirm a phone or counter appointment
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BookStaffAppointmentRequest' }
+      responses:
+        '201':
+          description: Confirmed staff booking.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AppointmentResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/admin/appointments/{appointmentId}/confirm:
+    post:
+      operationId: confirmAppointment
+      summary: Confirm a PENDING appointment before its hold expires
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/AppointmentId' }]
+      responses:
+        '200':
+          description: Confirmed appointment.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AppointmentResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/admin/appointments/{appointmentId}/reschedule:
+    post:
+      operationId: rescheduleAdminAppointment
+      summary: Atomically move an appointment as operational staff
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/AppointmentId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RescheduleAppointmentRequest' }
+      responses:
+        '200':
+          description: Rescheduled appointment.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AppointmentResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/admin/appointments/{appointmentId}/cancel:
+    post:
+      operationId: cancelAdminAppointment
+      summary: Cancel an appointment as operational staff
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/AppointmentId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AppointmentReasonRequest' }
+      responses:
+        '200':
+          description: Cancelled appointment.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AppointmentResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/admin/appointments/{appointmentId}/no-show:
+    post:
+      operationId: markAppointmentNoShow
+      summary: Mark a confirmed appointment as no-show after its scheduled end
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/AppointmentId' }]
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OptionalAppointmentReasonRequest' }
+      responses:
+        '200':
+          description: No-show recorded.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AppointmentResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/schedules:
+    get:
+      operationId: getScheduling
+      summary: Get branch doctors, rooms and recurring working schedules
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/BranchPublicIdQuery' }]
+      responses:
+        '200':
+          description: Branch-scoped scheduling workspace.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SchedulingResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: createWorkingSchedule
+      summary: Create a non-overlapping recurring doctor and room schedule
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateWorkingScheduleRequest' }
+      responses:
+        '201':
+          description: Working schedule created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreatedScheduleResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/schedules/{scheduleId}/generate-slots:
+    post:
+      operationId: generateWorkingScheduleSlots
+      summary: Generate timezone-correct slots for a recurring schedule
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: scheduleId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/GenerateSlotsRequest' }
+      responses:
+        '200':
+          description: Idempotent generation result.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GeneratedSlotsResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/reception/branches:
+    get:
+      operationId: listReceptionBranches
+      summary: List branches where the current staff member may receive or queue patients
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Branch scope for the reception workspace.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReceptionBranchListResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/v1/reception:
+    get:
+      operationId: getReceptionWorkspace
+      summary: Get today's branch queue, confirmed arrivals and walk-in reference data
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/BranchPublicIdQuery' }]
+      responses:
+        '200':
+          description: Live branch reception workspace.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReceptionWorkspaceResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/reception/patients:
+    get:
+      operationId: searchReceptionPatients
+      summary: Search active patients for walk-in reception at an authorized branch
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/BranchPublicIdQuery'
+        - name: query
+          in: query
+          required: true
+          schema: { type: string, minLength: 2, maxLength: 100 }
+      responses:
+        '200':
+          description: Matching active patients.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReceptionPatientListResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/check-ins/appointments/{appointmentId}:
+    post:
+      operationId: checkInAppointment
+      summary: Atomically create an encounter and queue ticket for a confirmed appointment
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/AppointmentId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AppointmentCheckInRequest' }
+      responses:
+        '201':
+          description: Appointment checked in and queue number issued.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/QueueCommandResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/check-ins/walk-ins:
+    post:
+      operationId: createWalkInEncounter
+      summary: Atomically create a walk-in encounter, initial service and queue ticket without a fake appointment
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateWalkInRequest' }
+      responses:
+        '201':
+          description: Walk-in accepted and queue number issued.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/QueueCommandResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/queues/call-next:
+    post:
+      operationId: callNextQueueTicket
+      summary: Atomically call the highest-priority then oldest waiting patient
+      description: Concurrent desks lock and claim different WAITING tickets. Data is null when no patient is waiting.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CallNextQueueRequest' }
+      responses:
+        '200':
+          description: Claimed queue ticket, or null when the queue is empty.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NullableQueueCommandResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/clinical/branches:
+    get:
+      operationId: listClinicalBranches
+      summary: List active branches assigned to the signed-in doctor
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Authorized clinical branches.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClinicalBranchListResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/v1/encounters:
+    get:
+      operationId: listClinicalEncounters
+      summary: List the doctor's encounters in one branch
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/BranchPublicIdQuery'
+        - name: status
+          in: query
+          required: false
+          description: Comma-separated encounter statuses.
+          schema: { type: string }
+      responses:
+        '200':
+          description: Up to 100 encounters, newest first.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClinicalEncounterListResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/encounters/{encounterId}:
+    get:
+      operationId: getClinicalEncounter
+      summary: Read a clinical encounter assigned to the doctor
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/EncounterId' }]
+      responses:
+        '200':
+          description: Encounter, measurements, diagnoses, orders, results and amendments.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClinicalEncounterResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/encounters/{encounterId}/start:
+    post:
+      operationId: startClinicalEncounter
+      summary: Start only a called encounter assigned to the doctor
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/EncounterId' }]
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ClinicalStartRequest' }
+      responses:
+        '200':
+          description: Started encounter.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClinicalEncounterResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/encounters/{encounterId}/clinical-notes:
+    patch:
+      operationId: updateClinicalNotes
+      summary: Replace clinical notes on an in-progress encounter
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/EncounterId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ClinicalNotesRequest' }
+      responses:
+        '200':
+          description: Updated encounter.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClinicalEncounterResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/encounters/{encounterId}/vital-signs:
+    post:
+      operationId: addClinicalVitalSigns
+      summary: Append a vital-sign measurement while the encounter is open
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/EncounterId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ClinicalVitalSignsRequest' }
+      responses:
+        '201':
+          description: Measurement created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClinicalCommandResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/encounters/{encounterId}/diagnoses:
+    post:
+      operationId: addClinicalDiagnosis
+      summary: Append a diagnosis; at most one can be primary
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/EncounterId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ClinicalDiagnosisRequest' }
+      responses:
+        '201':
+          description: Diagnosis created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClinicalCommandResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/encounters/{encounterId}/services:
+    post:
+      operationId: orderClinicalService
+      summary: Order an available branch service at its current branch price
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/EncounterId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ClinicalOrderServiceRequest' }
+      responses:
+        '201':
+          description: Service order created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClinicalCommandResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/clinical/services/{serviceId}/results/finalize:
+    post:
+      operationId: finalizeClinicalServiceResult
+      summary: Create immutable FINAL result version 1 and complete the service
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/EncounterServiceId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ClinicalFinalizeResultRequest' }
+      responses:
+        '201':
+          description: Result finalized.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClinicalCommandResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/encounters/{encounterId}/complete:
+    post:
+      operationId: completeClinicalEncounter
+      summary: Complete after a primary diagnosis and all required services are resolved
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/EncounterId' }]
+      responses:
+        '200':
+          description: Completed encounter.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClinicalEncounterResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/encounters/{encounterId}/sign:
+    post:
+      operationId: signClinicalEncounter
+      summary: Hash and lock the completed canonical clinical record
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/EncounterId' }]
+      responses:
+        '200':
+          description: SHA-256 hash attestation stored on the encounter.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClinicalCommandResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/encounters/{encounterId}/amendments:
+    post:
+      operationId: amendClinicalEncounter
+      summary: Append a hash-chained amendment to a signed record
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/EncounterId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ClinicalAmendmentRequest' }
+      responses:
+        '201':
+          description: Amendment appended.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClinicalCommandResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/pharmacy/branches:
+    get:
+      operationId: listPharmacyBranches
+      summary: Branches where the actor has prescription or pharmacy permission
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Scoped branches.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PharmacyBranchListResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/v1/pharmacy/workspace:
+    get:
+      operationId: getPharmacyWorkspace
+      summary: Branch-scoped medicines, stock, prescriptions and low-stock alerts
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/BranchPublicIdQuery' }]
+      responses:
+        '200':
+          description: Workspace for the actor's permitted branch and role.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PharmacyWorkspaceResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/pharmacy/reconciliation:
+    get:
+      operationId: reconcilePharmacyStock
+      summary: Return balances that differ from the append-only stock ledger
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/BranchPublicIdQuery' }]
+      responses:
+        '200':
+          description: Empty data means every branch balance reconciles.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PharmacyReconciliationResponse' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/pharmacy/medicines:
+    post:
+      operationId: createPharmacyMedicine
+      summary: Create an organization-level medicine definition
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateMedicineRequest' }
+      responses:
+        '201':
+          description: Medicine created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PharmacyResourceResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/pharmacy/batches:
+    post:
+      operationId: createPharmacyBatch
+      summary: Register a medicine batch with expiry and prices
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateMedicineBatchRequest' }
+      responses:
+        '201':
+          description: Batch registered; no stock received yet.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PharmacyResourceResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/pharmacy/locations:
+    post:
+      operationId: createPharmacyLocation
+      summary: Create a branch warehouse, dispensing counter or quarantine location
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreatePharmacyLocationRequest' }
+      responses:
+        '201':
+          description: Inventory location created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PharmacyResourceResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/pharmacy/receipts:
+    post:
+      operationId: receivePharmacyStock
+      summary: Atomically increase stock balance and append a receipt movement
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReceiveStockRequest' }
+      responses:
+        '201':
+          description: Receipt movement created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PharmacyResourceResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/encounters/{encounterId}/prescriptions:
+    post:
+      operationId: createEncounterPrescription
+      summary: Attending doctor starts a draft prescription for an in-progress encounter
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/EncounterId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreatePrescriptionRequest' }
+      responses:
+        '201':
+          description: Draft prescription.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PrescriptionDetailResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/prescriptions/{prescriptionId}:
+    get:
+      operationId: getPharmacyPrescription
+      summary: Read a prescription as its attending doctor or scoped pharmacy staff
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/PrescriptionId' }]
+      responses:
+        '200':
+          description: Prescription with items, dispensing history and drug allergy alerts.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PrescriptionDetailResponse' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/prescriptions/{prescriptionId}/items:
+    post:
+      operationId: addPrescriptionMedicine
+      summary: Add medicine to DRAFT; conflicting active-ingredient allergy needs a privileged override reason
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/PrescriptionId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AddPrescriptionItemRequest' }
+      responses:
+        '201':
+          description: Updated prescription.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PrescriptionDetailResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/prescriptions/{prescriptionId}/issue:
+    post:
+      operationId: issuePharmacyPrescription
+      summary: Issue and lock a nonempty draft prescription
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/PrescriptionId' }]
+      responses:
+        '200':
+          description: Issued prescription.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PrescriptionDetailResponse' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/prescriptions/{prescriptionId}/cancel:
+    post:
+      operationId: cancelPharmacyPrescription
+      summary: Cancel a draft or issued prescription before medicine is dispensed
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/PrescriptionId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PharmacyReasonRequest' }
+      responses:
+        '200':
+          description: Cancelled prescription.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PrescriptionDetailResponse' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/prescriptions/{prescriptionId}/dispensations:
+    post:
+      operationId: openPharmacyDispensation
+      summary: Open a draft dispensing session at an active pharmacy location
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/PrescriptionId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OpenDispensationRequest' }
+      responses:
+        '201':
+          description: Dispensing session opened.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PharmacyResourceResponse' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/dispensations/{dispensationId}/items:
+    post:
+      operationId: dispensePharmacyItem
+      summary: Dispense from a valid FEFO batch without exceeding prescription or stock
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/DispensationId' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DispenseItemRequest' }
+      responses:
+        '201':
+          description: Dispensed item and ledger movement created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PharmacyResourceResponse' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/dispensations/{dispensationId}/complete:
+    post:
+      operationId: completePharmacyDispensation
+      summary: Complete a session that has at least one nonreversed dispensing item
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/DispensationId' }]
+      responses:
+        '200':
+          description: Session completed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PharmacyStatusResponse' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/dispensations/{dispensationId}/cancel:
+    post:
+      operationId: cancelPharmacyDispensation
+      summary: Cancel a draft session only after every dispensed item has been reversed
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/DispensationId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PharmacyReasonRequest' }
+      responses:
+        '200':
+          description: Session cancelled.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PharmacyStatusResponse' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/pharmacy/dispensation-items/{itemId}/reverse:
+    post:
+      operationId: reversePharmacyDispensationItem
+      summary: Reverse a dispensing movement; expired or recalled stock cannot return to sellable inventory
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReverseDispensationRequest' }
+      responses:
+        '200':
+          description: Reversal movement created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PharmacyResourceResponse' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/billing/branches:
+    get:
+      operationId: listBillingBranches
+      summary: List branches where the actor has billing or payment permission
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Scoped billing branches.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BillingBranchListResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/v1/billing/workspace:
+    get:
+      operationId: getBillingWorkspace
+      summary: List billable encounters and recent invoices for one branch
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/BranchPublicIdQuery' }]
+      responses:
+        '200':
+          description: Branch billing workspace.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BillingWorkspaceResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/encounters/{encounterId}/invoices:
+    post:
+      operationId: createEncounterInvoice
+      summary: Create or return the active draft invoice for an encounter
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/EncounterId' }]
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateInvoiceRequest' }
+      responses:
+        '201':
+          description: Draft invoice created or returned.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InvoiceDetailResponse' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/invoices/{invoiceId}:
+    get:
+      operationId: getInvoice
+      summary: Get an invoice with charge, payment allocation and refund history
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/InvoiceId' }]
+      responses:
+        '200':
+          description: Invoice details.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InvoiceDetailResponse' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/invoices/{invoiceId}/synchronize:
+    post:
+      operationId: synchronizeInvoiceCharges
+      summary: Synchronize completed services and effective dispensations into a draft invoice
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/InvoiceId' }]
+      responses:
+        '200':
+          description: Invoice charges synchronized.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InvoiceDetailResponse' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/invoices/{invoiceId}/items:
+    post:
+      operationId: addManualInvoiceItem
+      summary: Add an audited manual charge to a draft invoice
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/InvoiceId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ManualInvoiceItemRequest' }
+      responses:
+        '201':
+          description: Manual charge added.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InvoiceDetailResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/invoices/{invoiceId}/insurance:
+    patch:
+      operationId: setInvoiceInsuranceAmount
+      summary: Set the insurer-covered amount on a draft invoice
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/InvoiceId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InvoiceInsuranceRequest' }
+      responses:
+        '200':
+          description: Insurance amount updated.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InvoiceDetailResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/invoices/{invoiceId}/issue:
+    post:
+      operationId: issueInvoice
+      summary: Atomically resynchronize all charges, pass completeness checks and issue the invoice
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/InvoiceId' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/IssueInvoiceRequest' }
+      responses:
+        '200':
+          description: Invoice issued; an identical retry returns the same invoice.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InvoiceDetailResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/invoices/{invoiceId}/payments:
+    post:
+      operationId: recordInvoicePayment
+      summary: Record a partial or full payment without exceeding the locked invoice balance
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/InvoiceId' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InvoicePaymentRequest' }
+      responses:
+        '201':
+          description: Payment recorded and allocated.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InvoiceDetailResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/payment-allocations/{allocationId}/refunds:
+    post:
+      operationId: refundPaymentAllocation
+      summary: Refund an amount that does not exceed the selected allocation's refundable balance
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/PaymentAllocationId' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PaymentRefundRequest' }
+      responses:
+        '201':
+          description: Refund recorded.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BillingResourceResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/invoices/{invoiceId}/void:
+    post:
+      operationId: voidInvoice
+      summary: Void a draft or issued invoice only when net collected is zero
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/InvoiceId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BillingReasonRequest' }
+      responses:
+        '200':
+          description: Invoice voided.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InvoiceDetailResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/reports/branches:
+    get:
+      operationId: listReportBranches
+      summary: List report branches and the caller's report capabilities
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Branch-scoped reporting capabilities.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReportBranchListResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/reports/operations:
+    get:
+      operationId: getOperationsReport
+      summary: Get appointment, arrival, completion, no-show and wait-time metrics
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/BranchPublicIdQuery' }
+        - { $ref: '#/components/parameters/ReportFromDate' }
+        - { $ref: '#/components/parameters/ReportToDate' }
+      responses:
+        '200':
+          description: Operational report in the branch business timezone.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OperationsReportResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/reports/revenue:
+    get:
+      operationId: getRevenueReport
+      summary: Get invoiced, collected, refunded and net-collected amounts
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/BranchPublicIdQuery' }
+        - { $ref: '#/components/parameters/ReportFromDate' }
+        - { $ref: '#/components/parameters/ReportToDate' }
+      responses:
+        '200':
+          description: Revenue report grouped by business date and payment method.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RevenueReportResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/reports/inventory:
+    get:
+      operationId: getInventoryReport
+      summary: Get service and medicine usage with low-stock and expiring-batch alerts
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/BranchPublicIdQuery' }
+        - { $ref: '#/components/parameters/ReportFromDate' }
+        - { $ref: '#/components/parameters/ReportToDate' }
+      responses:
+        '200':
+          description: Usage and inventory alert report.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InventoryReportResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
 components:
   parameters:
+    InvoiceId:
+      name: invoiceId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    PaymentAllocationId:
+      name: allocationId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    PrescriptionId:
+      name: prescriptionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    DispensationId:
+      name: dispensationId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    EncounterId:
+      name: encounterId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    EncounterServiceId:
+      name: serviceId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    AppointmentId:
+      name: appointmentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
     PatientId:
       name: patientId
       in: path
@@ -1292,6 +2517,16 @@ components:
       schema:
         type: string
         pattern: '^[0-9A-Fa-f]{8}-(?:[0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}$'
+    ReportFromDate:
+      name: from
+      in: query
+      required: true
+      schema: { type: string, format: date }
+    ReportToDate:
+      name: to
+      in: query
+      required: true
+      schema: { type: string, format: date }
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -3234,6 +4469,1407 @@ components:
           format: date
         isAvailable:
           type: boolean
+    AppointmentStatus:
+      type: string
+      enum: [PENDING, CONFIRMED, CHECKED_IN, IN_PROGRESS, COMPLETED, CANCELLED, NO_SHOW, EXPIRED]
+    AppointmentChannel:
+      type: string
+      enum: [ONLINE, PHONE, COUNTER]
+    AvailabilitySlot:
+      type: object
+      additionalProperties: false
+      required: [publicId, branch, doctor, service, room, serviceDateLocal, startTimeLocal, endTimeLocal, startsAtUtc, endsAtUtc]
+      properties:
+        publicId: { type: string, format: uuid }
+        branch:
+          type: object
+          additionalProperties: false
+          required: [publicId, code, name, timezoneName]
+          properties:
+            publicId: { type: string, format: uuid }
+            code: { type: string }
+            name: { type: string }
+            timezoneName: { type: string }
+        doctor:
+          type: object
+          additionalProperties: false
+          required: [publicId, name]
+          properties:
+            publicId: { type: string, format: uuid }
+            name: { type: string }
+        service:
+          type: object
+          additionalProperties: false
+          required: [publicId, code, name, price]
+          properties:
+            publicId: { type: string, format: uuid }
+            code: { type: string }
+            name: { type: string }
+            price:
+              type: object
+              additionalProperties: false
+              required: [amount, currency]
+              properties:
+                amount: { type: string, pattern: '^(0|[1-9][0-9]{0,16})(\.[0-9]{1,2})?$' }
+                currency: { type: string, enum: [VND] }
+        room:
+          type: object
+          additionalProperties: false
+          required: [publicId, code, name]
+          properties:
+            publicId: { type: string, format: uuid }
+            code: { type: string }
+            name: { type: string }
+        serviceDateLocal: { type: string, format: date }
+        startTimeLocal: { type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$' }
+        endTimeLocal: { type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$' }
+        startsAtUtc: { type: string, format: date-time }
+        endsAtUtc: { type: string, format: date-time }
+    AvailabilityListResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/AvailabilitySlot' } }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    Appointment:
+      type: object
+      additionalProperties: false
+      required: [publicId, code, status, bookingChannel, scheduledStartUtc, scheduledEndUtc, serviceDateLocal,
+        startTimeLocal, endTimeLocal, holdExpiresAtUtc, chiefComplaint, patientNote, cancellationReason,
+        slotPublicId, branch, patient, doctor, service, roomName, rowVersion]
+      properties:
+        publicId: { type: string, format: uuid }
+        code: { type: string }
+        status: { $ref: '#/components/schemas/AppointmentStatus' }
+        bookingChannel: { $ref: '#/components/schemas/AppointmentChannel' }
+        scheduledStartUtc: { type: string, format: date-time }
+        scheduledEndUtc: { type: string, format: date-time }
+        serviceDateLocal: { type: string, format: date }
+        startTimeLocal: { type: string }
+        endTimeLocal: { type: string }
+        holdExpiresAtUtc: { type: [string, 'null'], format: date-time }
+        chiefComplaint: { type: [string, 'null'] }
+        patientNote: { type: [string, 'null'] }
+        cancellationReason: { type: [string, 'null'] }
+        slotPublicId: { type: string, format: uuid }
+        branch:
+          type: object
+          additionalProperties: false
+          required: [publicId, name, timezoneName]
+          properties:
+            publicId: { type: string, format: uuid }
+            name: { type: string }
+            timezoneName: { type: string }
+        patient:
+          type: object
+          additionalProperties: false
+          required: [publicId, code, fullName]
+          properties:
+            publicId: { type: string, format: uuid }
+            code: { type: string }
+            fullName: { type: string }
+        doctor:
+          type: object
+          additionalProperties: false
+          required: [publicId, fullName]
+          properties:
+            publicId: { type: string, format: uuid }
+            fullName: { type: string }
+        service:
+          type: object
+          additionalProperties: false
+          required: [publicId, code, name]
+          properties:
+            publicId: { type: string, format: uuid }
+            code: { type: string }
+            name: { type: string }
+        roomName: { type: string }
+        rowVersion: { type: string, pattern: '^[A-Za-z0-9+/]{11}=$' }
+    AppointmentResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data: { $ref: '#/components/schemas/Appointment' }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    AppointmentListResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/Appointment' } }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    BookAppointmentRequest:
+      type: object
+      additionalProperties: false
+      required: [patientPublicId, slotPublicId, servicePublicId]
+      properties:
+        patientPublicId: { type: string, format: uuid }
+        slotPublicId: { type: string, format: uuid }
+        servicePublicId: { type: string, format: uuid }
+        chiefComplaint: { type: [string, 'null'], maxLength: 1000 }
+        patientNote: { type: [string, 'null'], maxLength: 1000 }
+    BookStaffAppointmentRequest:
+      type: object
+      additionalProperties: false
+      required: [patientPublicId, slotPublicId, servicePublicId, bookingChannel]
+      properties:
+        patientPublicId: { type: string, format: uuid }
+        slotPublicId: { type: string, format: uuid }
+        servicePublicId: { type: string, format: uuid }
+        bookingChannel: { type: string, enum: [PHONE, COUNTER] }
+        chiefComplaint: { type: [string, 'null'], maxLength: 1000 }
+        patientNote: { type: [string, 'null'], maxLength: 1000 }
+    RescheduleAppointmentRequest:
+      type: object
+      additionalProperties: false
+      required: [newSlotPublicId, reason]
+      properties:
+        newSlotPublicId: { type: string, format: uuid }
+        newServicePublicId: { type: string, format: uuid }
+        reason: { type: string, minLength: 3, maxLength: 500 }
+    AppointmentReasonRequest:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 3, maxLength: 500 }
+    OptionalAppointmentReasonRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason: { type: string, minLength: 3, maxLength: 500 }
+    ScheduleBreak:
+      type: object
+      additionalProperties: false
+      required: [localStartTime, localEndTime]
+      properties:
+        localStartTime: { type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$' }
+        localEndTime: { type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$' }
+        breakName: { type: [string, 'null'], maxLength: 100 }
+    CreateWorkingScheduleRequest:
+      type: object
+      additionalProperties: false
+      required: [branchPublicId, doctorPublicId, roomPublicId, weekdayIso, localStartTime, localEndTime,
+        slotDurationMinutes, effectiveFrom, breaks]
+      properties:
+        branchPublicId: { type: string, format: uuid }
+        doctorPublicId: { type: string, format: uuid }
+        roomPublicId: { type: string, format: uuid }
+        weekdayIso: { type: integer, minimum: 1, maximum: 7 }
+        localStartTime: { type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$' }
+        localEndTime: { type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$' }
+        slotDurationMinutes: { type: integer, minimum: 5, maximum: 240 }
+        effectiveFrom: { type: string, format: date }
+        effectiveTo: { type: [string, 'null'], format: date }
+        bookingHorizonDays: { type: [integer, 'null'], minimum: 1, maximum: 365 }
+        breaks: { type: array, maxItems: 10, items: { $ref: '#/components/schemas/ScheduleBreak' } }
+    SchedulingData:
+      type: object
+      additionalProperties: false
+      required: [branch, doctors, rooms, schedules]
+      properties:
+        branch:
+          type: object
+          additionalProperties: false
+          required: [publicId, code, name, timezoneName, bookingHorizonDays]
+          properties:
+            publicId: { type: string, format: uuid }
+            code: { type: string }
+            name: { type: string }
+            timezoneName: { type: string }
+            bookingHorizonDays: { type: integer }
+        doctors:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [publicId, fullName, defaultSlotMinutes, acceptsOnlineBooking]
+            properties:
+              publicId: { type: string, format: uuid }
+              fullName: { type: string }
+              defaultSlotMinutes: { type: integer }
+              acceptsOnlineBooking: { type: boolean }
+        rooms:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [publicId, code, name, type]
+            properties:
+              publicId: { type: string, format: uuid }
+              code: { type: string }
+              name: { type: string }
+              type: { type: string }
+        schedules:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [publicId, doctorPublicId, doctorName, roomPublicId, roomName, weekdayIso, localStartTime,
+              localEndTime, slotDurationMinutes, bookingHorizonDays, effectiveFrom, effectiveTo, isActive, breaks, slotCount, rowVersion]
+            properties:
+              publicId: { type: string, format: uuid }
+              doctorPublicId: { type: string, format: uuid }
+              doctorName: { type: string }
+              roomPublicId: { type: string, format: uuid }
+              roomName: { type: string }
+              weekdayIso: { type: integer, minimum: 1, maximum: 7 }
+              localStartTime: { type: string }
+              localEndTime: { type: string }
+              slotDurationMinutes: { type: integer }
+              bookingHorizonDays: { type: [integer, 'null'] }
+              effectiveFrom: { type: string, format: date }
+              effectiveTo: { type: [string, 'null'], format: date }
+              isActive: { type: boolean }
+              breaks: { type: array, items: { $ref: '#/components/schemas/ScheduleBreak' } }
+              slotCount: { type: integer, minimum: 0 }
+              rowVersion: { type: string }
+    SchedulingResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data: { $ref: '#/components/schemas/SchedulingData' }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    CreatedScheduleResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [publicId]
+          properties: { publicId: { type: string, format: uuid } }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    GenerateSlotsRequest:
+      type: object
+      additionalProperties: false
+      required: [fromDate, toDate]
+      properties:
+        fromDate: { type: string, format: date }
+        toDate: { type: string, format: date }
+    GeneratedSlotsResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [createdCount]
+          properties: { createdCount: { type: integer, minimum: 0 } }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    ReceptionBranch:
+      type: object
+      additionalProperties: false
+      required: [publicId, code, name, timezoneName]
+      properties:
+        publicId: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+        timezoneName: { type: string }
+    ReceptionBranchListResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/ReceptionBranch' } }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    QueueStatus:
+      type: string
+      enum: [WAITING, CALLED, SERVING]
+    QueueTicket:
+      type: object
+      additionalProperties: false
+      required: [publicId, encounterPublicId, displayNumber, priorityLevel, status, issuedAtUtc, calledAtUtc,
+        serviceStartedAtUtc, encounterCode, encounterSource, patient, doctor, room]
+      properties:
+        publicId: { type: string, format: uuid }
+        encounterPublicId: { type: string, format: uuid }
+        displayNumber: { type: string }
+        priorityLevel: { type: integer, minimum: 0, maximum: 9 }
+        status: { $ref: '#/components/schemas/QueueStatus' }
+        issuedAtUtc: { type: string, format: date-time }
+        calledAtUtc: { type: [string, 'null'], format: date-time }
+        serviceStartedAtUtc: { type: [string, 'null'], format: date-time }
+        encounterCode: { type: string }
+        encounterSource: { type: string, enum: [APPOINTMENT, WALK_IN] }
+        patient:
+          type: object
+          additionalProperties: false
+          required: [publicId, code, fullName]
+          properties:
+            publicId: { type: string, format: uuid }
+            code: { type: string }
+            fullName: { type: string }
+        doctor:
+          type: object
+          additionalProperties: false
+          required: [publicId, fullName]
+          properties:
+            publicId: { type: string, format: uuid }
+            fullName: { type: string }
+        room:
+          oneOf:
+            - type: object
+              additionalProperties: false
+              required: [publicId, name]
+              properties:
+                publicId: { type: string, format: uuid }
+                name: { type: string }
+            - type: 'null'
+    CheckInCandidate:
+      type: object
+      additionalProperties: false
+      required: [publicId, code, patient, doctor, service, room, scheduledStartUtc, scheduledEndUtc, startTimeLocal, chiefComplaint]
+      properties:
+        publicId: { type: string, format: uuid }
+        code: { type: string }
+        patient:
+          type: object
+          additionalProperties: false
+          required: [publicId, code, fullName]
+          properties:
+            publicId: { type: string, format: uuid }
+            code: { type: string }
+            fullName: { type: string }
+        doctor:
+          type: object
+          additionalProperties: false
+          required: [publicId, fullName]
+          properties:
+            publicId: { type: string, format: uuid }
+            fullName: { type: string }
+        service:
+          type: object
+          additionalProperties: false
+          required: [publicId, name]
+          properties:
+            publicId: { type: string, format: uuid }
+            name: { type: string }
+        room:
+          type: object
+          additionalProperties: false
+          required: [publicId, name]
+          properties:
+            publicId: { type: string, format: uuid }
+            name: { type: string }
+        scheduledStartUtc: { type: string, format: date-time }
+        scheduledEndUtc: { type: string, format: date-time }
+        startTimeLocal: { type: string }
+        chiefComplaint: { type: [string, 'null'] }
+    ReceptionPatient:
+      type: object
+      additionalProperties: false
+      required: [publicId, code, fullName, dateOfBirth, gender, phone]
+      properties:
+        publicId: { type: string, format: uuid }
+        code: { type: string }
+        fullName: { type: string }
+        dateOfBirth: { type: string, format: date }
+        gender: { type: string, enum: [MALE, FEMALE, OTHER] }
+        phone: { type: [string, 'null'] }
+    ReceptionPatientListResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/ReceptionPatient' } }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    ReceptionWorkspace:
+      type: object
+      additionalProperties: false
+      required: [branch, queue, appointments, doctors, rooms, services, doctorServices]
+      properties:
+        branch:
+          type: object
+          additionalProperties: false
+          required: [publicId, code, name, timezoneName, businessDate, checkInEarlyMinutes, checkInLateMinutes]
+          properties:
+            publicId: { type: string, format: uuid }
+            code: { type: string }
+            name: { type: string }
+            timezoneName: { type: string }
+            businessDate: { type: string, format: date }
+            checkInEarlyMinutes: { type: integer, minimum: 0, maximum: 720 }
+            checkInLateMinutes: { type: integer, minimum: 0, maximum: 1440 }
+        queue: { type: array, items: { $ref: '#/components/schemas/QueueTicket' } }
+        appointments: { type: array, items: { $ref: '#/components/schemas/CheckInCandidate' } }
+        doctors:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [publicId, fullName]
+            properties:
+              publicId: { type: string, format: uuid }
+              fullName: { type: string }
+        rooms:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [publicId, code, name]
+            properties:
+              publicId: { type: string, format: uuid }
+              code: { type: string }
+              name: { type: string }
+        services:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [publicId, code, name, priceAmount, currencyCode]
+            properties:
+              publicId: { type: string, format: uuid }
+              code: { type: string }
+              name: { type: string }
+              priceAmount: { type: string, pattern: '^(0|[1-9][0-9]{0,16})(\.[0-9]{1,2})?$' }
+              currencyCode: { type: string, enum: [VND] }
+        doctorServices:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [doctorPublicId, servicePublicId]
+            properties:
+              doctorPublicId: { type: string, format: uuid }
+              servicePublicId: { type: string, format: uuid }
+    ReceptionWorkspaceResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data: { $ref: '#/components/schemas/ReceptionWorkspace' }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    AppointmentCheckInRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        priorityLevel: { type: integer, minimum: 0, maximum: 9, default: 0 }
+    CreateWalkInRequest:
+      type: object
+      additionalProperties: false
+      required: [branchPublicId, patientPublicId, doctorPublicId, roomPublicId, servicePublicId, priorityLevel]
+      properties:
+        branchPublicId: { type: string, format: uuid }
+        patientPublicId: { type: string, format: uuid }
+        doctorPublicId: { type: string, format: uuid }
+        roomPublicId: { type: string, format: uuid }
+        servicePublicId: { type: string, format: uuid }
+        chiefComplaint: { type: [string, 'null'], maxLength: 1000 }
+        priorityLevel: { type: integer, minimum: 0, maximum: 9, default: 0 }
+    CallNextQueueRequest:
+      type: object
+      additionalProperties: false
+      required: [branchPublicId]
+      properties:
+        branchPublicId: { type: string, format: uuid }
+    QueueCommandResult:
+      type: object
+      additionalProperties: false
+      required: [queueTicketPublicId, encounterPublicId, displayNumber]
+      properties:
+        queueTicketPublicId: { type: string, format: uuid }
+        encounterPublicId: { type: string, format: uuid }
+        displayNumber: { type: string }
+    QueueCommandResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data: { $ref: '#/components/schemas/QueueCommandResult' }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    NullableQueueCommandResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data:
+          oneOf:
+            - { $ref: '#/components/schemas/QueueCommandResult' }
+            - { type: 'null' }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    ClinicalBranchListResponse:
+      type: object
+      required: [data, meta, requestId]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/ReceptionBranch' }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    ClinicalEncounterStatus:
+      type: string
+      enum: [WAITING, IN_PROGRESS, COMPLETED, SIGNED, CANCELLED]
+    ClinicalEncounterSummary:
+      type: object
+      required: [publicId, code, source, status, arrivedAtUtc, startedAtUtc, completedAtUtc,
+        chiefComplaint, patient, doctor, room, queue]
+      properties:
+        publicId: { type: string, format: uuid }
+        code: { type: string }
+        source: { type: string, enum: [APPOINTMENT, WALK_IN] }
+        status: { $ref: '#/components/schemas/ClinicalEncounterStatus' }
+        arrivedAtUtc: { type: string, format: date-time }
+        startedAtUtc: { type: [string, 'null'], format: date-time }
+        completedAtUtc: { type: [string, 'null'], format: date-time }
+        chiefComplaint: { type: [string, 'null'] }
+        patient:
+          type: object
+          required: [publicId, code, fullName, dateOfBirth, gender]
+          properties:
+            publicId: { type: string, format: uuid }
+            code: { type: string }
+            fullName: { type: string }
+            dateOfBirth: { type: string, format: date }
+            gender: { type: string, enum: [MALE, FEMALE, OTHER] }
+        doctor:
+          type: object
+          required: [publicId, fullName]
+          properties:
+            publicId: { type: string, format: uuid }
+            fullName: { type: string }
+        room:
+          oneOf:
+            - type: object
+              required: [publicId, name]
+              properties:
+                publicId: { type: string, format: uuid }
+                name: { type: string }
+            - type: 'null'
+        queue:
+          oneOf:
+            - type: object
+              required: [displayNumber, status]
+              properties:
+                displayNumber: { type: string }
+                status: { type: string }
+            - type: 'null'
+    ClinicalEncounterListResponse:
+      type: object
+      required: [data, meta, requestId]
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/ClinicalEncounterSummary' } }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    ClinicalNotesRequest:
+      type: object
+      properties:
+        historyOfPresentIllness: { type: [string, 'null'], maxLength: 10000 }
+        physicalExamination: { type: [string, 'null'], maxLength: 10000 }
+        clinicalAssessment: { type: [string, 'null'], maxLength: 10000 }
+        treatmentPlan: { type: [string, 'null'], maxLength: 10000 }
+        followUpInstructions: { type: [string, 'null'], maxLength: 10000 }
+        followUpDate: { type: [string, 'null'], format: date }
+    ClinicalStartRequest:
+      type: object
+      properties:
+        roomPublicId: { type: [string, 'null'], format: uuid }
+    ClinicalVitalSignsRequest:
+      type: object
+      properties:
+        temperatureC: { type: [number, 'null'], minimum: 25, maximum: 45 }
+        pulseBpm: { type: [integer, 'null'], minimum: 10, maximum: 300 }
+        respiratoryRateBpm: { type: [integer, 'null'], minimum: 1, maximum: 100 }
+        systolicBpMmhg: { type: [integer, 'null'], minimum: 30, maximum: 300 }
+        diastolicBpMmhg: { type: [integer, 'null'], minimum: 20, maximum: 200 }
+        spo2Percent: { type: [number, 'null'], minimum: 0, maximum: 100 }
+        heightCm: { type: [number, 'null'], minimum: 20, maximum: 300 }
+        weightKg: { type: [number, 'null'], minimum: 0.2, maximum: 500 }
+        painScore: { type: [integer, 'null'], minimum: 0, maximum: 10 }
+        notes: { type: [string, 'null'], maxLength: 500 }
+    ClinicalDiagnosisRequest:
+      type: object
+      required: [code, name]
+      properties:
+        code: { type: string, minLength: 1, maxLength: 30 }
+        name: { type: string, minLength: 2, maxLength: 500 }
+        type: { type: string, enum: [PROVISIONAL, DIFFERENTIAL, FINAL], default: FINAL }
+        isPrimary: { type: boolean, default: false }
+        notes: { type: [string, 'null'], maxLength: 1000 }
+    ClinicalOrderServiceRequest:
+      type: object
+      required: [servicePublicId]
+      properties:
+        servicePublicId: { type: string, format: uuid }
+        quantity: { type: number, exclusiveMinimum: 0, maximum: 1000, default: 1 }
+        notes: { type: [string, 'null'], maxLength: 1000 }
+    ClinicalFinalizeResultRequest:
+      type: object
+      properties:
+        summary: { type: [string, 'null'], maxLength: 10000 }
+        conclusion: { type: [string, 'null'], maxLength: 10000 }
+        result:
+          oneOf:
+            - type: object
+              additionalProperties: true
+            - type: array
+              items: {}
+            - type: 'null'
+    ClinicalAmendmentRequest:
+      type: object
+      required: [reason, content]
+      properties:
+        reason: { type: string, minLength: 10, maxLength: 1000 }
+        content: { type: string, minLength: 1, maxLength: 20000 }
+    ClinicalEncounterDetail:
+      allOf:
+        - $ref: '#/components/schemas/ClinicalEncounterSummary'
+        - type: object
+          required: [signedAtUtc, signature, historyOfPresentIllness, physicalExamination,
+            clinicalAssessment, treatmentPlan, followUpInstructions, followUpDate,
+            vitalSigns, diagnoses, services, amendments, availableServices]
+          properties:
+            signedAtUtc: { type: [string, 'null'], format: date-time }
+            signature:
+              oneOf:
+                - type: object
+                  required: [schemaVersion, sha256, signedAtUtc]
+                  properties:
+                    schemaVersion: { type: string }
+                    sha256: { type: string, pattern: '^[0-9A-F]{64}$' }
+                    signedAtUtc: { type: string, format: date-time }
+                - type: 'null'
+            historyOfPresentIllness: { type: [string, 'null'] }
+            physicalExamination: { type: [string, 'null'] }
+            clinicalAssessment: { type: [string, 'null'] }
+            treatmentPlan: { type: [string, 'null'] }
+            followUpInstructions: { type: [string, 'null'] }
+            followUpDate: { type: [string, 'null'], format: date }
+            vitalSigns:
+              type: array
+              items:
+                allOf:
+                  - $ref: '#/components/schemas/ClinicalVitalSignsRequest'
+                  - type: object
+                    required: [publicId, measuredAtUtc, bmi, measuredBy]
+                    properties:
+                      publicId: { type: string, format: uuid }
+                      measuredAtUtc: { type: string, format: date-time }
+                      bmi: { type: [number, 'null'] }
+                      measuredBy: { type: string }
+            diagnoses:
+              type: array
+              items:
+                allOf:
+                  - $ref: '#/components/schemas/ClinicalDiagnosisRequest'
+                  - type: object
+                    required: [publicId, type, isPrimary, createdAtUtc, recordedBy]
+                    properties:
+                      publicId: { type: string, format: uuid }
+                      createdAtUtc: { type: string, format: date-time }
+                      recordedBy: { type: string }
+            services:
+              type: array
+              items:
+                type: object
+                required: [publicId, catalogPublicId, code, name, type, quantity, unitPrice, status, notes, result]
+                properties:
+                  publicId: { type: string, format: uuid }
+                  catalogPublicId: { type: string, format: uuid }
+                  code: { type: string }
+                  name: { type: string }
+                  type: { type: string }
+                  quantity: { type: string }
+                  unitPrice: { type: string }
+                  status: { type: string, enum: [ORDERED, IN_PROGRESS, COMPLETED, CANCELLED] }
+                  notes: { type: [string, 'null'] }
+                  result:
+                    oneOf:
+                      - type: object
+                        required: [publicId, version, status, summary, conclusion, result, finalizedAtUtc]
+                        properties:
+                          publicId: { type: string, format: uuid }
+                          version: { type: integer }
+                          status: { type: string, enum: [FINAL] }
+                          summary: { type: [string, 'null'] }
+                          conclusion: { type: [string, 'null'] }
+                          result: {}
+                          finalizedAtUtc: { type: string, format: date-time }
+                      - type: 'null'
+            amendments:
+              type: array
+              items:
+                type: object
+                required: [publicId, number, reason, content, hash, amendedAtUtc, amendedBy]
+                properties:
+                  publicId: { type: string, format: uuid }
+                  number: { type: integer }
+                  reason: { type: string }
+                  content: { type: string }
+                  hash: { type: string, pattern: '^[0-9A-F]{64}$' }
+                  amendedAtUtc: { type: string, format: date-time }
+                  amendedBy: { type: string }
+            availableServices:
+              type: array
+              items:
+                type: object
+                required: [publicId, code, name, type, priceAmount]
+                properties:
+                  publicId: { type: string, format: uuid }
+                  code: { type: string }
+                  name: { type: string }
+                  type: { type: string }
+                  priceAmount: { type: string }
+    ClinicalEncounterResponse:
+      type: object
+      required: [data, meta, requestId]
+      properties:
+        data: { $ref: '#/components/schemas/ClinicalEncounterDetail' }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    ClinicalCommandResponse:
+      type: object
+      required: [data, meta, requestId]
+      properties:
+        data:
+          type: object
+          required: [publicId]
+          properties:
+            publicId: { type: string, format: uuid }
+            sha256: { type: string, pattern: '^[0-9A-F]{64}$' }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    PharmacyBranch:
+      type: object
+      required: [publicId, code, name, timezoneName]
+      properties:
+        publicId: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+        timezoneName: { type: string }
+    PharmacyBranchListResponse:
+      type: object
+      required: [data, meta, requestId]
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/PharmacyBranch' } }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    PharmacyLocation:
+      type: object
+      required: [publicId, code, name, type, isDispensing]
+      properties:
+        publicId: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+        type: { type: string, enum: [WAREHOUSE, PHARMACY, CABINET, QUARANTINE] }
+        isDispensing: { type: boolean }
+    PharmacyMedicine:
+      type: object
+      required: [publicId, code, genericName, brandName, activeIngredient, strength, dosageForm, route, baseUnit, salePrice, isActive]
+      properties:
+        publicId: { type: string, format: uuid }
+        code: { type: string }
+        genericName: { type: string }
+        brandName: { type: [string, 'null'] }
+        activeIngredient: { type: string }
+        strength: { type: string }
+        dosageForm: { type: string }
+        route: { type: string }
+        baseUnit: { type: string }
+        salePrice: { type: string }
+        isActive: { type: boolean }
+    PharmacyBatch:
+      type: object
+      required: [publicId, medicinePublicId, locationPublicId, batchNumber, expiryDate, status, salePrice, quantityOnHand, availableQuantity]
+      properties:
+        publicId: { type: string, format: uuid }
+        medicinePublicId: { type: string, format: uuid }
+        locationPublicId: { type: string, format: uuid }
+        batchNumber: { type: string }
+        expiryDate: { type: string, format: date }
+        status: { type: string }
+        salePrice: { type: string }
+        quantityOnHand: { type: string }
+        availableQuantity: { type: string }
+    PharmacyPrescriptionSummary:
+      type: object
+      required: [publicId, code, status, encounterPublicId, patientPublicId, patientCode, patientName, issuedAtUtc, validUntil, itemCount]
+      properties:
+        publicId: { type: string, format: uuid }
+        code: { type: string }
+        status: { type: string, enum: [DRAFT, ISSUED, PARTIALLY_DISPENSED, DISPENSED, CANCELLED, EXPIRED] }
+        encounterPublicId: { type: string, format: uuid }
+        patientPublicId: { type: string, format: uuid }
+        patientCode: { type: string }
+        patientName: { type: string }
+        issuedAtUtc: { type: [string, 'null'], format: date-time }
+        validUntil: { type: [string, 'null'], format: date }
+        itemCount: { type: integer }
+    PharmacyWorkspace:
+      type: object
+      required: [locations, medicines, batches, prescriptions, lowStock]
+      properties:
+        locations: { type: array, items: { $ref: '#/components/schemas/PharmacyLocation' } }
+        medicines: { type: array, items: { $ref: '#/components/schemas/PharmacyMedicine' } }
+        batches: { type: array, items: { $ref: '#/components/schemas/PharmacyBatch' } }
+        prescriptions: { type: array, items: { $ref: '#/components/schemas/PharmacyPrescriptionSummary' } }
+        lowStock:
+          type: array
+          items:
+            type: object
+            required: [medicinePublicId, medicineName, availableQuantity, reorderLevel]
+            properties:
+              medicinePublicId: { type: string, format: uuid }
+              medicineName: { type: string }
+              availableQuantity: { type: string }
+              reorderLevel: { type: string }
+    PharmacyWorkspaceResponse:
+      type: object
+      required: [data, meta, requestId]
+      properties:
+        data: { $ref: '#/components/schemas/PharmacyWorkspace' }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    PrescriptionDetail:
+      allOf:
+        - { $ref: '#/components/schemas/PharmacyPrescriptionSummary' }
+        - type: object
+          required: [clinicalNotes, generalInstructions, items, dispensations, dispensedItems, drugAllergies]
+          properties:
+            clinicalNotes: { type: [string, 'null'] }
+            generalInstructions: { type: [string, 'null'] }
+            items:
+              type: array
+              items:
+                type: object
+                required: [publicId, medicinePublicId, medicineName, strength, dosageForm, route, prescribedQuantity, dispensedQuantity, dose, frequency, durationDays, timingInstruction, usageInstruction]
+                properties:
+                  publicId: { type: string, format: uuid }
+                  medicinePublicId: { type: string, format: uuid }
+                  medicineName: { type: string }
+                  strength: { type: string }
+                  dosageForm: { type: string }
+                  route: { type: string }
+                  prescribedQuantity: { type: string }
+                  dispensedQuantity: { type: string }
+                  dose: { type: string }
+                  frequency: { type: string }
+                  durationDays: { type: [integer, 'null'] }
+                  timingInstruction: { type: [string, 'null'] }
+                  usageInstruction: { type: string }
+            dispensations:
+              type: array
+              items:
+                type: object
+                required: [publicId, code, status, locationPublicId, openedAtUtc, completedAtUtc]
+                properties:
+                  publicId: { type: string, format: uuid }
+                  code: { type: string }
+                  status: { type: string, enum: [DRAFT, COMPLETED, CANCELLED] }
+                  locationPublicId: { type: string, format: uuid }
+                  openedAtUtc: { type: string, format: date-time }
+                  completedAtUtc: { type: [string, 'null'], format: date-time }
+            dispensedItems:
+              type: array
+              items:
+                type: object
+                required: [publicId, dispensationPublicId, prescriptionItemPublicId, batchPublicId, batchNumber, quantity, unitPrice, dispensedAtUtc, reversed]
+                properties:
+                  publicId: { type: string, format: uuid }
+                  dispensationPublicId: { type: string, format: uuid }
+                  prescriptionItemPublicId: { type: string, format: uuid }
+                  batchPublicId: { type: string, format: uuid }
+                  batchNumber: { type: string }
+                  quantity: { type: string }
+                  unitPrice: { type: string }
+                  dispensedAtUtc: { type: string, format: date-time }
+                  reversed: { type: boolean }
+            drugAllergies:
+              type: array
+              items:
+                type: object
+                required: [allergenName, severity, reaction]
+                properties:
+                  allergenName: { type: string }
+                  severity: { type: string }
+                  reaction: { type: [string, 'null'] }
+    PrescriptionDetailResponse:
+      type: object
+      required: [data, meta, requestId]
+      properties:
+        data: { $ref: '#/components/schemas/PrescriptionDetail' }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    PharmacyResourceResponse:
+      type: object
+      required: [data, meta, requestId]
+      properties:
+        data:
+          type: object
+          required: [publicId]
+          properties:
+            publicId: { type: string, format: uuid }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    PharmacyStatusResponse:
+      type: object
+      required: [data, meta, requestId]
+      properties:
+        data:
+          type: object
+          required: [status]
+          properties:
+            status: { type: string, enum: [COMPLETED, CANCELLED] }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    PharmacyReconciliationResponse:
+      type: object
+      required: [data, meta, requestId]
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            required: [locationPublicId, batchPublicId, batchNumber, balanceQuantity, ledgerQuantity]
+            properties:
+              locationPublicId: { type: string, format: uuid }
+              batchPublicId: { type: string, format: uuid }
+              batchNumber: { type: string }
+              balanceQuantity: { type: string }
+              ledgerQuantity: { type: string }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    CreateMedicineRequest:
+      type: object
+      required: [code, genericName, activeIngredient, strength, dosageForm, route, baseUnit, salePrice]
+      properties:
+        code: { type: string, maxLength: 30 }
+        genericName: { type: string, maxLength: 250 }
+        activeIngredient: { type: string, maxLength: 500 }
+        strength: { type: string, maxLength: 100 }
+        dosageForm: { type: string, maxLength: 100 }
+        route: { type: string, maxLength: 100 }
+        baseUnit: { type: string, maxLength: 30 }
+        salePrice: { type: number, minimum: 0 }
+    CreateMedicineBatchRequest:
+      type: object
+      required: [branchPublicId, medicinePublicId, batchNumber, expiryDate, purchasePrice, salePrice]
+      properties:
+        branchPublicId: { type: string, format: uuid }
+        medicinePublicId: { type: string, format: uuid }
+        batchNumber: { type: string, maxLength: 80 }
+        expiryDate: { type: string, format: date }
+        purchasePrice: { type: number, minimum: 0 }
+        salePrice: { type: number, minimum: 0 }
+    CreatePharmacyLocationRequest:
+      type: object
+      required: [branchPublicId, code, name, type, isDispensing]
+      properties:
+        branchPublicId: { type: string, format: uuid }
+        code: { type: string, maxLength: 30 }
+        name: { type: string, maxLength: 150 }
+        type: { type: string, enum: [WAREHOUSE, PHARMACY, CABINET, QUARANTINE] }
+        isDispensing: { type: boolean }
+    ReceiveStockRequest:
+      type: object
+      required: [locationPublicId, batchPublicId, quantity]
+      properties:
+        locationPublicId: { type: string, format: uuid }
+        batchPublicId: { type: string, format: uuid }
+        quantity: { type: number, exclusiveMinimum: 0 }
+        reason: { type: [string, 'null'], maxLength: 500 }
+    CreatePrescriptionRequest:
+      type: object
+      properties:
+        validDays: { type: integer, minimum: 1, maximum: 90, default: 7 }
+        clinicalNotes: { type: [string, 'null'], maxLength: 1000 }
+        generalInstructions: { type: [string, 'null'], maxLength: 1000 }
+    AddPrescriptionItemRequest:
+      type: object
+      required: [medicinePublicId, prescribedQuantity, dose, frequency, usageInstruction]
+      properties:
+        medicinePublicId: { type: string, format: uuid }
+        prescribedQuantity: { type: number, exclusiveMinimum: 0 }
+        dose: { type: string, maxLength: 100 }
+        frequency: { type: string, maxLength: 100 }
+        durationDays: { type: [integer, 'null'], minimum: 1 }
+        timingInstruction: { type: [string, 'null'], maxLength: 200 }
+        usageInstruction: { type: string, maxLength: 1000 }
+        sortOrder: { type: integer, minimum: 0 }
+        allergyOverrideReason: { type: [string, 'null'], maxLength: 500 }
+    PharmacyReasonRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 5, maxLength: 500 }
+    OpenDispensationRequest:
+      type: object
+      required: [locationPublicId]
+      properties:
+        locationPublicId: { type: string, format: uuid }
+    DispenseItemRequest:
+      type: object
+      required: [prescriptionItemPublicId, batchPublicId, quantity]
+      properties:
+        prescriptionItemPublicId: { type: string, format: uuid }
+        batchPublicId: { type: string, format: uuid }
+        quantity: { type: number, exclusiveMinimum: 0 }
+    ReverseDispensationRequest:
+      type: object
+      required: [returnLocationPublicId, disposition, reason]
+      properties:
+        returnLocationPublicId: { type: string, format: uuid }
+        disposition: { type: string, enum: [SELLABLE, QUARANTINE] }
+        reason: { type: string, minLength: 5, maxLength: 500 }
+    MoneyDecimal:
+      type: string
+      pattern: '^[0-9]+(?:\.[0-9]{1,4})?$'
+      description: Exact decimal amount encoded as a JSON string.
+    SignedMoneyDecimal:
+      type: string
+      pattern: '^-?[0-9]+(?:\.[0-9]{1,4})?$'
+      description: Exact signed decimal amount encoded as a JSON string.
+    BillingBranch:
+      type: object
+      required: [publicId, code, name, timezoneName]
+      properties:
+        publicId: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+        timezoneName: { type: string }
+    BillingBranchListResponse:
+      type: object
+      required: [data, meta, requestId]
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/BillingBranch' } }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    BillableEncounter:
+      type: object
+      required: [publicId, code, status, completedAtUtc, patientPublicId, patientCode, patientName,
+        activeInvoicePublicId, activeInvoiceStatus]
+      properties:
+        publicId: { type: string, format: uuid }
+        code: { type: string }
+        status: { type: string, enum: [IN_PROGRESS, COMPLETED, SIGNED] }
+        completedAtUtc: { type: [string, 'null'], format: date-time }
+        patientPublicId: { type: string, format: uuid }
+        patientCode: { type: string }
+        patientName: { type: string }
+        activeInvoicePublicId: { type: [string, 'null'], format: uuid }
+        activeInvoiceStatus: { type: [string, 'null'], enum: [DRAFT, ISSUED, PARTIALLY_PAID, PAID, VOID, null] }
+    InvoiceSummary:
+      type: object
+      required: [publicId, number, status, encounterPublicId, encounterCode, patientPublicId, patientCode,
+        patientName, currency, patientPayableAmount, paidAmount, refundedAmount, balanceDue, issuedAtUtc, createdAtUtc]
+      properties:
+        publicId: { type: string, format: uuid }
+        number: { type: string }
+        status: { type: string, enum: [DRAFT, ISSUED, PARTIALLY_PAID, PAID, VOID] }
+        encounterPublicId: { type: string, format: uuid }
+        encounterCode: { type: string }
+        patientPublicId: { type: string, format: uuid }
+        patientCode: { type: string }
+        patientName: { type: string }
+        currency: { type: string, const: VND }
+        patientPayableAmount: { $ref: '#/components/schemas/MoneyDecimal' }
+        paidAmount: { $ref: '#/components/schemas/MoneyDecimal' }
+        refundedAmount: { $ref: '#/components/schemas/MoneyDecimal' }
+        balanceDue: { $ref: '#/components/schemas/MoneyDecimal' }
+        issuedAtUtc: { type: [string, 'null'], format: date-time }
+        createdAtUtc: { type: string, format: date-time }
+    BillingWorkspace:
+      type: object
+      required: [encounters, invoices]
+      properties:
+        encounters: { type: array, items: { $ref: '#/components/schemas/BillableEncounter' } }
+        invoices: { type: array, items: { $ref: '#/components/schemas/InvoiceSummary' } }
+    BillingWorkspaceResponse:
+      type: object
+      required: [data, meta, requestId]
+      properties:
+        data: { $ref: '#/components/schemas/BillingWorkspace' }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    InvoiceItem:
+      type: object
+      required: [publicId, type, code, name, quantity, unitPrice, discountAmount, taxRatePercent, lineTotal]
+      properties:
+        publicId: { type: string, format: uuid }
+        type: { type: string, enum: [SERVICE, MEDICINE, OTHER] }
+        code: { type: [string, 'null'] }
+        name: { type: string }
+        quantity: { type: string }
+        unitPrice: { $ref: '#/components/schemas/MoneyDecimal' }
+        discountAmount: { $ref: '#/components/schemas/MoneyDecimal' }
+        taxRatePercent: { type: string }
+        lineTotal: { $ref: '#/components/schemas/MoneyDecimal' }
+    InvoicePaymentAllocation:
+      type: object
+      required: [publicId, paymentPublicId, number, amount, method, status, externalTransactionId,
+        paidAtUtc, refundableAmount]
+      properties:
+        publicId: { type: string, format: uuid }
+        paymentPublicId: { type: string, format: uuid }
+        number: { type: string }
+        amount: { $ref: '#/components/schemas/MoneyDecimal' }
+        method: { $ref: '#/components/schemas/PaymentMethod' }
+        status: { type: string, enum: [PENDING, SUCCEEDED, FAILED, VOIDED] }
+        externalTransactionId: { type: [string, 'null'] }
+        paidAtUtc: { type: string, format: date-time }
+        refundableAmount: { $ref: '#/components/schemas/MoneyDecimal' }
+    InvoiceRefund:
+      type: object
+      required: [publicId, allocationPublicId, paymentAllocationPublicId, number, amount, method, status, reason,
+        refundedAtUtc]
+      properties:
+        publicId: { type: string, format: uuid }
+        allocationPublicId: { type: string, format: uuid }
+        paymentAllocationPublicId: { type: string, format: uuid }
+        number: { type: string }
+        amount: { $ref: '#/components/schemas/MoneyDecimal' }
+        method: { $ref: '#/components/schemas/PaymentMethod' }
+        status: { type: string, enum: [PENDING, SUCCEEDED, FAILED] }
+        reason: { type: string }
+        refundedAtUtc: { type: string, format: date-time }
+    InvoiceDetail:
+      allOf:
+        - { $ref: '#/components/schemas/InvoiceSummary' }
+        - type: object
+          required: [supersedesInvoicePublicId, subtotalAmount, discountAmount, taxAmount, totalAmount,
+            insuranceAmount, dueAtUtc, voidedAtUtc, voidReason, items, payments, refunds]
+          properties:
+            supersedesInvoicePublicId: { type: [string, 'null'], format: uuid }
+            subtotalAmount: { $ref: '#/components/schemas/MoneyDecimal' }
+            discountAmount: { $ref: '#/components/schemas/MoneyDecimal' }
+            taxAmount: { $ref: '#/components/schemas/MoneyDecimal' }
+            totalAmount: { $ref: '#/components/schemas/MoneyDecimal' }
+            insuranceAmount: { $ref: '#/components/schemas/MoneyDecimal' }
+            dueAtUtc: { type: [string, 'null'], format: date-time }
+            voidedAtUtc: { type: [string, 'null'], format: date-time }
+            voidReason: { type: [string, 'null'] }
+            items: { type: array, items: { $ref: '#/components/schemas/InvoiceItem' } }
+            payments: { type: array, items: { $ref: '#/components/schemas/InvoicePaymentAllocation' } }
+            refunds: { type: array, items: { $ref: '#/components/schemas/InvoiceRefund' } }
+    InvoiceDetailResponse:
+      type: object
+      required: [data, meta, requestId]
+      properties:
+        data: { $ref: '#/components/schemas/InvoiceDetail' }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    BillingResourceResponse:
+      type: object
+      required: [data, meta, requestId]
+      properties:
+        data:
+          type: object
+          required: [publicId]
+          properties:
+            publicId: { type: string, format: uuid }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    CreateInvoiceRequest:
+      type: object
+      properties:
+        supersedesInvoicePublicId: { type: [string, 'null'], format: uuid }
+    ManualInvoiceItemRequest:
+      type: object
+      required: [name, quantity, unitPrice]
+      properties:
+        code: { type: [string, 'null'], maxLength: 40 }
+        name: { type: string, minLength: 2, maxLength: 300 }
+        quantity: { type: number, exclusiveMinimum: 0 }
+        unitPrice: { type: number, minimum: 0 }
+        discountAmount: { type: number, minimum: 0 }
+        taxRatePercent: { type: number, minimum: 0, maximum: 100 }
+    InvoiceInsuranceRequest:
+      type: object
+      required: [amount]
+      properties:
+        amount: { type: number, minimum: 0 }
+    IssueInvoiceRequest:
+      type: object
+      properties:
+        dueAtUtc: { type: [string, 'null'], format: date-time }
+    PaymentMethod:
+      type: string
+      enum: [CASH, CARD, BANK_TRANSFER, EWALLET, OTHER]
+    InvoicePaymentRequest:
+      type: object
+      required: [amount, method]
+      properties:
+        amount: { type: number, exclusiveMinimum: 0 }
+        method: { $ref: '#/components/schemas/PaymentMethod' }
+        externalTransactionId: { type: [string, 'null'], maxLength: 150 }
+        notes: { type: [string, 'null'], maxLength: 500 }
+    PaymentRefundRequest:
+      type: object
+      required: [amount, method, reason]
+      properties:
+        amount: { type: number, exclusiveMinimum: 0 }
+        method: { $ref: '#/components/schemas/PaymentMethod' }
+        externalTransactionId: { type: [string, 'null'], maxLength: 150 }
+        reason: { type: string, minLength: 5, maxLength: 500 }
+    BillingReasonRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 5, maxLength: 500 }
+    ReportBranch:
+      type: object
+      additionalProperties: false
+      required: [publicId, code, name, timezoneName, canViewOperations, canViewRevenue, canViewInventory]
+      properties:
+        publicId: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+        timezoneName: { type: string }
+        canViewOperations: { type: boolean }
+        canViewRevenue: { type: boolean }
+        canViewInventory: { type: boolean }
+    ReportBranchListResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/ReportBranch' } }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    OperationsReportSummary:
+      type: object
+      additionalProperties: false
+      required: [appointmentCount, confirmedCount, cancelledCount, noShowCount, encounterCount, completedEncounterCount, averageWaitMinutes]
+      properties:
+        appointmentCount: { type: integer, minimum: 0 }
+        confirmedCount: { type: integer, minimum: 0 }
+        cancelledCount: { type: integer, minimum: 0 }
+        noShowCount: { type: integer, minimum: 0 }
+        encounterCount: { type: integer, minimum: 0 }
+        completedEncounterCount: { type: integer, minimum: 0 }
+        averageWaitMinutes: { type: [number, 'null'], minimum: 0 }
+    OperationsReportDay:
+      type: object
+      additionalProperties: false
+      required: [date, appointmentCount, arrivedCount, completedCount, cancelledCount, noShowCount]
+      properties:
+        date: { type: string, format: date }
+        appointmentCount: { type: integer, minimum: 0 }
+        arrivedCount: { type: integer, minimum: 0 }
+        completedCount: { type: integer, minimum: 0 }
+        cancelledCount: { type: integer, minimum: 0 }
+        noShowCount: { type: integer, minimum: 0 }
+    OperationsReport:
+      type: object
+      additionalProperties: false
+      required: [summary, daily]
+      properties:
+        summary: { $ref: '#/components/schemas/OperationsReportSummary' }
+        daily: { type: array, items: { $ref: '#/components/schemas/OperationsReportDay' } }
+    OperationsReportResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data: { $ref: '#/components/schemas/OperationsReport' }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    RevenueReportSummary:
+      type: object
+      additionalProperties: false
+      required: [invoicedAmount, collectedAmount, refundedAmount, netCollectedAmount]
+      properties:
+        invoicedAmount: { $ref: '#/components/schemas/MoneyDecimal' }
+        collectedAmount: { $ref: '#/components/schemas/MoneyDecimal' }
+        refundedAmount: { $ref: '#/components/schemas/MoneyDecimal' }
+        netCollectedAmount: { $ref: '#/components/schemas/SignedMoneyDecimal' }
+    RevenueReportDay:
+      type: object
+      additionalProperties: false
+      required: [date, method, collectedAmount, refundedAmount, netCollectedAmount]
+      properties:
+        date: { type: string, format: date }
+        method: { $ref: '#/components/schemas/PaymentMethod' }
+        collectedAmount: { $ref: '#/components/schemas/MoneyDecimal' }
+        refundedAmount: { $ref: '#/components/schemas/MoneyDecimal' }
+        netCollectedAmount: { $ref: '#/components/schemas/SignedMoneyDecimal' }
+    RevenueReport:
+      type: object
+      additionalProperties: false
+      required: [summary, daily]
+      properties:
+        summary: { $ref: '#/components/schemas/RevenueReportSummary' }
+        daily: { type: array, items: { $ref: '#/components/schemas/RevenueReportDay' } }
+    RevenueReportResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data: { $ref: '#/components/schemas/RevenueReport' }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    UsageReportItem:
+      type: object
+      additionalProperties: false
+      required: [code, name, quantity, amount]
+      properties:
+        code: { type: string }
+        name: { type: string }
+        quantity: { type: string, pattern: '^-?[0-9]+(?:\\.[0-9]+)?$' }
+        amount: { $ref: '#/components/schemas/MoneyDecimal' }
+    LowStockReportItem:
+      type: object
+      additionalProperties: false
+      required: [code, name, availableQuantity, reorderLevel]
+      properties:
+        code: { type: string }
+        name: { type: string }
+        availableQuantity: { type: string, pattern: '^-?[0-9]+(?:\\.[0-9]+)?$' }
+        reorderLevel: { type: string, pattern: '^-?[0-9]+(?:\\.[0-9]+)?$' }
+    ExpiringBatchReportItem:
+      type: object
+      additionalProperties: false
+      required: [medicineCode, medicineName, batchNumber, expiryDate, availableQuantity, daysToExpiry]
+      properties:
+        medicineCode: { type: string }
+        medicineName: { type: string }
+        batchNumber: { type: string }
+        expiryDate: { type: string, format: date }
+        availableQuantity: { type: string, pattern: '^-?[0-9]+(?:\\.[0-9]+)?$' }
+        daysToExpiry: { type: integer, minimum: 0 }
+    InventoryReportSummary:
+      type: object
+      additionalProperties: false
+      required: [serviceQuantity, medicineQuantity, lowStockCount, expiringBatchCount]
+      properties:
+        serviceQuantity: { type: string, pattern: '^-?[0-9]+(?:\\.[0-9]+)?$' }
+        medicineQuantity: { type: string, pattern: '^-?[0-9]+(?:\\.[0-9]+)?$' }
+        lowStockCount: { type: integer, minimum: 0 }
+        expiringBatchCount: { type: integer, minimum: 0 }
+    InventoryReport:
+      type: object
+      additionalProperties: false
+      required: [summary, services, medicines, lowStock, expiringBatches]
+      properties:
+        summary: { $ref: '#/components/schemas/InventoryReportSummary' }
+        services: { type: array, items: { $ref: '#/components/schemas/UsageReportItem' } }
+        medicines: { type: array, items: { $ref: '#/components/schemas/UsageReportItem' } }
+        lowStock: { type: array, items: { $ref: '#/components/schemas/LowStockReportItem' } }
+        expiringBatches: { type: array, items: { $ref: '#/components/schemas/ExpiringBatchReportItem' } }
+    InventoryReportResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data: { $ref: '#/components/schemas/InventoryReport' }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
     ApiErrorResponse:
       type: object
       additionalProperties: false
