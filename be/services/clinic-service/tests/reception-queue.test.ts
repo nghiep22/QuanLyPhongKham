@@ -38,7 +38,8 @@ const workspace: ReceptionWorkspace = {
 };
 
 class MemoryReception implements ReceptionRepository {
-  denied = false; checkInError?: number; calls = [result('A0002'), result('A0003')];
+  denied = false; checkInError?: number; cancelError?: number; calls = [result('A0002'), result('A0003')];
+  cancelled: { encounterId: string; reason: string } | null = null;
   idempotency = new Map<string, { payload: string; result: QueueCommandResult }>();
   branches() { return Promise.resolve([{ publicId: branchId, code: 'MAIN', name: 'Chi nhánh chính',
     timezoneName: 'SE Asia Standard Time' }]); }
@@ -53,6 +54,10 @@ class MemoryReception implements ReceptionRepository {
     return this.once(key, JSON.stringify(input), 'A0005');
   }
   callNext() { return Promise.resolve(this.calls.shift() ?? null); }
+  cancelEncounter(_actor: ClinicPrincipal, encounterId: string, reason: string) {
+    if (this.cancelError) return Promise.reject({ number: this.cancelError });
+    this.cancelled = { encounterId, reason }; return Promise.resolve();
+  }
   private once(key: string, payload: string, display: string) {
     const previous = this.idempotency.get(key);
     if (previous && previous.payload !== payload) return Promise.reject({ number: 53206 });
@@ -129,6 +134,27 @@ describe('reception and queue vertical slice', () => {
     ]);
     expect(first.status).toBe(200); expect(second.status).toBe(200);
     expect(new Set([first.body.data.queueTicketPublicId, second.body.data.queueTicketPublicId]).size).toBe(2);
+  });
+
+  it('cancels an encounter by public id with a mandatory reason', async () => {
+    const encounterId = workspace.queue[0]!.encounterPublicId;
+    const response = await request(app(repository)).post(`/api/v1/encounters/${encounterId}/cancel`).set(auth)
+      .send({ reason: 'Bệnh nhân xin dừng lượt khám.' });
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual({ publicId: encounterId, status: 'CANCELLED' });
+    expect(repository.cancelled).toEqual({ encounterId, reason: 'Bệnh nhân xin dừng lượt khám.' });
+  });
+
+  it('validates cancellation and reports downstream safety blockers', async () => {
+    const encounterId = workspace.queue[0]!.encounterPublicId;
+    const invalid = await request(app(repository)).post(`/api/v1/encounters/${encounterId}/cancel`).set(auth)
+      .send({ reason: 'Ngắn' });
+    repository.cancelError = 53254;
+    const blocked = await request(app(repository)).post(`/api/v1/encounters/${encounterId}/cancel`).set(auth)
+      .send({ reason: 'Bệnh nhân xin dừng lượt khám.' });
+    expect(invalid.status).toBe(400);
+    expect(blocked.status).toBe(409);
+    expect(blocked.body.error.code).toBe('ENCOUNTER_MEDICATION_NOT_REVERSED');
   });
 
   it('maps branch-scoped queue denial to forbidden', async () => {

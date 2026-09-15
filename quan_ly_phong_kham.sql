@@ -9705,6 +9705,17 @@ BEGIN
 END;
 GO
 
+CREATE OR ALTER PROCEDURE dbo.sp_clinic_cancel_encounter
+    @actor_user_id bigint,@encounter_public_id uniqueidentifier,@reason nvarchar(500)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @encounter_id bigint=(SELECT encounter_id FROM dbo.encounters WHERE public_id=@encounter_public_id);
+    IF @encounter_id IS NULL THROW 53802,N'Lượt khám không tồn tại.',1;
+    EXEC dbo.sp_cancel_encounter @actor_user_id=@actor_user_id,@encounter_id=@encounter_id,@reason=@reason;
+END;
+GO
+
 CREATE OR ALTER PROCEDURE dbo.sp_cancel_encounter
     @actor_user_id bigint,
     @encounter_id bigint,
@@ -9713,15 +9724,16 @@ AS
 BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
-    IF NULLIF(LTRIM(RTRIM(@reason)),N'') IS NULL THROW 53252,N'Bắt buộc nhập lý do hủy lượt khám.',1;
+    IF LEN(LTRIM(RTRIM(COALESCE(@reason,N''))))<10
+        THROW 53252,N'Lý do hủy lượt khám phải có ít nhất 10 ký tự.',1;
     DECLARE @branch_id bigint;
     SELECT @branch_id=branch_id FROM dbo.encounters WHERE encounter_id=@encounter_id;
     EXEC dbo.sp_assert_permission @actor_user_id,'ENCOUNTERS_CREATE',@branch_id;
 
     BEGIN TRY
         BEGIN TRANSACTION;
-        DECLARE @status varchar(20),@appointment_id bigint;
-        SELECT @status=status,@appointment_id=appointment_id
+        DECLARE @status varchar(20),@appointment_id bigint,@encounter_public_id uniqueidentifier;
+        SELECT @status=status,@appointment_id=appointment_id,@encounter_public_id=public_id
         FROM dbo.encounters WITH (UPDLOCK,HOLDLOCK) WHERE encounter_id=@encounter_id;
         IF @status='CANCELLED' BEGIN COMMIT TRANSACTION; RETURN; END;
         IF @status NOT IN ('WAITING','IN_PROGRESS')
@@ -9760,19 +9772,33 @@ BEGIN
          WHERE encounter_id=@encounter_id AND ended_at_utc IS NULL;
         UPDATE dbo.queue_tickets SET status='CANCELLED',completed_at_utc=SYSUTCDATETIME()
          WHERE encounter_id=@encounter_id AND status IN ('WAITING','CALLED','SERVING');
+        DECLARE @appointment_cancelled bit=0;
         IF @appointment_id IS NOT NULL
+        BEGIN
             UPDATE dbo.appointments
                SET status='CANCELLED',occupies_slot=0,cancelled_by_user_id=@actor_user_id,
                    cancelled_at_utc=SYSUTCDATETIME(),cancellation_reason=@reason,
                    cancellation_source='STAFF',hold_expires_at_utc=NULL,updated_at_utc=SYSUTCDATETIME()
              WHERE appointment_id=@appointment_id AND status IN ('CHECKED_IN','IN_PROGRESS');
+            IF @@ROWCOUNT=1 SET @appointment_cancelled=1;
+        END;
         UPDATE dbo.encounters
            SET status='CANCELLED',occupies_appointment=0,is_in_progress=0,
                cancelled_at_utc=SYSUTCDATETIME(),cancelled_by_user_id=@actor_user_id,
                cancellation_reason=@reason,updated_at_utc=SYSUTCDATETIME()
          WHERE encounter_id=@encounter_id;
 
-        DECLARE @entity_id varchar(100)=CONVERT(varchar(100),@encounter_id);
+        INSERT dbo.outbox_events(aggregate_type,aggregate_id,event_type,payload_json)
+        VALUES('ENCOUNTER',CONVERT(varchar(36),@encounter_public_id),'ENCOUNTER_CANCELLED',
+          CONCAT(N'{"encounterPublicId":"',CONVERT(varchar(36),@encounter_public_id),N'"}'));
+        IF @appointment_cancelled=1
+        BEGIN
+            DECLARE @appointment_public_id uniqueidentifier=(SELECT public_id FROM dbo.appointments WHERE appointment_id=@appointment_id);
+            INSERT dbo.outbox_events(aggregate_type,aggregate_id,event_type,payload_json)
+            VALUES('APPOINTMENT',CONVERT(varchar(36),@appointment_public_id),'APPOINTMENT_CANCELLED',
+              CONCAT(N'{"appointmentPublicId":"',CONVERT(varchar(36),@appointment_public_id),N'"}'));
+        END;
+        DECLARE @entity_id varchar(100)=CONVERT(varchar(36),@encounter_public_id);
         DECLARE @audit_json nvarchar(max)=CONCAT(N'{"reason":"',STRING_ESCAPE(@reason,'json'),N'"}');
         EXEC dbo.sp_write_audit @actor_user_id,@branch_id,'ENCOUNTER_CANCELLED',
              'ENCOUNTER',@entity_id,NULL,@audit_json;
@@ -12364,6 +12390,7 @@ GRANT EXECUTE ON OBJECT::dbo.sp_clinic_finalize_service_result TO clinic_api_exe
 GRANT EXECUTE ON OBJECT::dbo.sp_clinic_complete_encounter TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_clinic_sign_encounter TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_clinic_add_encounter_amendment TO clinic_api_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_clinic_cancel_encounter TO clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_cancel_encounter FROM clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_create_prescription FROM clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_add_prescription_item FROM clinic_api_executor;

@@ -4,20 +4,20 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import {
   LoginScreen,
-  PatientHomeScreen,
   RegistrationScreen,
   type RootStackParamList,
   WelcomeScreen,
 } from './src/features/auth/patient-auth';
 import { apiClient } from './src/shared/api/client';
 import { authTokenStorage } from './src/shared/storage/auth-token';
-import { PatientAccessScreen } from './src/features/patient-access/patient-access-screen';
-import { AppointmentScreen } from './src/features/appointments/appointment-screen';
+import { DiscoveryNavigator } from './src/features/discovery/discovery-screens';
+import type { BookingIntent } from './src/features/discovery/discovery-screens';
+import { PatientTabs } from './src/features/home/patient-tabs';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const queryClient = new QueryClient();
@@ -25,6 +25,8 @@ const queryClient = new QueryClient();
 function MobileApp() {
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
   const [restoring, setRestoring] = useState(true);
+  const [pendingBookingIntent, setPendingBookingIntent] = useState<BookingIntent>();
+  const clearPendingBookingIntent = useCallback(() => setPendingBookingIntent(undefined), []);
 
   useEffect(() => {
     let active = true;
@@ -68,6 +70,8 @@ function MobileApp() {
       // Local credentials must still be removed when the network is unavailable.
     } finally {
       await authTokenStorage.clear();
+      queryClient.clear();
+      setPendingBookingIntent(undefined);
       setUser(null);
     }
   };
@@ -82,13 +86,18 @@ function MobileApp() {
     <StatusBar style="dark" />
     <Stack.Navigator screenOptions={{ headerShadowVisible: false, headerTintColor: '#155f55' }}>
       {user ? <>
-        <Stack.Screen name="PatientHome" options={{ title: 'Cổng bệnh nhân' }}>
-          {({ navigation }) => <PatientHomeScreen user={user} onLogout={logout} navigation={navigation} />}
+        <Stack.Screen name="PatientHome" options={{ headerShown: false }}>
+          {() => <PatientTabs user={user} onLogout={logout} initialBookingIntent={pendingBookingIntent}
+            onBookingIntentHandled={clearPendingBookingIntent} />}
         </Stack.Screen>
-        <Stack.Screen name="PatientProfiles" component={PatientAccessScreen} options={{ title: 'Hồ sơ được ủy quyền' }} />
-        <Stack.Screen name="Booking" component={AppointmentScreen} options={{ title: 'Đặt lịch khám' }} />
       </> : <>
         <Stack.Screen name="Welcome" component={WelcomeScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="GuestExplore" options={{ headerShown: false }}>
+          {({ navigation }) => <DiscoveryNavigator onBook={(intent) => {
+            setPendingBookingIntent(intent);
+            navigation.navigate('Login');
+          }} />}
+        </Stack.Screen>
         <Stack.Screen name="Login" options={{ title: 'Đăng nhập' }}>
           {(props) => <LoginScreen {...props} onAuthenticated={authenticated} />}
         </Stack.Screen>

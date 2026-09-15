@@ -83,4 +83,5 @@ export interface ReceptionRepository {
   createWalkIn(actor: ClinicPrincipal, input: WalkInInput, idempotencyKey: string,
     requestId: string): Promise<QueueCommandResult>;
   callNext(actor: ClinicPrincipal, branchPublicId: string, requestId: string): Promise<QueueCommandResult | null>;
+  cancelEncounter(actor: ClinicPrincipal, encounterPublicId: string, reason: string, requestId: string): Promise<void>;
 }

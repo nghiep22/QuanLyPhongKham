@@ -182,7 +182,10 @@ Lễ tân/Điều dưỡng có permission phù hợp mở **Tiếp nhận** đ�
 kế tiếp. Check-in/walk-in yêu cầu idempotency key và tạo Encounter + dịch vụ ban
 đầu + QueueTicket trong một transaction. Cửa sổ check-in lấy từ cấu hình chi
 nhánh; số tăng đơn điệu theo ngày, còn call-next xếp ưu tiên trước rồi FIFO và
-khóa ticket để hai quầy không gọi cùng một bệnh nhân.
+khóa ticket để hai quầy không gọi cùng một bệnh nhân. Ngay trên bảng hàng đợi,
+nhân viên có thể hủy lượt đang chờ/đang khám với lý do bắt buộc; hệ thống đóng
+đồng bộ ticket, dịch vụ và chứng từ nháp nhưng chặn hủy khi còn thuốc đã cấp chưa
+đảo hoặc đã phát sinh thanh toán.
 
 Bác sĩ được phân công mở **Khám bệnh** sau khi số đã được gọi để bắt đầu lượt,
 ghi sinh hiệu, bệnh sử, khám thực thể, chẩn đoán và chỉ định. Kết quả FINAL cần

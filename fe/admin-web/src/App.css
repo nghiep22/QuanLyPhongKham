@@ -183,6 +183,7 @@ header { display: flex; align-items: center; justify-content: space-between; gap
 .queue-ticket > strong { align-self: start; padding: 7px 9px; border-radius: 8px; background: #e4edf2; font-size: 17px; }
 .queue-ticket div { display: grid; gap: 3px; min-width: 0; }
 .queue-ticket span, .queue-ticket small, .arrival-card span, .arrival-card small { color: #687c89; font-size: 12px; }
+.queue-cancel-button { grid-column: 1 / -1; justify-self: end; padding: 5px 7px; font-size: 11px; }
 .queue-serving { border-color: #71b7a6; background: #eef9f6; }
 .queue-called { border-color: #e4ba61; background: #fff9e9; }
 .empty-column { padding: 20px 10px; border: 1px dashed #cbd9e1; border-radius: 10px; color: #6b7f8c; text-align: center; }

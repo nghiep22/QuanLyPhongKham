@@ -1227,6 +1227,21 @@ export type NullableQueueCommandResponse = {
     requestId: RequestId;
 };
 
+export type EncounterCancellationRequest = {
+    reason: string;
+};
+
+export type EncounterCancellationResult = {
+    publicId: string;
+    status: 'CANCELLED';
+};
+
+export type EncounterCancellationResponse = {
+    data: EncounterCancellationResult;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
 export type ClinicalBranchListResponse = {
     data: Array<ReceptionBranch>;
     meta: ResponseMeta;
@@ -4523,6 +4538,49 @@ export type CallNextQueueTicketResponses = {
 };
 
 export type CallNextQueueTicketResponse = CallNextQueueTicketResponses[keyof CallNextQueueTicketResponses];
+
+export type CancelEncounterData = {
+    body: EncounterCancellationRequest;
+    path: {
+        encounterId: string;
+    };
+    query?: never;
+    url: '/api/v1/encounters/{encounterId}/cancel';
+};
+
+export type CancelEncounterErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type CancelEncounterError = CancelEncounterErrors[keyof CancelEncounterErrors];
+
+export type CancelEncounterResponses = {
+    /**
+     * Encounter cancelled, or the existing cancellation returned idempotently.
+     */
+    200: EncounterCancellationResponse;
+};
+
+export type CancelEncounterResponse = CancelEncounterResponses[keyof CancelEncounterResponses];
 
 export type ListClinicalBranchesData = {
     body?: never;

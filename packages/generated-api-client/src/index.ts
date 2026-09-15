@@ -265,6 +265,11 @@ export function createApiClient(options: ApiClientOptions) {
         request<import('@clinic/generated-api-types').NullableQueueCommandResponse>('/api/v1/queues/call-next', {
           method: 'POST', body: JSON.stringify(body),
         }),
+      cancelEncounter: (encounterId: string, body: import('@clinic/generated-api-types').EncounterCancellationRequest) =>
+        request<import('@clinic/generated-api-types').EncounterCancellationResponse>(
+          `/api/v1/encounters/${encodeURIComponent(encounterId)}/cancel`,
+          { method: 'POST', body: JSON.stringify(body) },
+        ),
     },
     pharmacy: {
       branches: () => request<import('@clinic/generated-api-types').PharmacyBranchListResponse>('/api/v1/pharmacy/branches'),

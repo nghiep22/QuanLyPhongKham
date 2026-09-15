@@ -1171,6 +1171,7 @@ Health readiness phải kiểm tra dependency cần thiết nhưng có timeout n
 | Slice 13 — Billing & Payments Core | **DONE** | 2026-09-14 | BIL-01–11/15: hóa đơn DRAFT theo lượt khám, đồng bộ dịch vụ hoàn tất và thuốc đã cấp, dòng thủ công/bảo hiểm, completeness gate nguyên tử khi phát hành, thu từng phần, hoàn theo allocation, VOID sau khi thu ròng về 0 và hóa đơn thay thế. Public UUID, branch scope, idempotency issue/payment/refund, outbox/audit bằng public ID và khóa ứng dụng chống hai quầy thu vượt. Admin Web, OpenAPI v0.9/client đồng bộ; 15 SQL regression + harness payment race + 97 application test, lint/typecheck/build và Gateway smoke đạt. In hóa đơn và cổng thanh toán còn P1. |
 | Slice 14 — Operational Reports Core | **DONE** | 2026-09-14 | RPT-01–03: báo cáo vận hành lịch/lượt đến/no-show/thời gian chờ, doanh thu thu ròng theo ngày/phương thức, dịch vụ và thuốc sử dụng, tồn thấp/lô hết hạn 90 ngày. Khoảng ngày theo timezone chi nhánh, tối đa 366 ngày; capability tách Manager/Admin, Cashier và Pharmacist theo branch scope. API dùng pool `clinic_report_reader` riêng, fail closed khi thiếu credentials và mutation role không được cấp report procedure. Admin Web, OpenAPI v0.10/client đồng bộ; 16 SQL regression + 101 application test đạt. Export CSV/XLSX và worker thông báo còn mở. |
 | Slice 15 — Outbox Publisher & Appointment Reminders | **DONE** | 2026-09-14 | Outbox có envelope/version/event ID/dedupe/correlation, claim lease an toàn nhiều worker, retry exponential và dead-letter. Scheduler tạo reminder idempotent theo appointment + thời điểm + lead time; materializer bỏ reminder stale và hủy bản còn chờ khi reschedule/cancel/expire. Publisher và notification adapter hỗ trợ console metadata-only ở development, webhook HTTPS + bearer ở production; SQL login worker riêng fail closed. 17 SQL regression + 113 application test đạt. Replay dead-letter thủ công và export CSV/XLSX còn P1. |
+| Slice 16 — Safe Encounter Cancellation | **DONE** | 2026-09-15 | Nhân viên có `ENCOUNTERS_CREATE` hủy lượt WAITING/IN_PROGRESS bằng public UUID và lý do bắt buộc từ bảng hàng đợi Admin. Transaction đóng ticket, dịch vụ mở, đơn/hóa đơn DRAFT, phân công và appointment; chặn khi còn thuốc đã cấp chưa đảo hoặc có thanh toán. Retry idempotent; audit/outbox dùng public ID và phát `APPOINTMENT_CANCELLED` để dừng reminder. OpenAPI v0.11/client, Clinic Service, Admin Web, SQL regression và Gateway smoke đồng bộ; 120 application test đạt. |
 
 Phase 1 và Slice 02–07 đã hoàn thành về source code và kiểm thử local. Phase 2
 đã đạt luồng MVP về source code và kiểm thử local. Các
@@ -1187,9 +1188,9 @@ Time-off, ngày nghỉ/lịch đặc biệt và quy trình duyệt ca còn dành
 Phase 5 đã có quầy tiếp nhận dùng được từ Admin Web đến SQL: check-in, walk-in,
 cấp số và call-next an toàn khi nhiều quầy cùng gọi. Recall/skip/cancel/transfer
 ticket, bảng hiển thị công khai và ước lượng thời gian chờ vẫn thuộc P1/P2.
-Phase 6 đã có luồng bác sĩ hoàn tất và ký hồ sơ từ Admin Web đến SQL. Hủy lượt,
-truy cập lịch sử cho bệnh nhân, kết quả nhiều phiên bản, chữ ký số được xác minh
-và đính kèm tệp sẽ được triển khai ở lát cắt tiếp theo.
+Phase 6 đã có luồng bác sĩ hoàn tất/ký hồ sơ và hủy lượt an toàn từ Admin Web đến
+SQL. Truy cập lịch sử cho bệnh nhân, kết quả nhiều phiên bản, chữ ký số được xác
+minh và đính kèm tệp sẽ được triển khai ở lát cắt tiếp theo.
 Phase 7 đã có luồng từ kê đơn đến nhập kho/cấp phát/đảo cấp và đối soát tồn. Quản lý
 nhà cung cấp, cập nhật danh mục thuốc, cảnh báo lô sắp hết hạn và kiểm thử hai quầy
 cấp phát đồng thời còn dành cho lát cắt hardening tiếp theo.

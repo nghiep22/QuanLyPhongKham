@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Private Clinic API
-  version: 0.10.0
+  version: 0.11.0
   description: Public contract for the private clinic management system.
 servers:
   - url: http://localhost:5000
@@ -1657,6 +1657,29 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/encounters/{encounterId}/cancel:
+    post:
+      operationId: cancelEncounter
+      summary: Cancel a waiting or in-progress encounter and its open downstream work
+      description: Cancels the queue ticket, open services, draft prescription and draft invoice. Dispensed medicine must be reversed and successful payments block cancellation.
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/EncounterId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EncounterCancellationRequest' }
+      responses:
+        '200':
+          description: Encounter cancelled, or the existing cancellation returned idempotently.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EncounterCancellationResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /api/v1/clinical/branches:
     get:
       operationId: listClinicalBranches
@@ -5002,6 +5025,27 @@ components:
           oneOf:
             - { $ref: '#/components/schemas/QueueCommandResult' }
             - { type: 'null' }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    EncounterCancellationRequest:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 10, maxLength: 500 }
+    EncounterCancellationResult:
+      type: object
+      additionalProperties: false
+      required: [publicId, status]
+      properties:
+        publicId: { type: string, format: uuid }
+        status: { type: string, enum: [CANCELLED] }
+    EncounterCancellationResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data: { $ref: '#/components/schemas/EncounterCancellationResult' }
         meta: { $ref: '#/components/schemas/ResponseMeta' }
         requestId: { $ref: '#/components/schemas/RequestId' }
     ClinicalBranchListResponse:

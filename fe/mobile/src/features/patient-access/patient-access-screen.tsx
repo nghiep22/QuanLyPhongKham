@@ -1,7 +1,8 @@
 import { ApiClientError } from '@clinic/generated-api-client';
 import type { BranchReference, PatientAccessData, PatientRelationship } from '@clinic/generated-api-types';
-import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import { useQueryClient } from '@tanstack/react-query';
+import { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -14,7 +15,6 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import type { RootStackParamList } from '../auth/patient-auth';
 import { apiClient } from '../../shared/api/client';
 
 const relationships: Array<[PatientRelationship, string]> = [
@@ -43,7 +43,8 @@ function message(error: unknown) {
   return error.message || 'Không thể xử lý yêu cầu.';
 }
 
-export function PatientAccessScreen(_props: NativeStackScreenProps<RootStackParamList, 'PatientProfiles'>) {
+export function PatientAccessScreen() {
+  const queryClient = useQueryClient();
   const [data, setData] = useState<PatientAccessData | null>(null);
   const [branches, setBranches] = useState<BranchReference[]>([]);
   const [branchPublicId, setBranchPublicId] = useState('');
@@ -77,7 +78,7 @@ export function PatientAccessScreen(_props: NativeStackScreenProps<RootStackPara
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useFocusEffect(useCallback(() => { void load(); }, [load]));
 
   const submit = async () => {
     const parsedBirthDate = new Date(`${dateOfBirth}T00:00:00.000Z`);
@@ -109,6 +110,7 @@ export function PatientAccessScreen(_props: NativeStackScreenProps<RootStackPara
       setDateOfBirth('');
       setRequestNote('');
       setSuccess('Đã tiếp nhận yêu cầu. Phòng khám sẽ chỉ duyệt sau khi đối chiếu giấy tờ.');
+      await queryClient.invalidateQueries({ queryKey: ['mobile', 'patient-access'] });
       await load(true);
     } catch (cause) {
       if (cause instanceof ApiClientError && cause.code === 'IDEMPOTENCY_KEY_REUSED') retry.current = null;
@@ -122,6 +124,7 @@ export function PatientAccessScreen(_props: NativeStackScreenProps<RootStackPara
     setError(null);
     try {
       await apiClient.patientAccess.cancelRequest(requestId);
+      await queryClient.invalidateQueries({ queryKey: ['mobile', 'patient-access'] });
       await load(true);
     } catch (cause) { setError(message(cause)); }
   };
@@ -135,6 +138,7 @@ export function PatientAccessScreen(_props: NativeStackScreenProps<RootStackPara
         setError(null);
         try {
           await apiClient.patientAccess.revokeLink(linkId, { reason: 'Người dùng chủ động thu hồi trên ứng dụng' });
+          await queryClient.invalidateQueries({ queryKey: ['mobile', 'patient-access'] });
           await load(true);
         } catch (cause) { setError(message(cause)); }
       })() },

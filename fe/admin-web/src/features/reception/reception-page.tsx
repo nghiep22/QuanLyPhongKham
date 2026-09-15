@@ -3,6 +3,8 @@ import type { CheckInCandidate, CreateWalkInRequest, ReceptionPatient, Reception
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useRef, useState } from 'react'
 import { apiClient } from '../../shared/api/client'
+import { getAdminAccess } from '../auth/admin-access'
+import { useAuth } from '../auth/auth-context'
 
 function idempotencyKey() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID()
@@ -12,14 +14,22 @@ function idempotencyKey() {
   })
 }
 function message(error: unknown) {
+  if (error instanceof Error && error.message === 'CANCELLATION_REASON_TOO_SHORT') {
+    return 'Lý do hủy lượt phải có ít nhất 10 ký tự.'
+  }
   if (!(error instanceof ApiClientError)) return 'Không thể kết nối hệ thống.'
   if (error.code === 'CHECK_IN_WINDOW_CLOSED') return 'Bệnh nhân đang ngoài cửa sổ check-in của chi nhánh.'
   if (error.code === 'RECEPTION_STATE_CONFLICT') return 'Lịch hoặc tài nguyên tiếp nhận vừa thay đổi. Hãy tải lại.'
+  if (error.code === 'ENCOUNTER_CANCELLATION_NOT_ALLOWED') return 'Chỉ có thể hủy lượt đang chờ hoặc đang khám.'
+  if (error.code === 'ENCOUNTER_MEDICATION_NOT_REVERSED') return 'Cần đảo toàn bộ thuốc đã cấp trước khi hủy lượt khám.'
+  if (error.code === 'ENCOUNTER_HAS_PAYMENT') return 'Lượt khám đã có thanh toán nên không thể hủy.'
   if (error.status === 403) return 'Bạn không có quyền tiếp nhận tại chi nhánh này.'
   return error.message
 }
 
 export function ReceptionPage() {
+  const { user } = useAuth()
+  const { canCancelEncounters } = getAdminAccess(user)
   const queryClient = useQueryClient()
   const [branchId, setBranchId] = useState('')
   const branches = useQuery({ queryKey: ['reception-branches'], queryFn: () => apiClient.reception.branches() })
@@ -48,20 +58,42 @@ export function ReceptionPage() {
     {Boolean(callError) && <div className="form-error" role="alert">{message(callError)}</div>}
     {workspace.isLoading ? <div className="page-state panel">Đang tải quầy tiếp nhận…</div>
       : workspace.error ? <div className="page-state error-state">{message(workspace.error)}</div>
-        : data && <><section className="reception-grid"><QueueBoard tickets={data.queue} />
+        : data && <><section className="reception-grid"><QueueBoard tickets={data.queue} refresh={refresh}
+          canCancel={canCancelEncounters} />
           <AppointmentArrivals items={data.appointments} refresh={refresh} /></section>
           <WalkInPanel branchId={selectedBranchId} data={data} refresh={refresh} /></>}
   </>
 }
 
-function QueueBoard({ tickets }: { tickets: ReceptionWorkspace['queue'] }) {
+function QueueBoard({ tickets, refresh, canCancel }: {
+  tickets: ReceptionWorkspace['queue']; refresh: () => void; canCancel: boolean
+}) {
   const groups = [['SERVING', 'Đang phục vụ'], ['CALLED', 'Đã gọi'], ['WAITING', 'Đang chờ']] as const
+  const [busy, setBusy] = useState(''); const [error, setError] = useState<unknown>(null); const [notice, setNotice] = useState('')
+  const cancel = async (ticket: ReceptionWorkspace['queue'][number]) => {
+    const entered = window.prompt(`Lý do hủy lượt ${ticket.encounterCode} (tối thiểu 10 ký tự):`)
+    if (entered == null) return
+    const reason = entered.trim()
+    if (reason.length < 10) { setError(new Error('CANCELLATION_REASON_TOO_SHORT')); return }
+    if (!window.confirm(`Xác nhận hủy lượt ${ticket.encounterCode} của ${ticket.patient.fullName}?`)) return
+    setBusy(ticket.publicId); setError(null); setNotice('')
+    try {
+      await apiClient.reception.cancelEncounter(ticket.encounterPublicId, { reason })
+      setNotice(`Đã hủy lượt ${ticket.encounterCode} và đóng số ${ticket.displayNumber}.`); refresh()
+    } catch (cause) { setError(cause) }
+    finally { setBusy('') }
+  }
   return <section className="panel queue-board"><div className="detail-heading"><div><h2>Hàng đợi hiện tại</h2>
     <p>{tickets.length} bệnh nhân đang trong luồng chờ–gọi–phục vụ.</p></div></div>
+    {notice && <div className="form-success" role="status">{notice}</div>}
+    {Boolean(error) && <div className="form-error" role="alert">{message(error)}</div>}
     <div className="queue-columns">{groups.map(([status, label]) => <div key={status}><h3>{label}</h3>
       {tickets.filter((ticket) => ticket.status === status).map((ticket) => <article className={`queue-ticket queue-${status.toLowerCase()}`} key={ticket.publicId}>
         <strong>{ticket.displayNumber}</strong><div><b>{ticket.patient.fullName}</b><span>{ticket.patient.code} · {ticket.doctor.fullName}</span>
-          <small>{ticket.room?.name ?? 'Chưa xếp phòng'}{ticket.priorityLevel ? ` · Ưu tiên ${ticket.priorityLevel}` : ''}</small></div></article>)}
+          <small>{ticket.room?.name ?? 'Chưa xếp phòng'}{ticket.priorityLevel ? ` · Ưu tiên ${ticket.priorityLevel}` : ''}</small></div>
+        {canCancel && <button type="button" className="danger-link queue-cancel-button" disabled={Boolean(busy)} onClick={() => void cancel(ticket)}>
+          {busy === ticket.publicId ? 'Đang hủy…' : 'Hủy lượt'}
+        </button>}</article>)}
       {!tickets.some((ticket) => ticket.status === status) && <div className="empty-column">Trống</div>}</div>)}</div>
   </section>
 }

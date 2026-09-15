@@ -1,5 +1,5 @@
 import { ApiClientError } from '@clinic/generated-api-client';
-import type { AuthResponse, AuthenticatedUser, PatientRegistrationRequest } from '@clinic/generated-api-types';
+import type { AuthResponse, PatientRegistrationRequest } from '@clinic/generated-api-types';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -20,9 +20,8 @@ export type RootStackParamList = {
   Welcome: undefined;
   Login: { identifier?: string } | undefined;
   Register: undefined;
+  GuestExplore: undefined;
   PatientHome: undefined;
-  PatientProfiles: undefined;
-  Booking: undefined;
 };
 
 type SessionCallback = (response: AuthResponse) => Promise<void>;
@@ -42,11 +41,14 @@ export function WelcomeScreen({ navigation }: NativeStackScreenProps<RootStackPa
       <Text style={styles.eyebrow}>PHÒNG KHÁM TƯ NHÂN</Text>
       <Text style={styles.title}>Chăm sóc sức khỏe, chủ động từng lịch hẹn.</Text>
       <Text style={styles.body}>Đăng nhập hoặc tạo tài khoản bệnh nhân đã xác minh để sử dụng dịch vụ trực tuyến.</Text>
-      <Pressable style={styles.primaryButton} onPress={() => navigation.navigate('Login')}>
-        <Text style={styles.primaryButtonText}>Đăng nhập</Text>
+      <Pressable style={styles.primaryButton} onPress={() => navigation.navigate('GuestExplore')}>
+        <Text style={styles.primaryButtonText}>Xem bác sĩ & bảng giá</Text>
       </Pressable>
-      <Pressable style={styles.secondaryButton} onPress={() => navigation.navigate('Register')}>
-        <Text style={styles.secondaryButtonText}>Đăng ký tài khoản bệnh nhân</Text>
+      <Pressable style={styles.secondaryButton} onPress={() => navigation.navigate('Login')}>
+        <Text style={styles.secondaryButtonText}>Đăng nhập</Text>
+      </Pressable>
+      <Pressable onPress={() => navigation.navigate('Register')}>
+        <Text style={styles.link}>Chưa có tài khoản? Đăng ký bệnh nhân</Text>
       </Pressable>
     </View>
   </SafeAreaView>;
@@ -234,26 +236,6 @@ export function RegistrationScreen({ navigation }: NativeStackScreenProps<RootSt
       <Pressable onPress={() => navigation.navigate('Login')}><Text style={styles.link}>Đã có tài khoản? Đăng nhập</Text></Pressable>
     </ScrollView>
   </SafeAreaView>;
-}
-
-export function PatientHomeScreen({ user, onLogout, navigation }: {
-  user: AuthenticatedUser;
-  onLogout: () => Promise<void>;
-  navigation: NativeStackScreenProps<RootStackParamList, 'PatientHome'>['navigation'];
-}) {
-  const [loggingOut, setLoggingOut] = useState(false);
-  return <SafeAreaView style={styles.screen}><View style={styles.hero}>
-    <Text style={styles.eyebrow}>TÀI KHOẢN ĐÃ XÁC MINH</Text>
-    <Text style={styles.heading}>Xin chào, {user.displayName}</Text>
-    <Text style={styles.body}>Quản lý các hồ sơ đã được xác minh trước khi đặt lịch cho bản thân hoặc người thân.</Text>
-    <SubmitButton label="Hồ sơ được ủy quyền" loading={false} onPress={() => navigation.navigate('PatientProfiles')} />
-    <SubmitButton label="Đặt lịch khám" loading={false} onPress={() => navigation.navigate('Booking')} />
-    <Pressable disabled={loggingOut} onPress={async () => {
-      setLoggingOut(true);
-      await onLogout();
-      setLoggingOut(false);
-    }}><Text style={styles.link}>{loggingOut ? 'Đang đăng xuất…' : 'Đăng xuất'}</Text></Pressable>
-  </View></SafeAreaView>;
 }
 
 function Field({ label, ...inputProps }: React.ComponentProps<typeof TextInput> & { label: string }) {

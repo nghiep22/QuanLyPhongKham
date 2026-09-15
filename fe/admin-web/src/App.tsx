@@ -9,6 +9,7 @@ import {
 import { z } from 'zod'
 import './App.css'
 import { useAuth } from './features/auth/auth-context'
+import { getAdminAccess } from './features/auth/admin-access'
 import { ChangePasswordPage, ForgotPasswordPage, ResetPasswordPage } from './features/auth/password-pages'
 import { StaffPage } from './features/staff/staff-page'
 import { PatientLinksPage } from './features/patient-links/patient-links-page'
@@ -21,6 +22,7 @@ import { ClinicalPage } from './features/clinical/clinical-page'
 import { PharmacyPage } from './features/pharmacy/pharmacy-page'
 import { BillingPage } from './features/billing/billing-page'
 import { ReportsPage } from './features/reports/reports-page'
+import { DashboardPage } from './features/dashboard/dashboard-page'
 
 const loginSchema = z.object({
   identifier: z.string().trim().min(3, 'Nhập tài khoản, email hoặc số điện thoại.'),
@@ -100,28 +102,11 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
 function AdminLayout() {
   const { user, logout } = useAuth()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
-  const canManageStaff = user?.roles.some((role) => role.code === 'ADMIN')
-    || user?.permissions.includes('USERS_MANAGE')
-  const canManagePatientLinks = user?.roles.some((role) => role.code === 'ADMIN')
-    || user?.permissions.includes('PATIENT_PORTAL_LINK_MANAGE')
-  const canManageCatalog = user?.roles.some((role) => role.code === 'ADMIN')
-    || user?.permissions.includes('MASTER_DATA_MANAGE')
-  const canManagePatients = user?.roles.some((role) => role.code === 'ADMIN')
-    || user?.permissions.includes('PATIENTS_MANAGE')
-  const canManageAppointments = user?.roles.some((role) => role.code === 'ADMIN')
-    || user?.permissions.includes('APPOINTMENTS_MANAGE')
-  const canManageSchedules = user?.roles.some((role) => role.code === 'ADMIN')
-    || user?.permissions.includes('SCHEDULES_MANAGE')
-  const canManageReception = user?.roles.some((role) => role.code === 'ADMIN')
-    || user?.permissions.includes('QUEUE_MANAGE') || user?.permissions.includes('ENCOUNTERS_CREATE')
-  const canUseClinical = user?.permissions.includes('ENCOUNTERS_CLINICAL')
-  const canUsePharmacy = user?.permissions.some((permission) =>
-    ['PRESCRIPTIONS_WRITE', 'PHARMACY_DISPENSE', 'INVENTORY_MANAGE'].includes(permission))
-  const canUseBilling = user?.roles.some((role) => role.code === 'ADMIN')
-    || user?.permissions.some((permission) =>
-      ['BILLING_MANAGE', 'PAYMENT_COLLECT', 'PAYMENT_REFUND'].includes(permission))
-  const canViewReports = user?.roles.some((role) => role.code === 'ADMIN')
-    || user?.permissions.includes('REPORTS_VIEW')
+  const {
+    canManageStaff, canManagePatientLinks, canManageCatalog, canManagePatients,
+    canManageAppointments, canManageSchedules, canManageReception, canUseClinical,
+    canUsePharmacy, canUseBilling, canViewReports,
+  } = getAdminAccess(user)
 
   const onLogout = async () => {
     setIsLoggingOut(true)
@@ -157,41 +142,6 @@ function AdminLayout() {
       </aside>
       <main className="dashboard"><Outlet /></main>
     </div>
-  )
-}
-
-function DashboardPage() {
-  const { user } = useAuth()
-  const modules = [
-    ['Nhân sự', 'Tài khoản, hồ sơ bác sĩ và phân quyền theo chi nhánh'],
-    ['Lịch hẹn hôm nay', 'Tiếp nhận lịch online và bệnh nhân đến trực tiếp'],
-    ['Danh sách chờ', 'Điều phối bệnh nhân theo phòng và bác sĩ'],
-    ['Hồ sơ khám', 'Sinh hiệu, chẩn đoán, chỉ định và kết luận'],
-    ['Đơn thuốc', 'Kê đơn, kiểm tra liều và hướng dẫn dùng thuốc'],
-    ['Thu ngân', 'Hóa đơn, thanh toán và hoàn tiền có kiểm soát'],
-  ]
-  return (
-    <>
-      <header>
-        <div>
-          <span className="eyebrow">TRUNG TÂM ĐIỀU HÀNH</span>
-          <h1>Xin chào, {user?.displayName}</h1>
-        </div>
-      </header>
-      <section className="notice">
-        <strong>Phiên đăng nhập an toàn đã hoạt động.</strong>
-        <span>Quyền truy cập được áp dụng theo vai trò và chi nhánh của tài khoản.</span>
-      </section>
-      <section className="module-grid">
-        {modules.map(([title, description]) => (
-          <article key={title}>
-            <div className="module-icon">+</div>
-            <h2>{title}</h2>
-            <p>{description}</p>
-          </article>
-        ))}
-      </section>
-    </>
   )
 }
 

@@ -127,4 +127,12 @@ export class SqlReceptionRepository implements ReceptionRepository {
     ], { requestId, actorUserId: actor.userId });
     return result.output.queue_ticket_public_id == null ? null : command(result);
   }
+
+  async cancelEncounter(actor: ClinicPrincipal, encounterPublicId: string, reason: string, requestId: string) {
+    await executeCommand('dbo.sp_clinic_cancel_encounter', [
+      { name: 'actor_user_id', type: sql.BigInt, value: actor.userId },
+      { name: 'encounter_public_id', type: sql.UniqueIdentifier, value: encounterPublicId },
+      { name: 'reason', type: sql.NVarChar(500), value: reason },
+    ], { requestId, actorUserId: actor.userId });
+  }
 }

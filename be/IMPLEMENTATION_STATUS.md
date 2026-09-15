@@ -1,6 +1,6 @@
 # Trạng thái triển khai backend
 
-> Cập nhật: 2026-09-14
+> Cập nhật: 2026-09-15
 
 ## DONE — Slice 01: Platform Foundation
 
@@ -300,16 +300,29 @@ Phạm vi đã hoàn thành:
   worker, materialize, retry/backoff/dead-letter và recovery. Unit test kiểm tra
   thứ tự publish/complete, failure path, chống overlap và không rò dữ liệu log.
 
+## DONE — Slice 16: Safe Encounter Cancellation
+
+- Lễ tân/Điều dưỡng/Manager/Admin có `ENCOUNTERS_CREATE` hủy lượt `WAITING` hoặc
+  `IN_PROGRESS` bằng public UUID và lý do tối thiểu 10 ký tự ngay trên bảng hàng đợi.
+- Một transaction đóng đồng bộ queue ticket, dịch vụ đang mở, đơn thuốc DRAFT,
+  hóa đơn DRAFT, phân công nhân viên và appointment đã check-in; slot được giải phóng.
+- Hủy bị chặn nếu còn thuốc đã cấp chưa đảo hoặc lượt khám đã có thanh toán thành
+  công; lỗi API phân biệt rõ state conflict, thuốc và thanh toán để hướng dẫn xử lý.
+- Retry lượt đã hủy là idempotent. Audit và outbox dùng public UUID; lượt có
+  appointment phát thêm `APPOINTMENT_CANCELLED` để dừng reminder đang chờ.
+- OpenAPI 3.1 v0.11, generated client/types, Clinic Service và Admin Web đã đồng bộ.
+  Regression SQL rollback sạch, API test và smoke Gateway → Auth/Clinic → SQL đạt.
+
 ### Bằng chứng xác minh local toàn bộ
 
 | Kiểm tra | Kết quả |
 |---|---|
-| Baseline SQL chạy lại idempotent | Đạt; 70 bảng, 23 view, 158 procedure, 30 trigger |
+| Baseline SQL chạy lại idempotent | Đạt; 70 bảng, 23 view, 159 procedure, 30 trigger |
 | SQL auth session/staff RBAC/staff safety/password lifecycle/patient registration/patient link/catalog-directory/patient registry/scheduling-appointments/reception-queue/clinical-core/pharmacy-core/pharmacy-FEFO/pharmacy-allergy/billing-core/reports-core/notifications-outbox regression | 17/17 PASS; rollback sạch. Hai harness SQL thật xác minh queue gọi hai ticket khác nhau và payment race chỉ một quầy thu được toàn bộ dư nợ |
 | OpenAPI lint + code generation | Đạt; contract hợp lệ và generated code sinh lặp lại ổn định |
 | npm run lint | Đạt, không cảnh báo |
 | npm run typecheck | Đạt |
-| npm test | 113 test đạt (Auth 34, Mobile 14, Clinic 53, Worker 12), gồm luồng API và outbox/delivery worker |
+| npm test | 120 test đạt (Admin 5, Auth 34, Mobile 14, Clinic 55, Worker 12), gồm hủy lượt an toàn và outbox/delivery worker |
 | npm run build | Đạt; .NET 0 warning/0 error |
 | npm run doctor:mobile | 21/21; ba gói Expo SDK 57 đã được nâng đúng patch tương thích |
 | Gateway → Auth → SQL smoke test | Registration thiếu idempotency key trả 400; challenge lạ trả generic OTP 400; ba route patient-access mới đi đúng Auth và trả 401 + request ID + `Cache-Control: no-store` khi thiếu token |
@@ -317,6 +330,7 @@ Phạm vi đã hoàn thành:
 | Gateway → Auth/Clinic → SQL patient smoke test | Demo Admin đăng nhập; lấy chi nhánh, tra cứu, mở hồ sơ thật đạt; đọc lâm sàng không có care relationship trả 403 |
 | Gateway → Clinic → SQL scheduling smoke test | Public availability trả 200 từ SQL thật; patient/admin appointments và schedules thiếu token trả 401; route Admin đi đúng Clinic; request ID xuyên suốt; Gateway readiness trả 200 |
 | Gateway → Clinic → SQL reception smoke test | `receptionist.demo` đăng nhập qua Gateway; đọc branch/workspace từ SQL thật; queue rỗng trả `data: null` khi call-next; request ID xuyên suốt; logout đạt |
+| Gateway → Clinic → SQL encounter cancellation smoke test | `receptionist.demo` gọi endpoint hủy bằng public UUID không tồn tại qua Gateway; Clinic trả đúng 404 `RECEPTION_RESOURCE_NOT_FOUND`, có request ID xuyên suốt và logout đạt. Transaction hủy thật được xác minh bằng SQL regression rollback sạch |
 | Gateway → Auth/Clinic → SQL clinical smoke test | `doctor.demo` đăng nhập qua Gateway; danh sách chi nhánh lâm sàng và lượt khám đọc từ SQL thật trả 200, status sai trả 400, request ID xuyên suốt và logout đạt. Luồng ghi/hoàn tất/ký được xác minh bằng regression SQL rollback sạch |
 | Gateway → Auth/Clinic → SQL pharmacy smoke test | `pharmacist.demo` và `doctor.demo` đăng nhập qua Gateway; scoped pharmacy branches, workspace và đối soát đọc SQL thật trả 200, request ID xuyên suốt. Luồng ghi nhập/cấp/đảo được kiểm tra trong SQL regression rollback sạch |
 | Gateway → Auth/Clinic → SQL billing smoke test | `cashier.demo` đăng nhập qua Gateway; billing branches/workspace đọc SQL thật trả 200 với request ID xuyên suốt; thiếu token trả 401 và logout đạt. Luồng ghi/phát hành/thu/hoàn/VOID được xác minh bằng SQL regression rollback sạch |
@@ -337,9 +351,9 @@ Phạm vi đã hoàn thành:
   lịch online/tại quầy và reminder đa kênh đã hoàn thành qua Slice 09/15.
 - Phase 5 còn recall/skip/cancel/transfer ticket có lý do, đóng phiên, bảng hiển
   thị công khai và ước lượng thời gian chờ; lõi Reception & Queue của Slice 10 đã hoàn thành.
-- Phase 6 còn hủy lượt, lịch sử khám cho bệnh nhân theo chính sách công bố, kết quả
-  nhiều phiên bản, đính kèm tệp và chữ ký số có kiểm chứng certificate; lõi bác sĩ
-  hoàn tất/ký/bổ sung của Slice 11 đã hoàn thành.
+- Phase 6 còn lịch sử khám cho bệnh nhân theo chính sách công bố, kết quả nhiều
+  phiên bản, đính kèm tệp và chữ ký số có kiểm chứng certificate; lõi bác sĩ
+  hoàn tất/ký/bổ sung và hủy lượt an toàn đã hoàn thành qua Slice 11/16.
 - Phase 7 còn quản lý nhà cung cấp, cập nhật/khóa danh mục thuốc, cảnh báo lô sắp
   hết hạn và harness hai quầy cấp đồng thời; lõi kê đơn–nhập kho–cấp–đảo–đối soát
   của Slice 12 đã hoàn thành.

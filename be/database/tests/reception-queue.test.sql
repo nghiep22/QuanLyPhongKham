@@ -13,7 +13,7 @@ BEGIN TRY
         SELECT required.object_name FROM (VALUES
           (N'sp_clinic_reception_branches'),(N'sp_clinic_get_reception'),(N'sp_clinic_search_reception_patients'),
           (N'sp_clinic_check_in_appointment'),(N'sp_clinic_create_walk_in_encounter'),
-          (N'sp_clinic_call_next_queue_ticket')
+          (N'sp_clinic_call_next_queue_ticket'),(N'sp_clinic_cancel_encounter')
         ) required(object_name)
         WHERE NOT EXISTS(SELECT 1 FROM sys.database_permissions dp
           WHERE dp.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'clinic_api_executor')
@@ -21,7 +21,8 @@ BEGIN TRY
     ) THROW 55800,N'clinic_api_executor thiếu quyền reception/queue public procedures.',1;
     IF EXISTS(
         SELECT forbidden.object_name FROM (VALUES
-          (N'sp_check_in_appointment'),(N'sp_create_walk_in_encounter'),(N'sp_call_next_queue_ticket')
+          (N'sp_check_in_appointment'),(N'sp_create_walk_in_encounter'),(N'sp_call_next_queue_ticket'),
+          (N'sp_cancel_encounter')
         ) forbidden(object_name)
         WHERE EXISTS(SELECT 1 FROM sys.database_permissions dp
           WHERE dp.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'clinic_api_executor')
@@ -131,6 +132,41 @@ BEGIN TRY
       @queue_ticket_public_id=@retry_ticket OUTPUT,@display_number=@retry_display OUTPUT;
     IF @retry_encounter<>@encounter_public_id OR @retry_ticket<>@ticket_public_id OR @retry_display<>@display
       THROW 55806,N'Retry check-in không trả cùng lượt khám và số.',1;
+
+    DECLARE @cancel_prescription_code varchar(40)=CONCAT('RXC',LEFT(@suffix,20)),
+            @cancel_invoice_code varchar(40)=CONCAT('IVC',LEFT(@suffix,20));
+    INSERT dbo.prescriptions(prescription_code,encounter_id,patient_id,doctor_id,branch_id,status,created_by_user_id)
+    VALUES(@cancel_prescription_code,@check_encounter_id,@patient_id,@doctor_id,@branch_id,'DRAFT',@doctor_user_id);
+    DECLARE @cancel_prescription_id bigint=SCOPE_IDENTITY();
+    INSERT dbo.invoices(invoice_number,encounter_id,patient_id,branch_id,status,created_by_user_id)
+    VALUES(@cancel_invoice_code,@check_encounter_id,@patient_id,@branch_id,'DRAFT',@admin_id);
+    DECLARE @cancel_invoice_id bigint=SCOPE_IDENTITY();
+    DECLARE @cancel_reason nvarchar(500)=N'Bệnh nhân xin dừng lượt khám tại quầy.';
+    EXEC dbo.sp_clinic_cancel_encounter @actor_user_id=@admin_id,
+      @encounter_public_id=@encounter_public_id,@reason=@cancel_reason;
+    IF NOT EXISTS(SELECT 1 FROM dbo.encounters WHERE public_id=@encounter_public_id AND status='CANCELLED')
+      OR NOT EXISTS(SELECT 1 FROM dbo.queue_tickets WHERE public_id=@ticket_public_id AND status='CANCELLED')
+      OR NOT EXISTS(SELECT 1 FROM dbo.appointments WHERE public_id=@appointment_public_id AND status='CANCELLED' AND occupies_slot=0)
+      OR EXISTS(SELECT 1 FROM dbo.encounter_services WHERE encounter_id=@check_encounter_id AND status<>'CANCELLED')
+      OR NOT EXISTS(SELECT 1 FROM dbo.prescriptions WHERE prescription_id=@cancel_prescription_id AND status='CANCELLED')
+      OR NOT EXISTS(SELECT 1 FROM dbo.invoices WHERE invoice_id=@cancel_invoice_id AND status='VOID' AND is_active_invoice=0)
+      THROW 55814,N'Hủy lượt không đóng đồng bộ encounter, queue, appointment và dịch vụ mở.',1;
+    IF NOT EXISTS(SELECT 1 FROM dbo.audit_logs WHERE action_code='ENCOUNTER_CANCELLED'
+      AND entity_id=CONVERT(varchar(36),@encounter_public_id)
+      AND JSON_VALUE(new_values_json,'$.reason')=@cancel_reason)
+      THROW 55815,N'Audit hủy lượt không dùng public ID hoặc thiếu lý do.',1;
+    IF NOT EXISTS(SELECT 1 FROM dbo.outbox_events WHERE aggregate_id=CONVERT(varchar(36),@encounter_public_id)
+      AND event_type='ENCOUNTER_CANCELLED')
+      OR NOT EXISTS(SELECT 1 FROM dbo.outbox_events WHERE aggregate_id=CONVERT(varchar(36),@appointment_public_id)
+        AND event_type='APPOINTMENT_CANCELLED')
+      THROW 55816,N'Hủy lượt thiếu outbox encounter/appointment bằng public ID.',1;
+    DECLARE @encounter_cancel_event_count int=(SELECT COUNT(*) FROM dbo.outbox_events
+      WHERE aggregate_id=CONVERT(varchar(36),@encounter_public_id) AND event_type='ENCOUNTER_CANCELLED');
+    EXEC dbo.sp_clinic_cancel_encounter @actor_user_id=@admin_id,
+      @encounter_public_id=@encounter_public_id,@reason=@cancel_reason;
+    IF (SELECT COUNT(*) FROM dbo.outbox_events WHERE aggregate_id=CONVERT(varchar(36),@encounter_public_id)
+      AND event_type='ENCOUNTER_CANCELLED')<>@encounter_cancel_event_count
+      THROW 55817,N'Retry hủy lượt đã tạo outbox trùng.',1;
 
     DECLARE @walk1_encounter uniqueidentifier,@walk1_ticket uniqueidentifier,@walk1_display varchar(20),
             @walk2_encounter uniqueidentifier,@walk2_ticket uniqueidentifier,@walk2_display varchar(20);
