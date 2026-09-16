@@ -817,7 +817,7 @@ export const getClinicalEncounter = <ThrowOnError extends boolean = false>(optio
 });
 
 /**
- * Start only a called encounter assigned to the doctor
+ * Start a called encounter, or bypass calling for the next eligible ticket with permission and reason
  */
 export const startClinicalEncounter = <ThrowOnError extends boolean = false>(options: Options<StartClinicalEncounterData, ThrowOnError>): RequestResult<StartClinicalEncounterResponses, StartClinicalEncounterErrors, ThrowOnError> => (options.client ?? client).post<StartClinicalEncounterResponses, StartClinicalEncounterErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],

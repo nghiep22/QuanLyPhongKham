@@ -133,6 +133,7 @@ BEGIN TRY
       @encounter_public_id=@encounter_public_id,@room_public_id=@room_public_id;
     IF NOT EXISTS (SELECT 1 FROM dbo.encounters WHERE encounter_id=@encounter_id AND status='IN_PROGRESS')
       THROW 55903,N'Không bắt đầu được lượt đã CALLED.',1;
+
     EXEC dbo.sp_clinic_update_encounter_clinical_notes @actor_user_id=@doctor_user_id,
       @encounter_public_id=@encounter_public_id,@history_of_present_illness=N'Đau đầu hai ngày',
       @physical_examination=N'Tỉnh, tiếp xúc tốt',@clinical_assessment=N'Cần theo dõi',
@@ -234,6 +235,44 @@ BEGIN TRY
         AND entity_id=CONVERT(varchar(36),@amendment_public_id)
         AND JSON_VALUE(new_values_json,'$.encounterPublicId')=CONVERT(varchar(36),@encounter_public_id))
       THROW 55910,N'Audit lâm sàng chưa dùng public ID.',1;
+
+    -- Bypass chỉ bỏ qua bước CALLED cho đúng ticket đang đứng đầu theo priority/FIFO.
+    DECLARE @lower_code varchar(40),@lower_encounter_id bigint,@lower_ticket_id bigint,@lower_display varchar(20),
+            @bypass_code varchar(40),@bypass_encounter_id bigint,@bypass_encounter_public_id uniqueidentifier,
+            @bypass_ticket_id bigint,@bypass_ticket_public_id uniqueidentifier,@bypass_display varchar(20),
+            @bypass_reason nvarchar(500)=N'Bệnh nhân cần được đưa thẳng vào phòng khám';
+    EXEC dbo.sp_next_document_number @branch_id,'ENCOUNTER',@business_date,'LK',@lower_code OUTPUT;
+    INSERT dbo.encounters(encounter_code,branch_id,patient_id,attending_doctor_id,room_id,
+      encounter_source,status,arrived_at_utc,created_by_user_id)
+    VALUES(@lower_code,@branch_id,@patient_id,@doctor_id,@room_id,'WALK_IN','WAITING',SYSUTCDATETIME(),@admin_id);
+    SET @lower_encounter_id=SCOPE_IDENTITY();
+    EXEC dbo.sp_allocate_queue_ticket_internal @actor_user_id=@admin_id,@encounter_id=@lower_encounter_id,
+      @queue_type='LAB',@priority_level=0,@queue_ticket_id=@lower_ticket_id OUTPUT,@display_number=@lower_display OUTPUT;
+    EXEC dbo.sp_next_document_number @branch_id,'ENCOUNTER',@business_date,'LK',@bypass_code OUTPUT;
+    INSERT dbo.encounters(encounter_code,branch_id,patient_id,attending_doctor_id,room_id,
+      encounter_source,status,arrived_at_utc,created_by_user_id)
+    VALUES(@bypass_code,@branch_id,@patient_id,@doctor_id,@room_id,'WALK_IN','WAITING',SYSUTCDATETIME(),@admin_id);
+    SET @bypass_encounter_id=SCOPE_IDENTITY();
+    SELECT @bypass_encounter_public_id=public_id FROM dbo.encounters WHERE encounter_id=@bypass_encounter_id;
+    EXEC dbo.sp_allocate_queue_ticket_internal @actor_user_id=@admin_id,@encounter_id=@bypass_encounter_id,
+      @queue_type='LAB',@priority_level=9,@queue_ticket_id=@bypass_ticket_id OUTPUT,@display_number=@bypass_display OUTPUT;
+    SELECT @bypass_ticket_public_id=public_id FROM dbo.queue_tickets WHERE queue_ticket_id=@bypass_ticket_id;
+    EXEC dbo.sp_clinic_start_encounter @actor_user_id=@doctor_user_id,
+      @encounter_public_id=@bypass_encounter_public_id,@room_public_id=@room_public_id,
+      @queue_bypass_reason=@bypass_reason;
+    IF NOT EXISTS (SELECT 1 FROM dbo.encounters WHERE encounter_id=@bypass_encounter_id AND status='IN_PROGRESS')
+      OR NOT EXISTS (SELECT 1 FROM dbo.queue_tickets WHERE queue_ticket_id=@bypass_ticket_id AND status='SERVING'
+        AND called_at_utc IS NOT NULL AND called_by_user_id=@doctor_user_id AND service_started_at_utc IS NOT NULL)
+      OR NOT EXISTS (SELECT 1 FROM dbo.queue_tickets WHERE queue_ticket_id=@lower_ticket_id AND status='WAITING')
+      THROW 55916,N'Bypass không giữ đúng thứ tự priority/FIFO hoặc không chuyển trạng thái nguyên tử.',1;
+    IF NOT EXISTS (SELECT 1 FROM dbo.audit_logs WHERE action_code='QUEUE_TICKET_CALL_BYPASSED'
+        AND entity_id=CONVERT(varchar(36),@bypass_ticket_public_id)
+        AND JSON_VALUE(new_values_json,'$.reason')=@bypass_reason)
+      OR NOT EXISTS (SELECT 1 FROM dbo.outbox_events WHERE event_type='QUEUE_TICKET_CALL_BYPASSED'
+        AND aggregate_id=CONVERT(varchar(36),@bypass_ticket_public_id)
+        AND JSON_VALUE(payload_json,'$.encounterPublicId')=CONVERT(varchar(36),@bypass_encounter_public_id)
+        AND JSON_VALUE(payload_json,'$.reason') IS NULL)
+      THROW 55917,N'Bypass chưa có audit lý do hoặc outbox metadata-only bằng public ID.',1;
 
     -- Negative case at end: the guard may make the fixture transaction uncommittable.
     DECLARE @immutable_error int=NULL;

@@ -137,9 +137,11 @@ export class SqlClinicalRepository implements ClinicalRepository {
     return detail(await executeCommand<Row>('dbo.sp_clinic_get_encounter', [actorParam(actor), encounterParam(encounterPublicId)],
       context(actor, requestId)));
   }
-  async start(actor: ClinicPrincipal, encounterPublicId: string, roomPublicId: string | null, requestId: string) {
+  async start(actor: ClinicPrincipal, encounterPublicId: string, roomPublicId: string | null,
+    queueBypassReason: string | null, requestId: string) {
     await executeCommand('dbo.sp_clinic_start_encounter', [actorParam(actor), encounterParam(encounterPublicId),
-      { name: 'room_public_id', type: sql.UniqueIdentifier, value: roomPublicId }], context(actor, requestId));
+      { name: 'room_public_id', type: sql.UniqueIdentifier, value: roomPublicId },
+      { name: 'queue_bypass_reason', type: sql.NVarChar(500), value: queueBypassReason }], context(actor, requestId));
   }
   async updateNotes(actor: ClinicPrincipal, encounterPublicId: string, input: ClinicalNotesInput, requestId: string) {
     await executeCommand('dbo.sp_clinic_update_encounter_clinical_notes', [actorParam(actor), encounterParam(encounterPublicId),

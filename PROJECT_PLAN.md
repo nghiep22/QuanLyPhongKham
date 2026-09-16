@@ -681,7 +681,7 @@ Trong bảng này, **P0** nghĩa là phải chốt thiết kế trước và ho�
 | P0 | Canonical payload dùng khi ký hồ sơ | **DONE — Slice 18** | Manifest V3 bao phủ snapshot lâm sàng bất biến, loại trạng thái/lượng cấp phát có thể đổi; cùng một procedure dùng cho ký và xác minh, regression recompute sau cấp/reversal đạt |
 | P0 | Tự chuyển prescription hết hạn | **DONE — Slice 19** | Command/worker dùng chung transition idempotent; lưu `EXPIRED`, audit và outbox trước khi từ chối cấp, không còn `UPDATE` rồi `THROW` bị rollback |
 | P0 | Đối chiếu dị ứng hoạt chất khi kê/cấp | **DONE — Slice 20** | Catalog allergen + mapping medicine; kiểm tra chính xác ở lúc kê và cấp; mỗi override có permission/lý do/audit và lưu append-only |
-| P0 | Start encounter tuân thủ queue | Có defect | Ticket phải `CALLED` đúng lượt trước khi `SERVING`; bypass cần permission/lý do và không phá priority/FIFO |
+| P0 | Start encounter tuân thủ queue | **DONE — Slice 21** | Luồng thường bắt buộc `CALLED`; bypass chỉ cho ticket `WAITING` đứng đầu, cần permission/lý do, khóa theo priority/FIFO và có audit/outbox |
 | P0 | Validation kết quả FINAL | Có defect | Không chốt khi summary/conclusion/result/value đều rỗng; validate theo result schema của dịch vụ |
 | P0 | Reversal về kho bán an toàn | Có defect | Lô còn ACTIVE, chưa hết hạn/thu hồi/cách ly và hàng trả đạt kiểm tra; nếu không bắt buộc vào quarantine |
 | P0 | Completeness gate khi phát hành hóa đơn | Có defect | Khóa encounter/billable sources, đồng bộ trong transaction, không còn service/dispensation dở hoặc dòng chưa tính |
@@ -1176,6 +1176,7 @@ Health readiness phải kiểm tra dependency cần thiết nhưng có timeout n
 | Slice 18 — Verifiable Clinical Signature Manifest V3 | **DONE** | 2026-09-16 | CLI-11 và defect P0 canonical payload: thuật toán ký/xác minh dùng chung một procedure có version; V3 dùng public UUID và snapshot lâm sàng bất biến đầy đủ, không đưa `prescription.status` hoặc `dispensed_quantity` có thể đổi vào hash. V2 vẫn được hỗ trợ để xác minh hồ sơ cũ. Doctor/Patient thấy trạng thái `isVerified` trên Web/Mobile; regression chứng minh ký → cấp đủ → đảo cấp vẫn giữ nguyên hash. OpenAPI v0.13/client, 17 SQL regression + 122 application test đạt. |
 | Slice 19 — Durable Prescription Expiration | **DONE** | 2026-09-16 | Defect P0 hết hạn đơn: lệnh mở cấp phát và Scheduler Worker dùng chung transition idempotent theo business date chi nhánh; `EXPIRED`, audit và outbox public UUID được commit trước lỗi từ chối cấp. Job có batch/khóa SQL, quyền riêng `clinic_job_executor`; completion/reversal không thể hồi sinh đơn. Baseline 165 procedure, pharmacy regression và 124 application test đạt. |
 | Slice 20 — Normalized Medication Allergy Safety | **DONE** | 2026-09-16 | RX-03 và defect P0 đối chiếu dị ứng: catalog `allergens` cùng mapping nhiều-nhiều thuốc–dị nguyên thay so khớp chuỗi `LIKE`; dữ liệu cũ được backfill. Kê đơn và cấp phát đều recheck mapping chính xác, tách permission override bác sĩ/dược sĩ, bắt lý do tối thiểu 10 ký tự, lưu trên dòng append-only và audit public UUID. Retry cấp phát giữ nguyên resource; OpenAPI v0.14/client và Admin Web hiển thị mapping/cảnh báo. Baseline 73 bảng, pharmacy regression và 126 application test đạt. |
+| Slice 21 — Queue-safe Encounter Start | **DONE** | 2026-09-16 | CLI-01 và defect P0 start encounter: đường thường chỉ chuyển ticket `CALLED` sang `SERVING`; ngoại lệ tách permission `ENCOUNTERS_QUEUE_BYPASS`, bắt lý do tối thiểu 10 ký tự và chỉ áp dụng cho ticket `WAITING` đang đứng đầu theo priority/FIFO dưới khóa transaction. Bypass ghi audit có lý do, outbox metadata-only bằng public UUID; OpenAPI v0.15/client và Admin Web có hành động riêng theo capability. Clinical SQL regression cùng 128 application test đạt. |
 
 Phase 1 và Slice 02–07 đã hoàn thành về source code và kiểm thử local. Phase 2
 đã đạt luồng MVP về source code và kiểm thử local. Các
@@ -1190,7 +1191,8 @@ Phase 4 đã có lát cắt dọc đặt lịch online/tại quầy dùng đư�
 điều kiện double-booking/idempotency và có reminder email/SMS qua delivery adapter.
 Time-off, ngày nghỉ/lịch đặc biệt và quy trình duyệt ca còn dành cho lát cắt sau.
 Phase 5 đã có quầy tiếp nhận dùng được từ Admin Web đến SQL: check-in, walk-in,
-cấp số và call-next an toàn khi nhiều quầy cùng gọi. Recall/skip/cancel/transfer
+cấp số và call-next an toàn khi nhiều quầy cùng gọi. Slice 21 khóa cả đường bypass
+bước gọi số theo priority/FIFO, permission và lý do. Recall/skip/cancel/transfer
 ticket, bảng hiển thị công khai và ước lượng thời gian chờ vẫn thuộc P1/P2.
 Phase 6 đã có luồng bác sĩ hoàn tất/ký/công bố hồ sơ, hủy lượt an toàn và bệnh
 nhân/người giám hộ xem lịch sử đã công bố từ UI đến SQL. Dấu SHA-256 V3 được

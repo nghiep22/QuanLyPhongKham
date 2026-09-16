@@ -13,6 +13,15 @@ function errorNumber(error: unknown): number | undefined {
 
 function mapError(error: unknown): never {
   const code = errorNumber(error);
+  if (code === 53256) {
+    throw new HttpError(409, 'CLINICAL_QUEUE_NOT_CALLED', 'Số hàng đợi chưa được gọi. Hãy gọi số trước khi bắt đầu khám.');
+  }
+  if (code === 53265) {
+    throw new HttpError(409, 'CLINICAL_QUEUE_BYPASS_REASON_REQUIRED', 'Ngoại lệ bắt đầu khám cần lý do tối thiểu 10 ký tự.');
+  }
+  if (code === 53266) {
+    throw new HttpError(409, 'CLINICAL_QUEUE_ORDER_CONFLICT', 'Còn lượt ưu tiên hoặc FIFO đứng trước trong hàng đợi.');
+  }
   if (code === 51002 || [53219, 53222, 53224, 53226, 53230, 53236, 53241, 53249,
     53259, 53260, 53261, 53264].includes(code ?? 0)) {
     throw new HttpError(403, 'CLINICAL_FORBIDDEN', 'Bạn không có quyền thực hiện thao tác lâm sàng này.');
@@ -21,7 +30,7 @@ function mapError(error: unknown): never {
     throw new HttpError(404, 'CLINICAL_RESOURCE_NOT_FOUND', 'Không tìm thấy lượt khám hoặc tài nguyên lâm sàng.');
   }
   if ([2601, 2627, 53220, 53223, 53225, 53227, 53228, 53231, 53234, 53235, 53237,
-    53238, 53239, 53240, 53244, 53245, 53246, 53247, 53250, 53251, 53256, 53262, 53263,
+    53238, 53239, 53240, 53244, 53245, 53246, 53247, 53250, 53251, 53262, 53263,
     52031, 52032, 52033, 52035, 52036, 52037].includes(code ?? 0)) {
     throw new HttpError(409, 'CLINICAL_STATE_CONFLICT', 'Trạng thái hồ sơ vừa thay đổi hoặc chưa đủ điều kiện.');
   }
@@ -43,8 +52,10 @@ export class ClinicalService {
   async get(actor: ClinicPrincipal, encounterPublicId: string, requestId: string) {
     try { return await this.repository.get(actor, encounterPublicId, requestId); } catch (error) { mapError(error); }
   }
-  async start(actor: ClinicPrincipal, encounterPublicId: string, roomPublicId: string | null, requestId: string) {
-    try { await this.repository.start(actor, encounterPublicId, roomPublicId, requestId); } catch (error) { mapError(error); }
+  async start(actor: ClinicPrincipal, encounterPublicId: string, roomPublicId: string | null,
+    queueBypassReason: string | null, requestId: string) {
+    try { await this.repository.start(actor, encounterPublicId, roomPublicId, queueBypassReason, requestId); }
+    catch (error) { mapError(error); }
   }
   async updateNotes(actor: ClinicPrincipal, encounterPublicId: string, input: ClinicalNotesInput, requestId: string) {
     try { await this.repository.updateNotes(actor, encounterPublicId, input, requestId); } catch (error) { mapError(error); }

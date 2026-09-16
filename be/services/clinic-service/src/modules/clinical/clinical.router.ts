@@ -17,7 +17,8 @@ const listQuery = z.object({ branchPublicId: uuid,
     if (statuses.some((status) => !allowed.has(status))) { context.addIssue({ code: 'custom', message: 'Trạng thái không hợp lệ.' }); return z.NEVER; }
     return statuses as EncounterStatus[];
   }) }).strict();
-const start = z.object({ roomPublicId: uuid.nullable().optional() }).strict();
+const start = z.object({ roomPublicId: uuid.nullable().optional(),
+  queueBypassReason: z.string().trim().min(10).max(500).nullable().optional() }).strict();
 const notes = z.object({ historyOfPresentIllness: nullableText(10_000), physicalExamination: nullableText(10_000),
   clinicalAssessment: nullableText(10_000), treatmentPlan: nullableText(10_000),
   followUpInstructions: nullableText(10_000), followUpDate: z.iso.date().nullable().optional() }).strict();
@@ -70,7 +71,8 @@ export function createClinicalRouter(auth: PrincipalAuthenticator, service: Clin
     await service.get(await actor(request, auth), validate(uuid, request.params.encounterId), response.locals.requestId))));
   router.post('/encounters/:encounterId/start', asyncRoute(async (request, response) => {
     const input = validate(start, request.body ?? {}); const encounterId = validate(uuid, request.params.encounterId);
-    const current = await actor(request, auth); await service.start(current, encounterId, input.roomPublicId ?? null, response.locals.requestId);
+    const current = await actor(request, auth); await service.start(current, encounterId, input.roomPublicId ?? null,
+      input.queueBypassReason ?? null, response.locals.requestId);
     success(response, await service.get(current, encounterId, response.locals.requestId));
   }));
   router.patch('/encounters/:encounterId/clinical-notes', asyncRoute(async (request, response) => {

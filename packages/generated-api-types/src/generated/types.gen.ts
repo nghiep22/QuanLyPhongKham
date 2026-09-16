@@ -1297,6 +1297,10 @@ export type ClinicalNotesRequest = {
 
 export type ClinicalStartRequest = {
     roomPublicId?: string | null;
+    /**
+     * Required with ENCOUNTERS_QUEUE_BYPASS when the next eligible ticket is still WAITING.
+     */
+    queueBypassReason?: string | null;
 };
 
 export type ClinicalVitalSignsRequest = {

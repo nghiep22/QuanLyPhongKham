@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { apiClient } from '../../shared/api/client'
+import { useAuth } from '../auth/auth-context'
 
 const labels: Record<ClinicalEncounterStatus, string> = {
   WAITING: 'Đang chờ', IN_PROGRESS: 'Đang khám', COMPLETED: 'Đã hoàn tất',
@@ -13,6 +14,9 @@ const labels: Record<ClinicalEncounterStatus, string> = {
 function errorMessage(error: unknown) {
   if (!(error instanceof ApiClientError)) return 'Không thể kết nối hệ thống. Hãy thử lại.'
   if (error.status === 403) return 'Bạn không được phân công lượt khám này hoặc không có quyền tại chi nhánh.'
+  if (error.code === 'CLINICAL_QUEUE_NOT_CALLED') return 'Quầy cần gọi số trước khi bắt đầu khám.'
+  if (error.code === 'CLINICAL_QUEUE_BYPASS_REASON_REQUIRED') return 'Ngoại lệ cần lý do tối thiểu 10 ký tự.'
+  if (error.code === 'CLINICAL_QUEUE_ORDER_CONFLICT') return 'Còn lượt ưu tiên hoặc FIFO đứng trước. Không thể bắt đầu ngoại lệ.'
   if (error.status === 409) return 'Trạng thái hồ sơ vừa thay đổi hoặc còn công việc chưa hoàn tất. Hãy tải lại.'
   return error.message
 }
@@ -24,6 +28,7 @@ function utc(value: string | null) {
 type Action = (label: string, operation: () => Promise<unknown>) => Promise<boolean>
 
 export function ClinicalPage() {
+  const { user } = useAuth()
   const queryClient = useQueryClient()
   const [branchId, setBranchId] = useState('')
   const [encounterId, setEncounterId] = useState('')
@@ -86,13 +91,16 @@ export function ClinicalPage() {
         {!encounterId ? <section className="panel page-state">Chọn một lượt khám để mở hồ sơ.</section>
           : detail.isLoading ? <section className="panel page-state">Đang tải hồ sơ khám…</section>
             : detail.error ? <section className="panel error-state page-state">{errorMessage(detail.error)}</section>
-              : detail.data && <EncounterEditor key={detail.data.data.publicId} item={detail.data.data} busy={busy} run={run} />}
+              : detail.data && <EncounterEditor key={detail.data.data.publicId} item={detail.data.data} busy={busy} run={run}
+                  canBypassQueue={Boolean(user?.permissions.includes('ENCOUNTERS_QUEUE_BYPASS'))} />}
       </div>
     </div>
   </>
 }
 
-function EncounterEditor({ item, busy, run }: { item: ClinicalEncounterDetail; busy: string; run: Action }) {
+function EncounterEditor({ item, busy, run, canBypassQueue }: {
+  item: ClinicalEncounterDetail; busy: string; run: Action; canBypassQueue: boolean
+}) {
   const open = item.status === 'IN_PROGRESS'
   const [notes, setNotes] = useState<ClinicalNotesRequest>({
     historyOfPresentIllness: item.historyOfPresentIllness ?? '',
@@ -138,6 +146,13 @@ function EncounterEditor({ item, busy, run }: { item: ClinicalEncounterDetail; b
       reason: amendReason.trim(), content: amendContent.trim(),
     }))) { setAmendReason(''); setAmendContent('') }
   }
+  const bypassQueueCall = () => {
+    const reason = window.prompt('Lý do bắt đầu khi chưa gọi số (tối thiểu 10 ký tự):')
+    if (reason == null) return
+    void run('Bắt đầu lượt khám theo ngoại lệ', () => apiClient.clinical.start(item.publicId, {
+      queueBypassReason: reason.trim(),
+    }))
+  }
   const setNote = (field: keyof ClinicalNotesRequest, value: string | null) =>
     setNotes((current) => ({ ...current, [field]: value }))
 
@@ -145,8 +160,10 @@ function EncounterEditor({ item, busy, run }: { item: ClinicalEncounterDetail; b
     <section className="panel"><div className="detail-heading"><div><span className={`status status-${item.status.toLowerCase()}`}>
       {labels[item.status]}</span><h2>{item.patient.fullName}</h2><p>{item.patient.code} · {item.code}</p></div>
       <div className="clinical-actions">{open && <Link to={`/pharmacy?encounterId=${encodeURIComponent(item.publicId)}`}>
-        Kê đơn thuốc</Link>}{item.status === 'WAITING' && <button type="button" disabled={Boolean(busy) || item.queue?.status !== 'CALLED'}
+        Kê đơn thuốc</Link>}{item.status === 'WAITING' && item.queue?.status === 'CALLED' && <button type="button" disabled={Boolean(busy)}
         onClick={() => void run('Bắt đầu lượt khám', () => apiClient.clinical.start(item.publicId))}>Bắt đầu khám</button>}
+        {item.status === 'WAITING' && item.queue?.status === 'WAITING' && canBypassQueue && <button type="button"
+          className="secondary" disabled={Boolean(busy)} onClick={bypassQueueCall}>Bắt đầu ngoại lệ</button>}
         {open && <button type="button" disabled={Boolean(busy)}
           onClick={() => void run('Hoàn tất lượt khám', () => apiClient.clinical.complete(item.publicId))}>Hoàn tất</button>}
         {item.status === 'COMPLETED' && <button type="button" disabled={Boolean(busy)}
@@ -157,7 +174,9 @@ function EncounterEditor({ item, busy, run }: { item: ClinicalEncounterDetail; b
       <div className="clinical-facts"><span><b>Số:</b> {item.queue?.displayNumber ?? '—'} ({item.queue?.status ?? '—'})</span>
         <span><b>Bác sĩ:</b> {item.doctor.fullName}</span><span><b>Phòng:</b> {item.room?.name ?? 'Chưa xếp'}</span>
         <span><b>Đến lúc:</b> {utc(item.arrivedAtUtc)}</span><span><b>Lý do:</b> {item.chiefComplaint ?? 'Chưa ghi'}</span></div>
-      {item.status === 'WAITING' && item.queue?.status !== 'CALLED' && <p className="appointment-warning">Quầy cần gọi số trước khi bác sĩ bắt đầu khám.</p>}
+      {item.status === 'WAITING' && item.queue?.status === 'WAITING' && <p className="appointment-warning">
+        {canBypassQueue ? 'Ngoại lệ chỉ bỏ qua bước gọi số cho lượt đang đứng đầu theo ưu tiên/FIFO và phải ghi lý do.'
+          : 'Quầy cần gọi số trước khi bác sĩ bắt đầu khám.'}</p>}
       {item.signature && <div className={`clinical-signature ${item.signature.isVerified ? '' : 'clinical-signature-failed'}`}>
         <strong>{item.signature.isVerified ? 'Toàn vẹn đã xác minh' : 'Cảnh báo: hồ sơ không khớp dấu đã ký'} · {utc(item.signature.signedAtUtc)}</strong>
         <span>{item.signature.schemaVersion}</span>

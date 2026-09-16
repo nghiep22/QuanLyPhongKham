@@ -138,7 +138,8 @@ export interface ClinicalRepository {
   branches(actor: ClinicPrincipal, requestId: string): Promise<ClinicalBranch[]>;
   list(actor: ClinicPrincipal, branchPublicId: string, statuses: EncounterStatus[], requestId: string): Promise<ClinicalEncounterSummary[]>;
   get(actor: ClinicPrincipal, encounterPublicId: string, requestId: string): Promise<ClinicalEncounterDetail>;
-  start(actor: ClinicPrincipal, encounterPublicId: string, roomPublicId: string | null, requestId: string): Promise<void>;
+  start(actor: ClinicPrincipal, encounterPublicId: string, roomPublicId: string | null,
+    queueBypassReason: string | null, requestId: string): Promise<void>;
   updateNotes(actor: ClinicPrincipal, encounterPublicId: string, input: ClinicalNotesInput, requestId: string): Promise<void>;
   addVitalSigns(actor: ClinicPrincipal, encounterPublicId: string, input: VitalSignsInput,
     requestId: string): Promise<ClinicalCommandResult>;

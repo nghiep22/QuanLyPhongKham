@@ -379,6 +379,19 @@ Phạm vi đã hoàn thành:
   Admin Web hiển thị dị nguyên chuẩn hóa, cảnh báo theo từng thuốc và hai dấu vết
   override. OpenAPI 3.1 v0.14/generated types/client đã đồng bộ.
 
+## DONE — Slice 21: Queue-safe Encounter Start
+
+- Đường bắt đầu thông thường vẫn yêu cầu ticket `CALLED`; ticket khác trạng thái
+  không thể chuyển thẳng sang `SERVING`. Ngoại lệ dùng permission riêng
+  `ENCOUNTERS_QUEUE_BYPASS` và lý do đã trim tối thiểu 10 ký tự.
+- Khi bypass, SQL khóa ticket và dải xếp hạng trong cùng queue session, rồi chỉ
+  chấp nhận ticket `WAITING` đứng đầu theo `priority_level DESC`, thời điểm cấp số
+  và số thứ tự FIFO. Ticket, encounter và appointment đổi trạng thái nguyên tử.
+- Audit giữ lý do và public UUID của ticket/encounter; outbox
+  `QUEUE_TICKET_CALL_BYPASSED` chỉ phát metadata, không phát lý do vận hành. Admin
+  Web chỉ hiện hành động ngoại lệ khi principal có capability và API trả conflict
+  riêng nếu còn lượt đứng trước. OpenAPI 3.1 v0.15/generated types/client đồng bộ.
+
 ### Bằng chứng xác minh local toàn bộ
 
 | Kiểm tra | Kết quả |
@@ -388,7 +401,7 @@ Phạm vi đã hoàn thành:
 | OpenAPI lint + code generation | Đạt; contract hợp lệ và generated code sinh lặp lại ổn định |
 | npm run lint | Đạt, không cảnh báo |
 | npm run typecheck | Đạt |
-| npm test | 126 test đạt (Admin 5, Auth 34, Mobile 14, Clinic 59, Worker 14), gồm mapping/recheck dị ứng lúc kê/cấp, hết hạn đơn theo batch/không overlap, công bố/lịch sử lâm sàng, xác minh manifest V3, hủy lượt an toàn và outbox/delivery worker |
+| npm test | 128 test đạt (Admin 5, Auth 34, Mobile 14, Clinic 61, Worker 14), gồm queue bypass validation/order conflict, mapping/recheck dị ứng lúc kê/cấp, hết hạn đơn theo batch/không overlap, công bố/lịch sử lâm sàng, xác minh manifest V3, hủy lượt an toàn và outbox/delivery worker |
 | npm run build | Đạt; .NET 0 warning/0 error |
 | npm run doctor:mobile | 21/21; Expo SDK 57 và các package liên quan khớp patch tương thích (`expo` 57.0.23) |
 | Gateway → Auth → SQL smoke test | Registration thiếu idempotency key trả 400; challenge lạ trả generic OTP 400; ba route patient-access mới đi đúng Auth và trả 401 + request ID + `Cache-Control: no-store` khi thiếu token |

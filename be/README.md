@@ -67,8 +67,9 @@ xóa `request_id`, `actor_user_id`, `branch_id` trong `SESSION_CONTEXT`.
 - Hai command tiếp nhận bắt buộc `Idempotency-Key`; SQL tạo Encounter, snapshot
   giá dịch vụ và QueueTicket trong cùng transaction, đồng thời ghi audit/outbox.
 - `POST /api/v1/queues/call-next` dùng `UPDLOCK + READPAST + ROWLOCK`, sắp theo
-  mức ưu tiên giảm dần rồi thời điểm cấp số/FIFO. Chỉ ticket `CALLED` mới được
-  chuyển sang `SERVING` khi bác sĩ bắt đầu lượt khám.
+  mức ưu tiên giảm dần rồi thời điểm cấp số/FIFO. Đường thường chỉ chuyển ticket
+  `CALLED` sang `SERVING`; bypass cần `ENCOUNTERS_QUEUE_BYPASS`, lý do tối thiểu
+  10 ký tự và vẫn chỉ được chọn ticket `WAITING` đứng đầu dưới khóa transaction.
 
 ## Clinical core
 
@@ -76,7 +77,9 @@ xóa `request_id`, `actor_user_id`, `branch_id` trong `SESSION_CONTEXT`.
   chi nhánh được phân công. `GET /api/v1/encounters` và `/api/v1/encounters/{id}`
   trả public UUID, sinh hiệu, chẩn đoán, chỉ định, kết quả và phụ lục.
 - `POST /api/v1/encounters/{id}/start` yêu cầu ticket `CALLED` và bác sĩ còn đủ
-  điều kiện hành nghề. Sinh hiệu có thể ghi nhiều lần khi lượt còn mở; bác sĩ ghi
+  điều kiện hành nghề. Ngoại lệ bỏ qua bước gọi số có permission/lý do riêng,
+  không được vượt priority/FIFO và phát audit/outbox bằng public UUID. Sinh hiệu
+  có thể ghi nhiều lần khi lượt còn mở; bác sĩ ghi
   nội dung khám, chẩn đoán chính, chỉ định dịch vụ theo giá chi nhánh và kết quả
   FINAL không rỗng.
 - Hoàn tất đòi một chẩn đoán chính và không còn dịch vụ/đơn thuốc bắt buộc ở trạng

@@ -3091,6 +3091,7 @@ FROM (VALUES
     ('QUEUE_MANAGE',          N'Quản lý hàng đợi',               'QUEUE',      N'Phát số và gọi bệnh nhân'),
     ('ENCOUNTERS_CREATE',     N'Tạo lượt khám',                  'CLINICAL',   N'Check-in và tiếp nhận walk-in'),
     ('ENCOUNTERS_CLINICAL',   N'Ghi hồ sơ khám',                 'CLINICAL',   N'Sinh hiệu, chẩn đoán, dịch vụ, kết quả'),
+    ('ENCOUNTERS_QUEUE_BYPASS',N'Bỏ qua bước gọi số',            'CLINICAL',   N'Bắt đầu lượt đứng đầu khi ticket còn WAITING, có lý do'),
     ('ENCOUNTERS_SIGN',       N'Ký hồ sơ khám',                  'CLINICAL',   N'Ký và khóa hồ sơ lâm sàng'),
     ('ENCOUNTERS_AMEND',      N'Bổ sung hồ sơ đã ký',            'CLINICAL',   N'Ghi phụ lục nối chuỗi hash'),
     ('PRESCRIPTIONS_WRITE',   N'Kê đơn thuốc',                   'PHARMACY',   N'Tạo và phát hành đơn'),
@@ -3129,6 +3130,7 @@ WHERE r.role_code = 'ADMIN'
         ('MANAGER','BILLING_MANAGE'), ('MANAGER','REPORTS_VIEW'),
         ('DOCTOR','PATIENTS_VIEW'), ('DOCTOR','APPOINTMENTS_MANAGE'),
         ('DOCTOR','QUEUE_MANAGE'), ('DOCTOR','ENCOUNTERS_CLINICAL'),
+        ('DOCTOR','ENCOUNTERS_QUEUE_BYPASS'),
         ('DOCTOR','ENCOUNTERS_SIGN'), ('DOCTOR','ENCOUNTERS_AMEND'),
         ('DOCTOR','PRESCRIPTIONS_WRITE'),('DOCTOR','PRESCRIPTIONS_ALLERGY_OVERRIDE'),
         ('NURSE','PATIENTS_VIEW'), ('NURSE','QUEUE_MANAGE'),
@@ -8752,7 +8754,8 @@ GO
 CREATE OR ALTER PROCEDURE dbo.sp_start_encounter
     @actor_user_id bigint,
     @encounter_id bigint,
-    @room_id bigint = NULL
+    @room_id bigint = NULL,
+    @queue_bypass_reason nvarchar(500) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -8799,10 +8802,58 @@ BEGIN
                           WHERE x.encounter_id=@encounter_id AND x.employee_id=d.employee_id
                             AND x.assignment_role='ATTENDING_DOCTOR' AND x.ended_at_utc IS NULL);
 
-        UPDATE dbo.queue_tickets WITH (UPDLOCK,HOLDLOCK)
-           SET status='SERVING',service_started_at_utc=SYSUTCDATETIME()
-         WHERE encounter_id=@encounter_id AND status='CALLED';
-        IF @@ROWCOUNT=0
+        DECLARE @queue_ticket_id bigint,@queue_ticket_public_id uniqueidentifier,
+                @queue_session_id bigint,@queue_status varchar(20),@display_number varchar(20);
+        SELECT @queue_ticket_id=queue_ticket_id,@queue_ticket_public_id=public_id,
+               @queue_session_id=queue_session_id,@queue_status=status,@display_number=display_number
+        FROM dbo.queue_tickets WITH (UPDLOCK,HOLDLOCK)
+        WHERE encounter_id=@encounter_id;
+
+        IF @queue_status='CALLED'
+            UPDATE dbo.queue_tickets
+               SET status='SERVING',service_started_at_utc=SYSUTCDATETIME()
+             WHERE queue_ticket_id=@queue_ticket_id AND status='CALLED';
+        ELSE IF @queue_status='WAITING'
+        BEGIN
+            SET @queue_bypass_reason=NULLIF(LTRIM(RTRIM(@queue_bypass_reason)),N'');
+            IF @queue_bypass_reason IS NULL
+                THROW 53256,N'Phải gọi số hàng đợi trước khi bắt đầu lượt khám.',1;
+            IF LEN(@queue_bypass_reason)<10
+                THROW 53265,N'Bắt buộc nhập lý do tối thiểu 10 ký tự khi bỏ qua bước gọi số.',1;
+            EXEC dbo.sp_assert_permission @actor_user_id,'ENCOUNTERS_QUEUE_BYPASS',@branch_id;
+
+            DECLARE @next_queue_ticket_id bigint;
+            SELECT TOP (1) @next_queue_ticket_id=qt.queue_ticket_id
+            FROM dbo.queue_tickets qt WITH (UPDLOCK,HOLDLOCK,INDEX(IX_queue_tickets_next))
+            JOIN dbo.queue_sessions next_session ON next_session.queue_session_id=qt.queue_session_id
+              AND next_session.status='OPEN' AND next_session.queue_date_local=@business_date
+            JOIN dbo.encounters next_encounter ON next_encounter.encounter_id=qt.encounter_id
+              AND next_encounter.status='WAITING'
+            WHERE qt.queue_session_id=@queue_session_id AND qt.status='WAITING'
+            ORDER BY qt.priority_level DESC,qt.issued_at_utc,qt.queue_number;
+            IF @next_queue_ticket_id IS NULL OR @next_queue_ticket_id<>@queue_ticket_id
+                THROW 53266,N'Không thể bỏ qua lượt có mức ưu tiên hoặc thứ tự FIFO cao hơn.',1;
+
+            UPDATE dbo.queue_tickets
+               SET status='SERVING',called_at_utc=COALESCE(called_at_utc,SYSUTCDATETIME()),
+                   called_by_user_id=COALESCE(called_by_user_id,@actor_user_id),
+                   service_started_at_utc=SYSUTCDATETIME()
+             WHERE queue_ticket_id=@queue_ticket_id AND status='WAITING';
+
+            DECLARE @bypass_encounter_public_id uniqueidentifier=(SELECT public_id FROM dbo.encounters WHERE encounter_id=@encounter_id);
+            INSERT dbo.outbox_events(aggregate_type,aggregate_id,event_type,payload_json)
+            VALUES('QUEUE_TICKET',CONVERT(varchar(36),@queue_ticket_public_id),'QUEUE_TICKET_CALL_BYPASSED',
+                CONCAT(N'{"queueTicketPublicId":"',CONVERT(varchar(36),@queue_ticket_public_id),
+                       N'","encounterPublicId":"',CONVERT(varchar(36),@bypass_encounter_public_id),
+                       N'","displayNumber":"',STRING_ESCAPE(@display_number,'json'),N'"}'));
+            DECLARE @bypass_entity_id varchar(100)=CONVERT(varchar(36),@queue_ticket_public_id);
+            DECLARE @bypass_audit_json nvarchar(max)=CONCAT(N'{"encounterPublicId":"',
+                CONVERT(varchar(36),@bypass_encounter_public_id),N'","reason":"',
+                STRING_ESCAPE(@queue_bypass_reason,'json'),N'"}');
+            EXEC dbo.sp_write_audit @actor_user_id,@branch_id,'QUEUE_TICKET_CALL_BYPASSED',
+                 'QUEUE_TICKET',@bypass_entity_id,NULL,@bypass_audit_json;
+        END
+        ELSE
             THROW 53256,N'Phải gọi số hàng đợi trước khi bắt đầu lượt khám.',1;
         IF @appointment_id IS NOT NULL
             UPDATE dbo.appointments SET status='IN_PROGRESS',updated_at_utc=SYSUTCDATETIME()
@@ -9852,7 +9903,8 @@ END;
 GO
 
 CREATE OR ALTER PROCEDURE dbo.sp_clinic_start_encounter
-    @actor_user_id bigint,@encounter_public_id uniqueidentifier,@room_public_id uniqueidentifier=NULL
+    @actor_user_id bigint,@encounter_public_id uniqueidentifier,@room_public_id uniqueidentifier=NULL,
+    @queue_bypass_reason nvarchar(500)=NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -9860,7 +9912,8 @@ BEGIN
             @room_id bigint=(SELECT room_id FROM dbo.rooms WHERE public_id=@room_public_id);
     IF @encounter_id IS NULL THROW 53802,N'Lượt khám không tồn tại.',1;
     IF @room_public_id IS NOT NULL AND @room_id IS NULL THROW 53804,N'Phòng không tồn tại.',1;
-    EXEC dbo.sp_start_encounter @actor_user_id=@actor_user_id,@encounter_id=@encounter_id,@room_id=@room_id;
+    EXEC dbo.sp_start_encounter @actor_user_id=@actor_user_id,@encounter_id=@encounter_id,@room_id=@room_id,
+        @queue_bypass_reason=@queue_bypass_reason;
 END;
 GO
 

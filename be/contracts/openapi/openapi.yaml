@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Private Clinic API
-  version: 0.14.0
+  version: 0.15.0
   description: Public contract for the private clinic management system.
 servers:
   - url: http://localhost:5000
@@ -1731,7 +1731,7 @@ paths:
   /api/v1/encounters/{encounterId}/start:
     post:
       operationId: startClinicalEncounter
-      summary: Start only a called encounter assigned to the doctor
+      summary: Start a called encounter, or bypass calling for the next eligible ticket with permission and reason
       security: [{ bearerAuth: [] }]
       parameters: [{ $ref: '#/components/parameters/EncounterId' }]
       requestBody:
@@ -5180,6 +5180,11 @@ components:
       type: object
       properties:
         roomPublicId: { type: [string, 'null'], format: uuid }
+        queueBypassReason:
+          type: [string, 'null']
+          minLength: 10
+          maxLength: 500
+          description: Required with ENCOUNTERS_QUEUE_BYPASS when the next eligible ticket is still WAITING.
     ClinicalVitalSignsRequest:
       type: object
       properties:

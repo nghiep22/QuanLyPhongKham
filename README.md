@@ -190,8 +190,11 @@ nhân viên có thể hủy lượt đang chờ/đang khám với lý do bắt b
 đồng bộ ticket, dịch vụ và chứng từ nháp nhưng chặn hủy khi còn thuốc đã cấp chưa
 đảo hoặc đã phát sinh thanh toán.
 
-Bác sĩ được phân công mở **Khám bệnh** sau khi số đã được gọi để bắt đầu lượt,
-ghi sinh hiệu, bệnh sử, khám thực thể, chẩn đoán và chỉ định. Kết quả FINAL cần
+Bác sĩ được phân công mở **Khám bệnh** sau khi số đã được gọi để bắt đầu lượt.
+Người có `ENCOUNTERS_QUEUE_BYPASS` thấy hành động ngoại lệ cho ticket còn
+`WAITING`; lý do tối thiểu 10 ký tự là bắt buộc và SQL chỉ cho phép lượt đang
+đứng đầu theo ưu tiên/FIFO, đồng thời ghi audit và outbox metadata-only. Sau đó
+bác sĩ ghi sinh hiệu, bệnh sử, khám thực thể, chẩn đoán và chỉ định. Kết quả FINAL cần
 có nội dung trước khi hoàn tất; hệ thống yêu cầu một chẩn đoán chính và không
 còn dịch vụ bắt buộc đang mở. Sau khi ký, hồ sơ được khóa; nội dung bổ sung được
 ghi bằng phụ lục nối hash. Bác sĩ phụ trách dùng **Công bố cho bệnh nhân** sau

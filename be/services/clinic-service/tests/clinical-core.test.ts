@@ -41,6 +41,8 @@ function encounter(): ClinicalEncounterDetail {
 class MemoryClinical implements ClinicalRepository {
   item = encounter();
   denied = false; linked = true;
+  startError: number | null = null;
+  lastQueueBypassReason: string | null = null;
   branches() { return Promise.resolve([{ publicId: branchId, code: 'MAIN', name: 'Chi nhánh chính',
     timezoneName: 'SE Asia Standard Time' }]); }
   list(_actor: ClinicPrincipal, _branchId: string, statuses: EncounterStatus[]) {
@@ -48,8 +50,10 @@ class MemoryClinical implements ClinicalRepository {
     return Promise.resolve(statuses.includes(this.item.status) ? [this.item] : []);
   }
   get() { return Promise.resolve(this.item); }
-  start() {
+  start(_actor: ClinicPrincipal, _id: string, _roomPublicId: string | null, queueBypassReason: string | null) {
+    if (this.startError != null) return Promise.reject({ number: this.startError });
     if (this.item.status !== 'WAITING') return Promise.reject({ number: 53220 });
+    this.lastQueueBypassReason = queueBypassReason;
     this.item.status = 'IN_PROGRESS'; this.item.queue = { displayNumber: 'A0001', status: 'SERVING' };
     return Promise.resolve();
   }
@@ -170,6 +174,24 @@ describe('clinical core API', () => {
     const signed = await request(server).post(`${base}/sign`).set(auth);
     expect(completed.body.data.status).toBe('COMPLETED');
     expect(signed.body.data.sha256).toHaveLength(64);
+  });
+
+  it('validates and forwards the explicit queue-call bypass reason', async () => {
+    const server = app(repository); const endpoint = `/api/v1/encounters/${encounterId}/start`;
+    const invalid = await request(server).post(endpoint).set(auth).send({ queueBypassReason: 'ngắn' });
+    const valid = await request(server).post(endpoint).set(auth)
+      .send({ queueBypassReason: '  Cần xử lý ngay tại phòng khám  ' });
+    expect(invalid.status).toBe(400);
+    expect(valid.status).toBe(200);
+    expect(repository.lastQueueBypassReason).toBe('Cần xử lý ngay tại phòng khám');
+  });
+
+  it('returns a safe conflict when a higher-priority or earlier ticket is still waiting', async () => {
+    repository.startError = 53266;
+    const response = await request(app(repository)).post(`/api/v1/encounters/${encounterId}/start`).set(auth)
+      .send({ queueBypassReason: 'Bắt đầu theo ngoại lệ có kiểm soát' });
+    expect(response.status).toBe(409);
+    expect(response.body.error.code).toBe('CLINICAL_QUEUE_ORDER_CONFLICT');
   });
 
   it('validates vital signs and FINAL result content before writing', async () => {
