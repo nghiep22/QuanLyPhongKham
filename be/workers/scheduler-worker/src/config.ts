@@ -15,6 +15,8 @@ const schema = z.object({
   SCHEDULER_WORKER_PORT: z.coerce.number().int().positive().default(4010),
   WORKER_ID: z.string().uuid().default(() => randomUUID()),
   APPOINTMENT_HOLD_SWEEP_MS: z.coerce.number().int().min(10_000).default(60_000),
+  PRESCRIPTION_EXPIRY_SWEEP_MS: z.coerce.number().int().min(60_000).default(3_600_000),
+  PRESCRIPTION_EXPIRY_BATCH_SIZE: z.coerce.number().int().min(1).max(1_000).default(500),
   SLOT_GENERATION_SWEEP_MS: z.coerce.number().int().min(60_000).default(21_600_000),
   APPOINTMENT_REMINDER_SWEEP_MS: z.coerce.number().int().min(10_000).default(300_000),
   APPOINTMENT_REMINDER_LEAD_MINUTES: z.coerce.number().int().min(15).max(10_080).default(1_440),

@@ -4,6 +4,7 @@ import type { NotificationProvider, OutboxPublisher, WorkerLogger, WorkerReposit
 export interface BackgroundJobOptions {
   workerId: string;
   reminderLeadMinutes: number;
+  prescriptionExpiryBatchSize: number;
   batchSize: number;
   leaseSeconds: number;
   maxAttempts: number;
@@ -43,6 +44,16 @@ export class BackgroundJobs {
     return this.run('expire-appointment-holds', async () => {
       const expiredCount = await this.repository.expireAppointmentHolds(randomUUID());
       if (expiredCount) this.logger.info({ expiredCount }, 'expired appointment holds');
+      return expiredCount;
+    });
+  }
+
+  expirePrescriptions(): Promise<number> {
+    return this.run('expire-prescriptions', async () => {
+      const expiredCount = await this.repository.expirePrescriptions(
+        randomUUID(), this.options.prescriptionExpiryBatchSize,
+      );
+      if (expiredCount) this.logger.info({ expiredCount }, 'expired prescriptions');
       return expiredCount;
     });
   }

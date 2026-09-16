@@ -26,6 +26,7 @@ const notificationProvider = env.NOTIFICATION_DELIVERY_MODE === 'webhook'
 const jobs = new BackgroundJobs(repository, outboxPublisher, notificationProvider, logger, {
   workerId: env.WORKER_ID,
   reminderLeadMinutes: env.APPOINTMENT_REMINDER_LEAD_MINUTES,
+  prescriptionExpiryBatchSize: env.PRESCRIPTION_EXPIRY_BATCH_SIZE,
   batchSize: env.DELIVERY_BATCH_SIZE,
   leaseSeconds: env.DELIVERY_LEASE_SECONDS,
   maxAttempts: env.DELIVERY_MAX_ATTEMPTS,
@@ -53,6 +54,7 @@ const server = createServer((request, response) => {
 
 const timers = [
   setInterval(() => void jobs.expireAppointmentHolds(), env.APPOINTMENT_HOLD_SWEEP_MS),
+  setInterval(() => void jobs.expirePrescriptions(), env.PRESCRIPTION_EXPIRY_SWEEP_MS),
   setInterval(() => void jobs.generateDoctorSlots(), env.SLOT_GENERATION_SWEEP_MS),
   setInterval(() => void jobs.scheduleAppointmentReminders(), env.APPOINTMENT_REMINDER_SWEEP_MS),
   setInterval(() => void jobs.publishOutbox(), env.OUTBOX_POLL_MS),
@@ -63,6 +65,7 @@ timers.forEach((timer) => timer.unref());
 server.listen(env.SCHEDULER_WORKER_PORT, () => {
   logger.info({ port: env.SCHEDULER_WORKER_PORT, workerId: env.WORKER_ID }, 'scheduler-worker started');
   void jobs.expireAppointmentHolds();
+  void jobs.expirePrescriptions();
   void jobs.generateDoctorSlots();
   void jobs.scheduleAppointmentReminders();
   void jobs.publishOutbox();

@@ -25,12 +25,12 @@ Tài liệu này không thay thế đặc tả chi tiết của từng màn hìn
 |---|---|
 | Thư mục `fe/` và `be/` | Đã tạo |
 | SQL Server `quan_ly_phong_kham.sql` | Baseline candidate: đã có luồng lõi, còn gap/defect P0 tại mục 8.12 |
-| Database objects | 71 bảng, 23 view, 163 stored procedure, 31 trigger |
+| Database objects | 71 bảng, 23 view, 165 stored procedure, 31 trigger |
 | Kiểm thử database | Baseline idempotent; 17 regression suite đến reports/outbox-notification đều đạt, cùng harness đồng thời queue và payment; chưa coi production-ready trước khi hoàn tất mọi ca P0 |
 | Gateway | Đã scaffold; live/ready, request ID và route Auth/Clinic hoạt động |
 | Auth Service | Slice 06 hoàn tất: auth/session, workforce/RBAC, OTP và yêu cầu/duyệt/thu hồi patient portal link |
 | Clinic Service | Slice 13 hoàn tất: tiếp nhận, khám, nhà thuốc và hóa đơn/thanh toán/hoàn tiền theo chi nhánh |
-| Scheduler Worker | Tự động hết hạn giữ chỗ mỗi phút và sinh trước slot định kỳ; readiness kiểm tra SQL, liveness độc lập |
+| Scheduler Worker | Tự động hết hạn giữ chỗ/đơn thuốc và sinh trước slot định kỳ; readiness kiểm tra SQL, liveness độc lập |
 | Admin Web | Đã có các màn Nhân sự, liên kết hồ sơ, Danh mục, Bệnh nhân, Lịch hẹn, Ca/slot, Tiếp nhận, Khám bệnh, Nhà thuốc và Thu ngân |
 | Mobile | Đã có onboarding/portal link và đặt, xem, đổi, hủy lịch cho hồ sơ được ủy quyền |
 | OpenAPI contract | OpenAPI 3.1 v0.9 đã mô tả health, Auth, Workforce/RBAC và các luồng Clinic đến billing/payment/refund; lint và generated types/fetch SDK hoạt động |
@@ -77,7 +77,7 @@ Patient Mobile (Expo/RN) ───┘          │
                                        ▲
                                        │
                               Scheduler Worker
-                         (hold, slot, reminder, outbox)
+                  (hold, prescription expiry, slot, reminder, outbox)
 
 Clinic Service ── storage port ──► Object Storage (ảnh/PDF)
 Auth/Clinic ── transaction ──► SQL Outbox ──► Worker ──► SMS/email/push
@@ -679,7 +679,7 @@ Trong bảng này, **P0** nghĩa là phải chốt thiết kế trước và ho�
 | P0 | Outbox event coverage và envelope version | Khung | Không chỉ `APPOINTMENT_CREATED`; event ghi cùng transaction và handler idempotent theo `eventId` |
 | P0 | Audit search/enrichment/verify | Khung | `AUDIT_VIEW`, branch scope, pagination; IP/user-agent/request context được ghi và chain verification đạt |
 | P0 | Canonical payload dùng khi ký hồ sơ | **DONE — Slice 18** | Manifest V3 bao phủ snapshot lâm sàng bất biến, loại trạng thái/lượng cấp phát có thể đổi; cùng một procedure dùng cho ký và xác minh, regression recompute sau cấp/reversal đạt |
-| P0 | Tự chuyển prescription hết hạn | Có defect | Không `UPDATE` rồi `THROW` trong transaction bị rollback; có command/worker idempotent lưu `EXPIRED` và audit |
+| P0 | Tự chuyển prescription hết hạn | **DONE — Slice 19** | Command/worker dùng chung transition idempotent; lưu `EXPIRED`, audit và outbox trước khi từ chối cấp, không còn `UPDATE` rồi `THROW` bị rollback |
 | P0 | Đối chiếu dị ứng hoạt chất khi kê/cấp | Mới | Allergen được chuẩn hóa/mapping với medicine; cảnh báo rõ, override có permission/lý do/audit |
 | P0 | Start encounter tuân thủ queue | Có defect | Ticket phải `CALLED` đúng lượt trước khi `SERVING`; bypass cần permission/lý do và không phá priority/FIFO |
 | P0 | Validation kết quả FINAL | Có defect | Không chốt khi summary/conclusion/result/value đều rỗng; validate theo result schema của dịch vụ |
@@ -1041,7 +1041,7 @@ Worker jobs:
 
 Mỗi worker instance phải có `workerId`, lease expiry và heartbeat. Không dùng `setInterval` đơn giản cho job quan trọng nếu có nhiều instance.
 
-Job sinh slot, hết hạn hold, lập lịch reminder, claim/complete/fail outbox và
+Job sinh slot, hết hạn hold/đơn thuốc, lập lịch reminder, claim/complete/fail outbox và
 notification đều chạy qua system procedure chỉ cấp cho `clinic_job_executor`.
 Timer trong process chỉ kích hoạt poll; khóa ứng dụng hoặc lease trong SQL là nơi
 bảo đảm idempotency và loại trừ giữa nhiều instance.
@@ -1174,6 +1174,7 @@ Health readiness phải kiểm tra dependency cần thiết nhưng có timeout n
 | Slice 16 — Safe Encounter Cancellation | **DONE** | 2026-09-15 | Nhân viên có `ENCOUNTERS_CREATE` hủy lượt WAITING/IN_PROGRESS bằng public UUID và lý do bắt buộc từ bảng hàng đợi Admin. Transaction đóng ticket, dịch vụ mở, đơn/hóa đơn DRAFT, phân công và appointment; chặn khi còn thuốc đã cấp chưa đảo hoặc có thanh toán. Retry idempotent; audit/outbox dùng public ID và phát `APPOINTMENT_CANCELLED` để dừng reminder. OpenAPI v0.11/client, Clinic Service, Admin Web, SQL regression và Gateway smoke đồng bộ; 120 application test đạt. |
 | Slice 17 — Released Patient Clinical History | **DONE** | 2026-09-16 | CLI-15 và chính sách P0 công bố kết quả: bác sĩ phụ trách chỉ công bố hồ sơ `SIGNED`; trạng thái công bố idempotent, append-only nằm ngoài cây lâm sàng bất biến và phát audit/outbox bằng public UUID. Patient/guardian chỉ xem lịch sử, chẩn đoán, sinh hiệu và kết quả FINAL đã công bố qua liên kết `ACTIVE`; thu hồi link mất quyền ngay. OpenAPI v0.12/client, Clinic Service, Admin Web và tab Kết quả trên Mobile đồng bộ; SQL regression + 122 application test đạt. |
 | Slice 18 — Verifiable Clinical Signature Manifest V3 | **DONE** | 2026-09-16 | CLI-11 và defect P0 canonical payload: thuật toán ký/xác minh dùng chung một procedure có version; V3 dùng public UUID và snapshot lâm sàng bất biến đầy đủ, không đưa `prescription.status` hoặc `dispensed_quantity` có thể đổi vào hash. V2 vẫn được hỗ trợ để xác minh hồ sơ cũ. Doctor/Patient thấy trạng thái `isVerified` trên Web/Mobile; regression chứng minh ký → cấp đủ → đảo cấp vẫn giữ nguyên hash. OpenAPI v0.13/client, 17 SQL regression + 122 application test đạt. |
+| Slice 19 — Durable Prescription Expiration | **DONE** | 2026-09-16 | Defect P0 hết hạn đơn: lệnh mở cấp phát và Scheduler Worker dùng chung transition idempotent theo business date chi nhánh; `EXPIRED`, audit và outbox public UUID được commit trước lỗi từ chối cấp. Job có batch/khóa SQL, quyền riêng `clinic_job_executor`; completion/reversal không thể hồi sinh đơn. Baseline 165 procedure, pharmacy regression và 124 application test đạt. |
 
 Phase 1 và Slice 02–07 đã hoàn thành về source code và kiểm thử local. Phase 2
 đã đạt luồng MVP về source code và kiểm thử local. Các

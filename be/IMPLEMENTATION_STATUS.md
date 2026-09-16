@@ -1,6 +1,6 @@
 # Trạng thái triển khai backend
 
-> Cập nhật: 2026-09-15
+> Cập nhật: 2026-09-16
 
 ## DONE — Slice 01: Platform Foundation
 
@@ -347,16 +347,32 @@ Phạm vi đã hoàn thành:
   hai lần recompute vẫn bằng hash đã lưu. API types/OpenAPI 3.1 v0.13 và generated
   client đã đồng bộ.
 
+## DONE — Slice 19: Durable Prescription Expiration
+
+- `sp_expire_prescription_if_due` là transition duy nhất cho lệnh mở cấp phát và
+  worker: kiểm tra ngày nghiệp vụ chi nhánh, khóa đơn và ghi `EXPIRED`, audit cùng
+  outbox `PRESCRIPTION_EXPIRED` bằng public UUID trong một transaction.
+- Wrapper mở cấp phát commit transition trước khi trả lỗi đơn quá hạn; không còn
+  mẫu `UPDATE` rồi `THROW` trong transaction bị rollback. Race qua mốc nửa đêm
+  được bắt lại sau khi command nội bộ từ chối.
+- Job `sp_expire_due_prescriptions_system` chạy theo batch có giới hạn, khóa ứng
+  dụng cấp SQL và retry idempotent. Chỉ `clinic_job_executor` được gọi; API role
+  không có quyền trên procedure hệ thống/nội bộ và worker không DML bảng domain.
+- Hoàn tất phiên cấp bị chặn nếu đơn đã `EXPIRED`; reversal tồn kho vẫn được phép
+  nhưng không thể đổi đơn trở lại `ISSUED`/`PARTIALLY_DISPENSED`.
+- Worker có cadence/batch cấu hình riêng, chạy khi khởi động và theo giờ. Regression
+  xác minh trạng thái, audit/correlation, outbox/dedupe và lần chạy lại bằng 0.
+
 ### Bằng chứng xác minh local toàn bộ
 
 | Kiểm tra | Kết quả |
 |---|---|
-| Baseline SQL chạy lại idempotent | Đạt; 71 bảng, 23 view, 163 procedure, 31 trigger |
+| Baseline SQL chạy lại idempotent | Đạt; 71 bảng, 23 view, 165 procedure, 31 trigger |
 | SQL auth session/staff RBAC/staff safety/password lifecycle/patient registration/patient link/catalog-directory/patient registry/scheduling-appointments/reception-queue/clinical-core/pharmacy-core/pharmacy-FEFO/pharmacy-allergy/billing-core/reports-core/notifications-outbox regression | 17/17 PASS; rollback sạch. Hai harness SQL thật xác minh queue gọi hai ticket khác nhau và payment race chỉ một quầy thu được toàn bộ dư nợ |
 | OpenAPI lint + code generation | Đạt; contract hợp lệ và generated code sinh lặp lại ổn định |
 | npm run lint | Đạt, không cảnh báo |
 | npm run typecheck | Đạt |
-| npm test | 122 test đạt (Admin 5, Auth 34, Mobile 14, Clinic 57, Worker 12), gồm công bố/lịch sử lâm sàng, xác minh manifest V3, hủy lượt an toàn và outbox/delivery worker |
+| npm test | 124 test đạt (Admin 5, Auth 34, Mobile 14, Clinic 57, Worker 14), gồm hết hạn đơn theo batch/không overlap, công bố/lịch sử lâm sàng, xác minh manifest V3, hủy lượt an toàn và outbox/delivery worker |
 | npm run build | Đạt; .NET 0 warning/0 error |
 | npm run doctor:mobile | 21/21; Expo SDK 57 và các package liên quan khớp patch tương thích (`expo` 57.0.23) |
 | Gateway → Auth → SQL smoke test | Registration thiếu idempotency key trả 400; challenge lạ trả generic OTP 400; ba route patient-access mới đi đúng Auth và trả 401 + request ID + `Cache-Control: no-store` khi thiếu token |
@@ -369,7 +385,7 @@ Phạm vi đã hoàn thành:
 | Gateway → Auth/Clinic → SQL pharmacy smoke test | `pharmacist.demo` và `doctor.demo` đăng nhập qua Gateway; scoped pharmacy branches, workspace và đối soát đọc SQL thật trả 200, request ID xuyên suốt. Luồng ghi nhập/cấp/đảo được kiểm tra trong SQL regression rollback sạch |
 | Gateway → Auth/Clinic → SQL billing smoke test | `cashier.demo` đăng nhập qua Gateway; billing branches/workspace đọc SQL thật trả 200 với request ID xuyên suốt; thiếu token trả 401 và logout đạt. Luồng ghi/phát hành/thu/hoàn/VOID được xác minh bằng SQL regression rollback sạch |
 | Gateway → Auth/Clinic → SQL reports smoke test | `manager.demo` nhận đủ ba capability và ba report trả 200; `cashier.demo` chỉ đọc revenue, `pharmacist.demo` chỉ đọc inventory, nhóm trái quyền trả 403; request ID xuyên suốt và logout đạt |
-| Scheduler Worker smoke test | Worker khởi động đủ năm job hold/slot/reminder/outbox/notification; sinh slot hệ thống đạt và `/health/live`, `/health/ready` cùng trả 200 với SQL thật |
+| Scheduler Worker smoke test | Worker khởi động đủ sáu job hold/prescription-expiry/slot/reminder/outbox/notification; sinh slot hệ thống đạt và `/health/live`, `/health/ready` cùng trả 200 với SQL thật |
 | npm audit --omit=dev --audit-level=high | Đạt; 0 high/critical. Còn 13 moderate từ dependency bắc cầu Expo/React Navigation, chưa có bản sửa không breaking |
 
 ## Chưa hoàn thành
@@ -390,7 +406,7 @@ Phạm vi đã hoàn thành:
   xác minh lại dấu SHA-256 đã hoàn thành qua Slice 11/16/17/18.
 - Phase 7 còn quản lý nhà cung cấp, cập nhật/khóa danh mục thuốc, cảnh báo lô sắp
   hết hạn và harness hai quầy cấp đồng thời; lõi kê đơn–nhập kho–cấp–đảo–đối soát
-  của Slice 12 đã hoàn thành.
+  và tự hết hạn đơn của Slice 12/19 đã hoàn thành.
 - Phase 8 còn in/xuất hóa đơn, tích hợp payment gateway/webhook và hồ sơ claim bảo
   hiểm; lõi hóa đơn–thu–hoàn–VOID của Slice 13 đã hoàn thành.
 - Phase 9 còn replay dead-letter thủ công và export CSV/XLSX; lõi báo cáo,

@@ -40,8 +40,8 @@ xóa `request_id`, `actor_user_id`, `branch_id` trong `SESSION_CONTEXT`.
   lý ca và sinh slot tại `/api/v1/schedules`.
 - Booking/reschedule dùng `Idempotency-Key`; SQL khóa slot và ghi status history,
   audit/outbox trong cùng transaction để chống double-booking và retry trùng.
-- Scheduler Worker gọi system procedure riêng để hết hạn hold, sinh slot và lập
-  lịch reminder; readiness kiểm tra SQL Server, còn liveness không phụ thuộc database.
+- Scheduler Worker gọi system procedure riêng để hết hạn hold/đơn thuốc, sinh slot
+  và lập lịch reminder; readiness kiểm tra SQL Server, còn liveness không phụ thuộc database.
 
 ## Outbox & appointment notifications
 
@@ -96,6 +96,9 @@ xóa `request_id`, `actor_user_id`, `branch_id` trong `SESSION_CONTEXT`.
   khác tổng ledger (mảng rỗng là khớp).
 - Đơn, lô, kho và movement dùng public UUID. Chỉ wrapper public được cấp cho
   Clinic API database role; các command bigint cũ không còn được cấp trực tiếp.
+- Đơn quá `valid_until` theo business date chi nhánh được chuyển `EXPIRED` bằng
+  transition idempotent dùng chung giữa command và worker. Trạng thái, audit và
+  outbox được commit trước lỗi từ chối cấp; completion/reversal không hồi sinh đơn.
 
 ## Billing & payments
 

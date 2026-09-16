@@ -128,13 +128,19 @@ BEGIN TRY
     IF EXISTS (SELECT 1 FROM (VALUES
       (N'sp_create_medicine_batch'),(N'sp_create_prescription'),(N'sp_add_prescription_item'),
       (N'sp_issue_prescription'),(N'sp_cancel_prescription'),(N'sp_receive_stock'),
-      (N'sp_open_dispensation'),(N'sp_dispense_prescription_item'),
+      (N'sp_open_dispensation'),(N'sp_expire_prescription_if_due'),
+      (N'sp_expire_due_prescriptions_system'),(N'sp_dispense_prescription_item'),
       (N'sp_complete_dispensation'),(N'sp_reverse_dispensation_item'),
       (N'sp_cancel_dispensation')
     ) forbidden(name) JOIN sys.database_permissions dp ON dp.major_id=OBJECT_ID(N'dbo.'+forbidden.name)
       WHERE dp.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'clinic_api_executor')
         AND dp.permission_name='EXECUTE' AND dp.state IN('G','W'))
       THROW 55930,N'Clinic API còn quyền pharmacy bigint nội bộ.',1;
+    IF NOT EXISTS (SELECT 1 FROM sys.database_permissions dp
+      WHERE dp.major_id=OBJECT_ID(N'dbo.sp_expire_due_prescriptions_system')
+        AND dp.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'clinic_job_executor')
+        AND dp.permission_name='EXECUTE' AND dp.state IN('G','W'))
+      THROW 55943,N'Scheduler Worker thiếu quyền hết hạn đơn thuốc.',1;
 
     EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=@admin_id;
     DECLARE @medicine_public_id uniqueidentifier,@older_batch_public_id uniqueidentifier,
@@ -194,6 +200,73 @@ BEGIN TRY
       @prescription_public_id=@prescription_public_id;
     IF NOT EXISTS (SELECT 1 FROM dbo.prescriptions WHERE public_id=@prescription_public_id AND status='ISSUED')
       THROW 55933,N'Đơn không được phát hành.',1;
+
+    DECLARE @expired_prescription_public_id uniqueidentifier,@expired_item_public_id uniqueidentifier,
+      @expired_count int,@expired_count_replay int,@expiry_request_id uniqueidentifier=NEWID(),
+      @expiry_replay_request_id uniqueidentifier=NEWID();
+    EXEC dbo.sp_clinic_create_prescription @actor_user_id=@doctor_user_id,
+      @encounter_public_id=@encounter_public_id,@valid_days=1,
+      @prescription_public_id=@expired_prescription_public_id OUTPUT;
+    EXEC dbo.sp_clinic_add_prescription_item @actor_user_id=@doctor_user_id,
+      @prescription_public_id=@expired_prescription_public_id,@medicine_public_id=@medicine_public_id,
+      @prescribed_quantity=1,@dose=N'1 viên',@frequency=N'Một lần',
+      @duration_days=1,@usage_instruction=N'Uống sau ăn',@item_public_id=@expired_item_public_id OUTPUT;
+    EXEC dbo.sp_clinic_issue_prescription @actor_user_id=@doctor_user_id,
+      @prescription_public_id=@expired_prescription_public_id;
+    UPDATE dbo.prescriptions SET valid_until=DATEADD(DAY,-1,@business_date)
+    WHERE public_id=@expired_prescription_public_id;
+    EXEC dbo.sp_expire_due_prescriptions_system @request_id=@expiry_request_id,
+      @batch_size=1000,@expired_count=@expired_count OUTPUT;
+    IF @expired_count<>1 OR NOT EXISTS (SELECT 1 FROM dbo.prescriptions
+      WHERE public_id=@expired_prescription_public_id AND status='EXPIRED')
+      THROW 55944,N'Worker không chuyển đúng đơn quá hạn sang EXPIRED.',1;
+    IF NOT EXISTS (SELECT 1 FROM dbo.audit_logs WHERE action_code='PRESCRIPTION_EXPIRED'
+      AND entity_type='PRESCRIPTION' AND entity_id=CONVERT(varchar(36),@expired_prescription_public_id)
+      AND request_id=@expiry_request_id)
+      OR NOT EXISTS (SELECT 1 FROM dbo.outbox_events WHERE event_type='PRESCRIPTION_EXPIRED'
+      AND aggregate_type='PRESCRIPTION' AND aggregate_id=CONVERT(varchar(36),@expired_prescription_public_id)
+      AND correlation_id=@expiry_request_id
+      AND dedupe_key=CONCAT('prescription-expired:',CONVERT(varchar(36),@expired_prescription_public_id)))
+      THROW 55945,N'Hết hạn đơn thuốc thiếu audit hoặc outbox chuẩn.',1;
+    EXEC dbo.sp_expire_due_prescriptions_system @request_id=@expiry_replay_request_id,
+      @batch_size=1000,@expired_count=@expired_count_replay OUTPUT;
+    IF @expired_count_replay<>0 OR (SELECT COUNT(*) FROM dbo.outbox_events
+      WHERE event_type='PRESCRIPTION_EXPIRED'
+        AND aggregate_id=CONVERT(varchar(36),@expired_prescription_public_id))<>1
+      THROW 55946,N'Job hết hạn đơn thuốc không idempotent.',1;
+    EXEC sys.sp_set_session_context @key=N'request_id',@value=@request_id;
+
+    DECLARE @command_expired_public_id uniqueidentifier,@command_expired_item_id uniqueidentifier,
+      @rejected_dispensation_id uniqueidentifier,@expiry_error int=NULL;
+    EXEC dbo.sp_clinic_create_prescription @actor_user_id=@doctor_user_id,
+      @encounter_public_id=@encounter_public_id,@valid_days=1,
+      @prescription_public_id=@command_expired_public_id OUTPUT;
+    EXEC dbo.sp_clinic_add_prescription_item @actor_user_id=@doctor_user_id,
+      @prescription_public_id=@command_expired_public_id,@medicine_public_id=@medicine_public_id,
+      @prescribed_quantity=1,@dose=N'1 viên',@frequency=N'Một lần',
+      @duration_days=1,@usage_instruction=N'Uống sau ăn',@item_public_id=@command_expired_item_id OUTPUT;
+    EXEC dbo.sp_clinic_issue_prescription @actor_user_id=@doctor_user_id,
+      @prescription_public_id=@command_expired_public_id;
+    UPDATE dbo.prescriptions SET valid_until=DATEADD(DAY,-1,@business_date)
+    WHERE public_id=@command_expired_public_id;
+    EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=@admin_id;
+    SET XACT_ABORT OFF;
+    BEGIN TRY
+      EXEC dbo.sp_clinic_open_dispensation @actor_user_id=@admin_id,
+        @prescription_public_id=@command_expired_public_id,@location_public_id=@location_public_id,
+        @dispensation_public_id=@rejected_dispensation_id OUTPUT;
+      SET @expiry_error=0;
+    END TRY BEGIN CATCH SET @expiry_error=ERROR_NUMBER(); END CATCH;
+    SET XACT_ABORT ON;
+    IF @expiry_error<>53321 OR XACT_STATE()<>1
+      OR NOT EXISTS (SELECT 1 FROM dbo.prescriptions
+        WHERE public_id=@command_expired_public_id AND status='EXPIRED')
+      OR NOT EXISTS (SELECT 1 FROM dbo.audit_logs WHERE action_code='PRESCRIPTION_EXPIRED'
+        AND entity_id=CONVERT(varchar(36),@command_expired_public_id))
+      OR NOT EXISTS (SELECT 1 FROM dbo.outbox_events WHERE event_type='PRESCRIPTION_EXPIRED'
+        AND aggregate_id=CONVERT(varchar(36),@command_expired_public_id))
+      THROW 55947,N'Lệnh mở cấp phát không lưu hết hạn trước khi từ chối.',1;
+    EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=@doctor_user_id;
 
     DECLARE @diagnosis_public_id uniqueidentifier,@signature_hash binary(32),@computed_signature_hash binary(32);
     EXEC dbo.sp_clinic_add_encounter_diagnosis @actor_user_id=@doctor_user_id,

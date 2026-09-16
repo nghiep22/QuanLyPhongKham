@@ -2138,6 +2138,9 @@ GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.prescriptions') AND name = N'IX_prescriptions_encounter')
     CREATE INDEX IX_prescriptions_encounter ON dbo.prescriptions(encounter_id, status);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.prescriptions') AND name = N'IX_prescriptions_expiry')
+    CREATE INDEX IX_prescriptions_expiry ON dbo.prescriptions(status,valid_until,prescription_id)
+    INCLUDE(branch_id,public_id);
 GO
 
 IF OBJECT_ID(N'dbo.prescription_items', N'U') IS NULL
@@ -10465,6 +10468,128 @@ BEGIN
 END;
 GO
 
+CREATE OR ALTER PROCEDURE dbo.sp_expire_prescription_if_due
+    @prescription_id bigint,
+    @is_expired bit OUTPUT,
+    @transitioned bit OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    SET @is_expired=0;
+    SET @transitioned=0;
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        DECLARE @branch_id bigint,@status varchar(30),@valid_until date,
+                @business_date date,@prescription_public_id uniqueidentifier;
+        SELECT @branch_id=branch_id,@status=status,@valid_until=valid_until,
+               @prescription_public_id=public_id
+        FROM dbo.prescriptions WITH (UPDLOCK,HOLDLOCK)
+        WHERE prescription_id=@prescription_id;
+        IF @status IS NULL
+        BEGIN
+            COMMIT TRANSACTION;
+            RETURN;
+        END;
+        IF @status='EXPIRED'
+        BEGIN
+            SET @is_expired=1;
+            COMMIT TRANSACTION;
+            RETURN;
+        END;
+        IF @status NOT IN ('ISSUED','PARTIALLY_DISPENSED')
+        BEGIN
+            COMMIT TRANSACTION;
+            RETURN;
+        END;
+        EXEC dbo.sp_get_branch_business_date @branch_id,NULL,@business_date OUTPUT;
+        IF @valid_until>=@business_date
+        BEGIN
+            COMMIT TRANSACTION;
+            RETURN;
+        END;
+
+        UPDATE dbo.prescriptions
+           SET status='EXPIRED',updated_at_utc=SYSUTCDATETIME()
+         WHERE prescription_id=@prescription_id;
+        INSERT dbo.outbox_events
+            (aggregate_type,aggregate_id,event_type,payload_json,schema_version,producer,
+             correlation_id,dedupe_key)
+        VALUES
+            ('PRESCRIPTION',CONVERT(varchar(36),@prescription_public_id),'PRESCRIPTION_EXPIRED',
+             CONCAT(N'{"prescriptionPublicId":"',CONVERT(varchar(36),@prescription_public_id),N'"}'),
+             1,'clinic-service',TRY_CONVERT(uniqueidentifier,SESSION_CONTEXT(N'request_id')),
+             CONCAT('prescription-expired:',CONVERT(varchar(36),@prescription_public_id)));
+        DECLARE @entity_id varchar(100)=CONVERT(varchar(36),@prescription_public_id);
+        DECLARE @audit_json nvarchar(max)=CONCAT(N'{"validUntil":"',CONVERT(char(10),@valid_until,23),N'"}');
+        EXEC dbo.sp_write_audit NULL,@branch_id,'PRESCRIPTION_EXPIRED',
+             'PRESCRIPTION',@entity_id,NULL,@audit_json;
+        SET @is_expired=1;
+        SET @transitioned=1;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_expire_due_prescriptions_system
+    @request_id uniqueidentifier=NULL,
+    @batch_size int=500,
+    @expired_count int OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    IF IS_MEMBER(N'clinic_job_executor')<>1 AND IS_SRVROLEMEMBER(N'sysadmin')<>1
+        THROW 53349,N'Chỉ Scheduler Worker được chạy tác vụ hết hạn đơn thuốc.',1;
+    IF @batch_size IS NULL OR @batch_size NOT BETWEEN 1 AND 1000
+        THROW 53350,N'Kích thước lô hết hạn đơn thuốc không hợp lệ.',1;
+    SET @expired_count=0;
+
+    DECLARE @lock_result int,@prescription_id bigint,@is_expired bit,@transitioned bit;
+    BEGIN TRY
+        IF @request_id IS NOT NULL
+            EXEC sys.sp_set_session_context @key=N'request_id',@value=@request_id;
+        EXEC @lock_result=sys.sp_getapplock @Resource=N'prescription-expiry-scheduler',
+            @LockMode='Exclusive',@LockOwner='Session',@LockTimeout=5000;
+        IF @lock_result<0 THROW 53351,N'Không lấy được khóa hết hạn đơn thuốc.',1;
+
+        DECLARE @due TABLE(row_no int IDENTITY(1,1) NOT NULL,prescription_id bigint NOT NULL);
+        INSERT @due(prescription_id)
+        SELECT TOP (@batch_size) p.prescription_id
+        FROM dbo.prescriptions p WITH (READPAST)
+        JOIN dbo.branches b ON b.branch_id=p.branch_id
+        WHERE p.status IN ('ISSUED','PARTIALLY_DISPENSED')
+          AND p.valid_until<CONVERT(date,(SYSUTCDATETIME() AT TIME ZONE 'UTC') AT TIME ZONE b.timezone_name)
+        ORDER BY p.valid_until,p.prescription_id;
+
+        DECLARE @row_no int=1,@row_count int=(SELECT COUNT(*) FROM @due);
+        WHILE @row_no<=@row_count
+        BEGIN
+            SELECT @prescription_id=prescription_id FROM @due WHERE row_no=@row_no;
+            SET @is_expired=0;
+            SET @transitioned=0;
+            EXEC dbo.sp_expire_prescription_if_due @prescription_id=@prescription_id,
+                @is_expired=@is_expired OUTPUT,@transitioned=@transitioned OUTPUT;
+            IF @transitioned=1 SET @expired_count+=1;
+            SET @row_no+=1;
+        END;
+        EXEC sys.sp_releaseapplock @Resource=N'prescription-expiry-scheduler',@LockOwner='Session';
+        EXEC sys.sp_set_session_context @key=N'request_id',@value=NULL;
+    END TRY
+    BEGIN CATCH
+        IF @lock_result>=0
+            EXEC sys.sp_releaseapplock @Resource=N'prescription-expiry-scheduler',@LockOwner='Session';
+        EXEC sys.sp_set_session_context @key=N'request_id',@value=NULL;
+        THROW;
+    END CATCH;
+END;
+GO
+
 CREATE OR ALTER PROCEDURE dbo.sp_open_dispensation
     @actor_user_id bigint,
     @prescription_id bigint,
@@ -10486,12 +10611,7 @@ BEGIN
         IF @status NOT IN ('ISSUED','PARTIALLY_DISPENSED')
             THROW 53320,N'Đơn thuốc không ở trạng thái có thể cấp.',1;
         EXEC dbo.sp_get_branch_business_date @branch_id,NULL,@business_date OUTPUT;
-        IF @valid_until<@business_date
-        BEGIN
-            UPDATE dbo.prescriptions SET status='EXPIRED',updated_at_utc=SYSUTCDATETIME()
-            WHERE prescription_id=@prescription_id;
-            THROW 53321,N'Đơn thuốc đã hết hạn.',1;
-        END;
+        IF @valid_until<@business_date THROW 53321,N'Đơn thuốc đã hết hạn.',1;
         IF NOT EXISTS (SELECT 1 FROM dbo.inventory_locations WHERE inventory_location_id=@inventory_location_id
                        AND branch_id=@branch_id AND is_active=1 AND is_dispensing=1)
             THROW 53322,N'Quầy cấp thuốc không hợp lệ hoặc khác chi nhánh.',1;
@@ -10627,11 +10747,14 @@ BEGIN
 
     BEGIN TRY
         BEGIN TRANSACTION;
-        DECLARE @prescription_id bigint,@status varchar(20);
+        DECLARE @prescription_id bigint,@status varchar(20),@prescription_status varchar(30);
         SELECT @prescription_id=prescription_id,@status=status
         FROM dbo.dispensations WITH (UPDLOCK,HOLDLOCK) WHERE dispensation_id=@dispensation_id;
         IF @status='COMPLETED' BEGIN COMMIT TRANSACTION; RETURN; END;
         IF @status<>'DRAFT' THROW 53335,N'Phiên cấp phát không thể hoàn tất.',1;
+        SELECT @prescription_status=status FROM dbo.prescriptions WITH (UPDLOCK,HOLDLOCK)
+        WHERE prescription_id=@prescription_id;
+        IF @prescription_status='EXPIRED' THROW 53321,N'Đơn thuốc đã hết hạn.',1;
         IF NOT EXISTS
         (
             SELECT 1 FROM dbo.dispensation_items di
@@ -10645,10 +10768,10 @@ BEGIN
         IF NOT EXISTS (SELECT 1 FROM dbo.prescription_items
                        WHERE prescription_id=@prescription_id AND dispensed_quantity<prescribed_quantity)
             UPDATE dbo.prescriptions SET status='DISPENSED',updated_at_utc=SYSUTCDATETIME()
-            WHERE prescription_id=@prescription_id;
+            WHERE prescription_id=@prescription_id AND status<>'EXPIRED';
         ELSE
             UPDATE dbo.prescriptions SET status='PARTIALLY_DISPENSED',updated_at_utc=SYSUTCDATETIME()
-            WHERE prescription_id=@prescription_id;
+            WHERE prescription_id=@prescription_id AND status<>'EXPIRED';
 
         DECLARE @entity_id varchar(100)=CONVERT(varchar(100),@dispensation_id);
         EXEC dbo.sp_write_audit @actor_user_id,@branch_id,'DISPENSATION_COMPLETED',
@@ -10746,11 +10869,11 @@ BEGIN
         IF NOT EXISTS (SELECT 1 FROM dbo.prescription_items
                        WHERE prescription_id=@prescription_id AND dispensed_quantity>0)
             UPDATE dbo.prescriptions SET status='ISSUED',updated_at_utc=SYSUTCDATETIME()
-            WHERE prescription_id=@prescription_id;
+            WHERE prescription_id=@prescription_id AND status<>'EXPIRED';
         ELSE IF EXISTS (SELECT 1 FROM dbo.prescription_items
                         WHERE prescription_id=@prescription_id AND dispensed_quantity<prescribed_quantity)
             UPDATE dbo.prescriptions SET status='PARTIALLY_DISPENSED',updated_at_utc=SYSUTCDATETIME()
-            WHERE prescription_id=@prescription_id;
+            WHERE prescription_id=@prescription_id AND status<>'EXPIRED';
 
         DECLARE @entity_id varchar(100)=CONVERT(varchar(100),@dispensation_item_id);
         DECLARE @audit_json nvarchar(max)=CONCAT(N'{"reversal_movement_id":',@reversal_movement_id,
@@ -11164,10 +11287,25 @@ CREATE OR ALTER PROCEDURE dbo.sp_clinic_open_dispensation
 AS
 BEGIN
     SET NOCOUNT ON;
-    DECLARE @prescription_id bigint=(SELECT prescription_id FROM dbo.prescriptions WHERE public_id=@prescription_public_id),
-            @location_id bigint=(SELECT inventory_location_id FROM dbo.inventory_locations WHERE public_id=@location_public_id),@id bigint;
+    DECLARE @prescription_id bigint,@branch_id bigint,
+            @location_id bigint=(SELECT inventory_location_id FROM dbo.inventory_locations WHERE public_id=@location_public_id),
+            @id bigint,@is_expired bit=0,@transitioned bit=0;
+    SELECT @prescription_id=prescription_id,@branch_id=branch_id
+    FROM dbo.prescriptions WHERE public_id=@prescription_public_id;
     IF @prescription_id IS NULL OR @location_id IS NULL THROW 53913,N'Đơn hoặc quầy không tồn tại.',1;
-    EXEC dbo.sp_open_dispensation @actor_user_id,@prescription_id,@location_id,@id OUTPUT;
+    EXEC dbo.sp_assert_permission @actor_user_id,'PHARMACY_DISPENSE',@branch_id;
+    EXEC dbo.sp_expire_prescription_if_due @prescription_id=@prescription_id,
+        @is_expired=@is_expired OUTPUT,@transitioned=@transitioned OUTPUT;
+    IF @is_expired=1 THROW 53321,N'Đơn thuốc đã hết hạn.',1;
+    BEGIN TRY
+        EXEC dbo.sp_open_dispensation @actor_user_id,@prescription_id,@location_id,@id OUTPUT;
+    END TRY
+    BEGIN CATCH
+        IF ERROR_NUMBER()=53321
+            EXEC dbo.sp_expire_prescription_if_due @prescription_id=@prescription_id,
+                @is_expired=@is_expired OUTPUT,@transitioned=@transitioned OUTPUT;
+        THROW;
+    END CATCH;
     SELECT @dispensation_public_id=public_id FROM dbo.dispensations WHERE dispensation_id=@id;
 END;
 GO
@@ -11230,8 +11368,15 @@ CREATE OR ALTER PROCEDURE dbo.sp_clinic_complete_dispensation
 AS
 BEGIN
     SET NOCOUNT ON;
-    DECLARE @id bigint=(SELECT dispensation_id FROM dbo.dispensations WHERE public_id=@dispensation_public_id);
+    DECLARE @id bigint,@prescription_id bigint,@branch_id bigint,
+            @is_expired bit=0,@transitioned bit=0;
+    SELECT @id=dispensation_id,@prescription_id=prescription_id,@branch_id=branch_id
+    FROM dbo.dispensations WHERE public_id=@dispensation_public_id;
     IF @id IS NULL THROW 53915,N'Phiên cấp phát không tồn tại.',1;
+    EXEC dbo.sp_assert_permission @actor_user_id,'PHARMACY_DISPENSE',@branch_id;
+    EXEC dbo.sp_expire_prescription_if_due @prescription_id=@prescription_id,
+        @is_expired=@is_expired OUTPUT,@transitioned=@transitioned OUTPUT;
+    IF @is_expired=1 THROW 53321,N'Đơn thuốc đã hết hạn.',1;
     EXEC dbo.sp_complete_dispensation @actor_user_id,@id;
 END;
 GO
@@ -12786,6 +12931,8 @@ REVOKE EXECUTE ON OBJECT::dbo.sp_issue_prescription FROM clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_cancel_prescription FROM clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_receive_stock FROM clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_open_dispensation FROM clinic_api_executor;
+REVOKE EXECUTE ON OBJECT::dbo.sp_expire_prescription_if_due FROM clinic_api_executor;
+REVOKE EXECUTE ON OBJECT::dbo.sp_expire_due_prescriptions_system FROM clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_dispense_prescription_item FROM clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_complete_dispensation FROM clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_reverse_dispensation_item FROM clinic_api_executor;
@@ -12829,6 +12976,7 @@ GRANT EXECUTE ON OBJECT::dbo.sp_clinic_void_invoice TO clinic_api_executor;
 GO
 
 GRANT EXECUTE ON OBJECT::dbo.sp_expire_appointment_holds TO clinic_job_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_expire_due_prescriptions_system TO clinic_job_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_generate_doctor_slots_system TO clinic_job_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_generate_all_doctor_slots_system TO clinic_job_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_schedule_appointment_reminders TO clinic_job_executor;

@@ -40,6 +40,7 @@ function repository(overrides: Partial<WorkerRepository> = {}): WorkerRepository
     ready: vi.fn(),
     close: vi.fn(),
     expireAppointmentHolds: vi.fn().mockResolvedValue(0),
+    expirePrescriptions: vi.fn().mockResolvedValue(0),
     generateDoctorSlots: vi.fn().mockResolvedValue(0),
     scheduleAppointmentReminders: vi.fn().mockResolvedValue(0),
     claimOutboxEvents: vi.fn().mockResolvedValue([]),
@@ -66,6 +67,7 @@ function createJobs(
   return new BackgroundJobs(repo, publisher, provider, log, {
     workerId: '40000000-0000-4000-8000-000000000001',
     reminderLeadMinutes: 1_440,
+    prescriptionExpiryBatchSize: 500,
     batchSize: 20,
     leaseSeconds: 60,
     maxAttempts: 5,
@@ -74,6 +76,24 @@ function createJobs(
 }
 
 describe('BackgroundJobs', () => {
+  it('expires prescriptions in a bounded batch without overlapping the same job', async () => {
+    let release!: (count: number) => void;
+    const pending = new Promise<number>((resolve) => { release = resolve; });
+    const expirePrescriptions = vi.fn().mockReturnValue(pending);
+    const repo = repository({ expirePrescriptions });
+    const log = logger();
+    const jobs = createJobs(repo, undefined, undefined, log);
+
+    const first = jobs.expirePrescriptions();
+    await expect(jobs.expirePrescriptions()).resolves.toBe(0);
+    release(3);
+    await expect(first).resolves.toBe(3);
+
+    expect(expirePrescriptions).toHaveBeenCalledWith(expect.any(String), 500);
+    expect(expirePrescriptions).toHaveBeenCalledTimes(1);
+    expect(log.info).toHaveBeenCalledWith({ expiredCount: 3 }, 'expired prescriptions');
+  });
+
   it('materializes, publishes, then completes each outbox event', async () => {
     const repo = repository({ claimOutboxEvents: vi.fn().mockResolvedValue([event]) });
     const publisher = { publish: vi.fn() };

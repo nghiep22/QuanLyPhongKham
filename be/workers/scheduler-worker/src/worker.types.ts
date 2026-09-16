@@ -28,6 +28,7 @@ export interface WorkerRepository {
   ready(): Promise<void>;
   close(): Promise<void>;
   expireAppointmentHolds(requestId: string): Promise<number>;
+  expirePrescriptions(requestId: string, batchSize: number): Promise<number>;
   generateDoctorSlots(requestId: string): Promise<number>;
   scheduleAppointmentReminders(requestId: string, leadMinutes: number): Promise<number>;
   claimOutboxEvents(workerId: string, batchSize: number, leaseSeconds: number): Promise<OutboxEvent[]>;

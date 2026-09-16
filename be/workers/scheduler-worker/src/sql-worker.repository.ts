@@ -69,6 +69,15 @@ export class SqlWorkerRepository implements WorkerRepository {
     return Number(result.output.expired_count);
   }
 
+  async expirePrescriptions(requestId: string, batchSize: number): Promise<number> {
+    const result = await (await this.connected()).request()
+      .input('request_id', this.sql.UniqueIdentifier, requestId)
+      .input('batch_size', this.sql.Int, batchSize)
+      .output('expired_count', this.sql.Int, 0)
+      .execute('dbo.sp_expire_due_prescriptions_system');
+    return Number(result.output.expired_count);
+  }
+
   async generateDoctorSlots(requestId: string): Promise<number> {
     const result = await (await this.connected()).request()
       .input('request_id', this.sql.UniqueIdentifier, requestId)

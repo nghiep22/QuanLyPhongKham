@@ -155,9 +155,11 @@ dịch vụ, ngày và slot còn trống; sau đó có thể xem, đổi hoặc 
 Lễ tân có permission phù hợp mở **Lịch hẹn** để đặt lịch tại quầy, xác nhận, hủy và
 ghi no-show. Admin/Manager mở **Ca & slot** để tạo ca có khoảng nghỉ và sinh slot.
 Booking/reschedule yêu cầu idempotency key; hệ thống khóa slot trong SQL để chống
-double-booking. Worker tự hết hạn hold, sinh trước slot và lập lịch reminder theo
-chu kỳ cấu hình bởi `APPOINTMENT_HOLD_SWEEP_MS`, `SLOT_GENERATION_SWEEP_MS` và
-`APPOINTMENT_REMINDER_SWEEP_MS`.
+double-booking. Worker tự hết hạn hold/đơn thuốc, sinh trước slot và lập lịch
+reminder theo chu kỳ cấu hình bởi `APPOINTMENT_HOLD_SWEEP_MS`,
+`PRESCRIPTION_EXPIRY_SWEEP_MS`, `SLOT_GENERATION_SWEEP_MS` và
+`APPOINTMENT_REMINDER_SWEEP_MS`. Mỗi lượt quét đơn dùng tối đa
+`PRESCRIPTION_EXPIRY_BATCH_SIZE` bản ghi.
 
 Worker publish outbox và gửi notification theo batch bằng lease trong SQL, vì vậy
 nhiều instance không xử lý đồng thời cùng một bản ghi. Lỗi được retry exponential
@@ -210,7 +212,9 @@ Bác sĩ chọn **Kê đơn thuốc** trong lượt đang khám để tạo đơ
 liều và hướng dẫn rồi phát hành. Màn **Nhà thuốc** cho nhân viên có quyền tạo lô,
 nhập kho, mở phiên cấp, chọn lô FEFO, đảo cấp vào cách ly và đối soát ledger.
 Nhập và cấp thuốc dùng `Idempotency-Key`; dị ứng hoạt chất yêu cầu quyền override
-riêng cùng lý do được audit. Sau phát hành không sửa nội dung đơn.
+riêng cùng lý do được audit. Sau phát hành không sửa nội dung đơn. Đơn quá ngày
+hiệu lực theo chi nhánh được worker chuyển `EXPIRED`; nếu dược sĩ mở trước lượt
+quét, command vẫn lưu trạng thái, audit và outbox rồi mới từ chối cấp.
 
 Nhân viên có quyền mở **Thu ngân** để tạo hóa đơn DRAFT từ lượt khám, đồng bộ
 dịch vụ hoàn tất và thuốc đã cấp, thêm khoản thu thủ công, ghi phần bảo hiểm rồi

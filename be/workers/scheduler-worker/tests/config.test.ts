@@ -36,4 +36,10 @@ describe('worker configuration', () => {
       NOTIFICATION_WEBHOOK_BEARER_TOKEN: 'notification-token-long',
     }).NODE_ENV).toBe('production');
   });
+
+  it('bounds prescription expiry cadence and batch size', () => {
+    expect(() => parseWorkerEnvironment({ PRESCRIPTION_EXPIRY_SWEEP_MS: '59999' })).toThrow();
+    expect(() => parseWorkerEnvironment({ PRESCRIPTION_EXPIRY_BATCH_SIZE: '1001' })).toThrow();
+    expect(parseWorkerEnvironment({}).PRESCRIPTION_EXPIRY_BATCH_SIZE).toBe(500);
+  });
 });
