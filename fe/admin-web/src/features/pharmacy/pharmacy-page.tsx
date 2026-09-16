@@ -153,6 +153,15 @@ export function PharmacyPage() {
     && Number(batch.availableQuantity) > 0).sort((a, b) => a.expiryDate.localeCompare(b.expiryDate)) ?? []
   const uniqueBatches = [...new Map(data?.batches.map((lot) => [lot.publicId, lot]) ?? []).values()]
   const quarantineId = data?.locations.find((location) => location.type === 'QUARANTINE')?.publicId
+  const reverseToSellable = (line: NonNullable<typeof rx>['dispensedItems'][number]) => {
+    const session = rx?.dispensations.find((item) => item.publicId === line.dispensationPublicId)
+    if (!session || !window.confirm('Xác nhận thuốc còn nguyên vẹn, được bảo quản đúng và đã qua kiểm tra chất lượng để trở lại kho bán?')) return
+    const why = window.prompt('Ghi kết quả kiểm tra và lý do hoàn về kho bán (tối thiểu 5 ký tự)')
+    if (why?.trim()) void run('Hoàn về kho bán', () => apiClient.pharmacy.reverse(line.publicId, {
+      returnLocationPublicId: session.locationPublicId, disposition: 'SELLABLE', reason: why.trim(),
+      sellableInspectionConfirmed: true,
+    }))
+  }
 
   return <>
     <header><div><span className="eyebrow">PHARMACY WORKSPACE</span><h1>Đơn thuốc & nhà thuốc</h1>
@@ -256,10 +265,15 @@ export function PharmacyPage() {
                         <strong>Lô {line.batchNumber} · {line.quantity} × {amount(line.unitPrice)} ₫</strong>
                         <p>{line.reversed ? 'Đã đảo' : 'Đang hiệu lực'}</p>
                         {line.allergyOverrideReason && <small>Đã xác nhận dị ứng lúc cấp: {line.allergyOverrideReason}</small>}
-                        {canDispense && !line.reversed && quarantineId && <button type="button" className="secondary" disabled={Boolean(busy)}
-                          onClick={() => { const why = window.prompt('Lý do đảo cấp phát');
-                            if (why) void run('Đảo cấp phát', () => apiClient.pharmacy.reverse(line.publicId,
-                              { returnLocationPublicId: quarantineId, disposition: 'QUARANTINE', reason: why })) }}>Đảo vào cách ly</button>}
+                        {canDispense && !line.reversed && <div className="action-row">
+                          <button type="button" className="secondary" disabled={Boolean(busy)}
+                            onClick={() => reverseToSellable(line)}>Hoàn về kho bán sau kiểm tra</button>
+                          {quarantineId && <button type="button" className="secondary" disabled={Boolean(busy)}
+                            onClick={() => { const why = window.prompt('Lý do đảo cấp phát vào cách ly');
+                              if (why) void run('Đảo vào cách ly', () => apiClient.pharmacy.reverse(line.publicId,
+                                { returnLocationPublicId: quarantineId, disposition: 'QUARANTINE', reason: why,
+                                  sellableInspectionConfirmed: false })) }}>Đảo vào cách ly</button>}
+                        </div>}
                       </article>)}</section>}
                   </>}</div></div>
           {canInventory && <><section className="panel"><h2>Nhập kho</h2>

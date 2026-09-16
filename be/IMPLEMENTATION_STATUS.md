@@ -407,16 +407,29 @@ Phạm vi đã hoàn thành:
   chỉ có hai ledger movement tương ứng và reconciliation không có sai lệch. Fixture
   domain được dọn sạch; audit được giữ append-only theo thiết kế.
 
+## DONE — Slice 23: Safe Sellable Inventory Reversal
+
+- Hoàn thuốc về tồn bán bắt buộc dược sĩ xác nhận đã kiểm tra hàng trả; xác nhận
+  được lưu cùng reversal append-only. Đường cách ly mặc định không được mang cờ
+  xác nhận bán lại.
+- Procedure nội bộ khóa lô trong transaction, chỉ chấp nhận `SELLABLE` khi lô còn
+  `AVAILABLE` và chưa hết hạn theo business date của chi nhánh; wrapper kiểm tra
+  sớm nhưng không thay thế kiểm tra có khóa.
+- Admin Web tách hai thao tác “Hoàn về kho bán sau kiểm tra” và “Đảo vào cách ly”.
+  OpenAPI 3.1 v0.16/generated types/client đồng bộ.
+- Harness SQL thật phủ thiếu xác nhận, lô thu hồi, lô hết hạn, hoàn bán hợp lệ,
+  cách ly hợp lệ và hậu kiểm prescription/balance/ledger.
+
 ### Bằng chứng xác minh local toàn bộ
 
 | Kiểm tra | Kết quả |
 |---|---|
 | Baseline SQL chạy lại idempotent | Đạt; 73 bảng, 23 view, 165 procedure, 31 trigger |
-| SQL auth session/staff RBAC/staff safety/password lifecycle/patient registration/patient link/catalog-directory/patient registry/scheduling-appointments/reception-queue/clinical-core/pharmacy-core/pharmacy-FEFO/pharmacy-allergy/billing-core/reports-core/notifications-outbox regression | 17/17 PASS; rollback sạch. Ba harness SQL thật xác minh queue không gọi trùng, payment không thu vượt và pharmacy giữ FEFO/idempotency/giới hạn đơn–tồn khi hai quầy race |
+| SQL auth session/staff RBAC/staff safety/password lifecycle/patient registration/patient link/catalog-directory/patient registry/scheduling-appointments/reception-queue/clinical-core/pharmacy-core/pharmacy-FEFO/pharmacy-allergy/billing-core/reports-core/notifications-outbox regression | 17/17 PASS; rollback sạch. Ba harness SQL thật xác minh queue không gọi trùng, payment không thu vượt và pharmacy giữ FEFO/idempotency/giới hạn đơn–tồn khi hai quầy race, đồng thời chặn hoàn bán thiếu kiểm tra hoặc lô không an toàn |
 | OpenAPI lint + code generation | Đạt; contract hợp lệ và generated code sinh lặp lại ổn định |
 | npm run lint | Đạt, không cảnh báo |
 | npm run typecheck | Đạt |
-| npm test | 128 test đạt (Admin 5, Auth 34, Mobile 14, Clinic 61, Worker 14), gồm queue bypass validation/order conflict, mapping/recheck dị ứng lúc kê/cấp, hết hạn đơn theo batch/không overlap, công bố/lịch sử lâm sàng, xác minh manifest V3, hủy lượt an toàn và outbox/delivery worker |
+| npm test | 129 test đạt (Admin 5, Auth 34, Mobile 14, Clinic 62, Worker 14), gồm queue bypass validation/order conflict, mapping/recheck dị ứng lúc kê/cấp, hoàn tồn bán an toàn, hết hạn đơn theo batch/không overlap, công bố/lịch sử lâm sàng, xác minh manifest V3, hủy lượt an toàn và outbox/delivery worker |
 | npm run build | Đạt; .NET 0 warning/0 error |
 | npm run doctor:mobile | 21/21; Expo SDK 57 và các package liên quan khớp patch tương thích (`expo` 57.0.23) |
 | Gateway → Auth → SQL smoke test | Registration thiếu idempotency key trả 400; challenge lạ trả generic OTP 400; ba route patient-access mới đi đúng Auth và trả 401 + request ID + `Cache-Control: no-store` khi thiếu token |
@@ -449,8 +462,8 @@ Phạm vi đã hoàn thành:
   certificate; lõi bác sĩ hoàn tất/ký/bổ sung/hủy, công bố, lịch sử bệnh nhân và
   xác minh lại dấu SHA-256 đã hoàn thành qua Slice 11/16/17/18.
 - Phase 7 còn quản lý nhà cung cấp, cập nhật/khóa danh mục thuốc và cảnh báo lô sắp
-  hết hạn; lõi kê đơn–nhập kho–cấp–đảo–đối soát, tự hết hạn đơn, recheck dị ứng
-  chuẩn hóa và race hai quầy của Slice 12/19/20/22 đã hoàn thành.
+  hết hạn; lõi kê đơn–nhập kho–cấp–đảo–đối soát, tự hết hạn đơn, recheck dị ứng,
+  race hai quầy và hoàn tồn bán an toàn của Slice 12/19/20/22/23 đã hoàn thành.
 - Phase 8 còn in/xuất hóa đơn, tích hợp payment gateway/webhook và hồ sơ claim bảo
   hiểm; lõi hóa đơn–thu–hoàn–VOID của Slice 13 đã hoàn thành.
 - Phase 9 còn replay dead-letter thủ công và export CSV/XLSX; lõi báo cáo,

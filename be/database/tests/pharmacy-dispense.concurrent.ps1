@@ -192,6 +192,7 @@ END TRY BEGIN CATCH SELECT CONCAT('ERR|',ERROR_NUMBER()); END CATCH;
       ($sharedResults[0] -ne $sharedResults[1])) {
     throw "Retry đồng thời không trả cùng một dòng cấp phát: $($sharedResults -join ', ')"
   }
+  $sharedDispensedPublicId = $sharedResults[0].Split('|')[1]
 
   $oldRaceSql = @"
 SET NOCOUNT ON; SET XACT_ABORT ON; SET ANSI_NULLS ON; SET QUOTED_IDENTIFIER ON;
@@ -277,12 +278,107 @@ SELECT CONCAT('dispensed=',@dispensed,'; oldBalance=',@old_balance,'; newBalance
   '; items=',@item_count,'; movements=',@movement_count,'; completedKeys=',@completed_keys);
 "@
 
+  $missingInspection = Invoke-SqlText @"
+SET NOCOUNT ON; SET XACT_ABORT ON;
+EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=$actorId;
+DECLARE @movement uniqueidentifier;
+BEGIN TRY
+  EXEC dbo.sp_clinic_reverse_dispensation_item @actor_user_id=$actorId,
+    @dispensation_item_public_id='$oldDispensedPublicId',@return_location_public_id='$locationPublicId',
+    @disposition='SELLABLE',@reason=N'Bao bì còn nguyên vẹn',@sellable_inspection_confirmed=0,
+    @movement_public_id=@movement OUTPUT;
+  SELECT 'OK';
+END TRY BEGIN CATCH SELECT CONCAT('ERR|',ERROR_NUMBER()); END CATCH;
+"@
+  if ($missingInspection -ne 'ERR|53352') {
+    throw "Hoàn kho bán thiếu xác nhận không bị chặn: $missingInspection"
+  }
+
+  Invoke-SqlText "SET NOCOUNT ON; UPDATE dbo.medicine_batches SET status='RECALLED' WHERE medicine_batch_id=$oldBatchId;" | Out-Null
+  $recalledBatch = Invoke-SqlText @"
+SET NOCOUNT ON; SET XACT_ABORT ON;
+EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=$actorId;
+DECLARE @movement uniqueidentifier;
+BEGIN TRY
+  EXEC dbo.sp_clinic_reverse_dispensation_item @actor_user_id=$actorId,
+    @dispensation_item_public_id='$oldDispensedPublicId',@return_location_public_id='$locationPublicId',
+    @disposition='SELLABLE',@reason=N'Kiểm tra lô thu hồi',@sellable_inspection_confirmed=1,
+    @movement_public_id=@movement OUTPUT;
+  SELECT 'OK';
+END TRY BEGIN CATCH SELECT CONCAT('ERR|',ERROR_NUMBER()); END CATCH;
+"@
+  if ($recalledBatch -ne 'ERR|53353') {
+    throw "Lô thu hồi vẫn được hoàn về kho bán: $recalledBatch"
+  }
+  Invoke-SqlText "SET NOCOUNT ON; UPDATE dbo.medicine_batches SET status='AVAILABLE' WHERE medicine_batch_id=$oldBatchId;" | Out-Null
+
+  $oldExpiry = Invoke-SqlText "SET NOCOUNT ON; SELECT CONVERT(char(10),expiry_date,23) FROM dbo.medicine_batches WHERE medicine_batch_id=$oldBatchId;"
+  Invoke-SqlText "SET NOCOUNT ON; DECLARE @branch_id bigint=(SELECT branch_id FROM dbo.branches WHERE branch_code='MAIN'),@business_date date; EXEC dbo.sp_get_branch_business_date @branch_id,NULL,@business_date OUTPUT; UPDATE dbo.medicine_batches SET expiry_date=DATEADD(DAY,-1,@business_date) WHERE medicine_batch_id=$oldBatchId;" | Out-Null
+  $expiredBatch = Invoke-SqlText @"
+SET NOCOUNT ON; SET XACT_ABORT ON;
+EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=$actorId;
+DECLARE @movement uniqueidentifier;
+BEGIN TRY
+  EXEC dbo.sp_clinic_reverse_dispensation_item @actor_user_id=$actorId,
+    @dispensation_item_public_id='$oldDispensedPublicId',@return_location_public_id='$locationPublicId',
+    @disposition='SELLABLE',@reason=N'Kiểm tra lô hết hạn',@sellable_inspection_confirmed=1,
+    @movement_public_id=@movement OUTPUT;
+  SELECT 'OK';
+END TRY BEGIN CATCH SELECT CONCAT('ERR|',ERROR_NUMBER()); END CATCH;
+"@
+  if ($expiredBatch -ne 'ERR|53353') {
+    throw "Lô hết hạn vẫn được hoàn về kho bán: $expiredBatch"
+  }
+  Invoke-SqlText "SET NOCOUNT ON; UPDATE dbo.medicine_batches SET expiry_date='$oldExpiry' WHERE medicine_batch_id=$oldBatchId;" | Out-Null
+
+  $quarantinePublicId = Invoke-SqlText "SET NOCOUNT ON; SELECT CONVERT(varchar(36),public_id) FROM dbo.inventory_locations WHERE branch_id=(SELECT branch_id FROM dbo.branches WHERE branch_code='MAIN') AND location_code='MAIN-QA';"
+  $sellableReversal = Invoke-SqlText @"
+SET NOCOUNT ON; SET XACT_ABORT ON;
+EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=$actorId;
+DECLARE @movement uniqueidentifier;
+EXEC dbo.sp_clinic_reverse_dispensation_item @actor_user_id=$actorId,
+  @dispensation_item_public_id='$oldDispensedPublicId',@return_location_public_id='$locationPublicId',
+  @disposition='SELLABLE',@reason=N'Bao bì nguyên vẹn và bảo quản đạt yêu cầu',
+  @sellable_inspection_confirmed=1,@movement_public_id=@movement OUTPUT;
+SELECT CONVERT(varchar(36),@movement);
+"@
+  $quarantineReversal = Invoke-SqlText @"
+SET NOCOUNT ON; SET XACT_ABORT ON;
+EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=$actorId;
+DECLARE @movement uniqueidentifier;
+EXEC dbo.sp_clinic_reverse_dispensation_item @actor_user_id=$actorId,
+  @dispensation_item_public_id='$sharedDispensedPublicId',@return_location_public_id='$quarantinePublicId',
+  @disposition='QUARANTINE',@reason=N'Không đủ bằng chứng bảo quản sau khi giao',
+  @sellable_inspection_confirmed=0,@movement_public_id=@movement OUTPUT;
+SELECT CONVERT(varchar(36),@movement);
+"@
+  $reversalVerification = Invoke-SqlText @"
+SET NOCOUNT ON; SET XACT_ABORT ON;
+EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=$actorId;
+DECLARE @branch_public_id uniqueidentifier=(SELECT public_id FROM dbo.branches WHERE branch_code='MAIN');
+DECLARE @differences TABLE(locationPublicId varchar(36),batchPublicId varchar(36),
+  batchNumber nvarchar(80),balanceQuantity varchar(30),ledgerQuantity varchar(30));
+INSERT @differences EXEC dbo.sp_clinic_reconcile_stock @actor_user_id=$actorId,@branch_public_id=@branch_public_id;
+IF NOT EXISTS (SELECT 1 FROM dbo.dispensation_item_reversals r JOIN dbo.dispensation_items di
+    ON di.dispensation_item_id=r.dispensation_item_id
+    WHERE di.public_id='$oldDispensedPublicId' AND r.disposition='SELLABLE' AND r.sellable_inspection_confirmed=1)
+  OR NOT EXISTS (SELECT 1 FROM dbo.dispensation_item_reversals r JOIN dbo.dispensation_items di
+    ON di.dispensation_item_id=r.dispensation_item_id
+    WHERE di.public_id='$sharedDispensedPublicId' AND r.disposition='QUARANTINE' AND r.sellable_inspection_confirmed=0)
+  OR EXISTS (SELECT 1 FROM @differences WHERE batchPublicId IN ('$oldBatchPublicId','$newBatchPublicId'))
+  OR NOT EXISTS (SELECT 1 FROM dbo.prescription_items WHERE prescription_item_id=$itemId AND dispensed_quantity=0)
+  OR NOT EXISTS (SELECT 1 FROM dbo.prescriptions WHERE prescription_id=$prescriptionId AND status='ISSUED')
+  THROW 55842,N'Hậu kiểm reversal không khớp xác nhận, prescription hoặc ledger.',1;
+SELECT CONCAT('sellableMovement=','$sellableReversal','; quarantineMovement=','$quarantineReversal','; ledger=balanced');
+"@
+
   [pscustomobject]@{
     result = 'PASS'
     openRace = ($openResults -join ', ')
     retryRace = ($sharedResults -join ', ')
     fefoRace = ($raceResults -join ', ')
     verification = $verification
+    reversalSafety = $reversalVerification
   }
 }
 finally {
@@ -295,6 +391,11 @@ SET ARITHABORT ON; SET NUMERIC_ROUNDABORT OFF;
 BEGIN TRANSACTION;
 DELETE dbo.idempotency_requests WHERE actor_user_id=$actorId
   AND idempotency_key IN ('$receiptKeyOld','$receiptKeyNew','$sharedDispenseKey','$oldBatchRaceKey','$newBatchRaceKey');
+DISABLE TRIGGER dbo.trg_dispense_reversals_append_only ON dbo.dispensation_item_reversals;
+DELETE r FROM dbo.dispensation_item_reversals r JOIN dbo.dispensation_items di
+  ON di.dispensation_item_id=r.dispensation_item_id
+  JOIN dbo.dispensations d ON d.dispensation_id=di.dispensation_id WHERE d.prescription_id=$prescriptionId;
+ENABLE TRIGGER dbo.trg_dispense_reversals_append_only ON dbo.dispensation_item_reversals;
 DISABLE TRIGGER dbo.trg_inventory_movements_append_only ON dbo.inventory_movements;
 DELETE dbo.inventory_movements WHERE medicine_batch_id IN ($oldBatchId,$newBatchId);
 ENABLE TRIGGER dbo.trg_inventory_movements_append_only ON dbo.inventory_movements;
@@ -307,8 +408,7 @@ DISABLE TRIGGER dbo.trg_prescription_items_guard ON dbo.prescription_items;
 DELETE dbo.prescription_items WHERE prescription_id=$prescriptionId;
 ENABLE TRIGGER dbo.trg_prescription_items_guard ON dbo.prescription_items;
 DELETE dbo.prescriptions WHERE prescription_id=$prescriptionId;
-DELETE dbo.inventory_balances WHERE inventory_location_id=$locationId
-  AND medicine_batch_id IN ($oldBatchId,$newBatchId);
+DELETE dbo.inventory_balances WHERE medicine_batch_id IN ($oldBatchId,$newBatchId);
 DELETE dbo.medicine_batches WHERE medicine_batch_id IN ($oldBatchId,$newBatchId);
 DELETE dbo.medicine_allergens WHERE medicine_id=$medicineId;
 DELETE dbo.allergens WHERE allergen_type='DRUG' AND canonical_name=N'$ingredient'

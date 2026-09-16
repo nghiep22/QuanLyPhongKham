@@ -2427,6 +2427,20 @@ BEGIN
 END;
 GO
 
+IF COL_LENGTH(N'dbo.dispensation_item_reversals',N'sellable_inspection_confirmed') IS NULL
+    ALTER TABLE dbo.dispensation_item_reversals ADD sellable_inspection_confirmed bit NOT NULL
+        CONSTRAINT DF_dispense_reversals_sellable_inspection DEFAULT (0);
+GO
+/* Historical SELLABLE reversals predate inspection evidence; enforce the rule for new writes. */
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints
+               WHERE parent_object_id=OBJECT_ID(N'dbo.dispensation_item_reversals')
+                 AND name=N'CK_dispense_reversals_sellable_inspection')
+    ALTER TABLE dbo.dispensation_item_reversals WITH NOCHECK
+        ADD CONSTRAINT CK_dispense_reversals_sellable_inspection
+        CHECK ((disposition='SELLABLE' AND sellable_inspection_confirmed=1)
+            OR (disposition<>'SELLABLE' AND sellable_inspection_confirmed=0));
+GO
+
 /* Slice 12: stable identifiers for every pharmacy resource exposed by the API. */
 DECLARE @pharmacy_table sysname,@pharmacy_sql nvarchar(max);
 DECLARE pharmacy_public_ids CURSOR LOCAL FAST_FORWARD FOR
@@ -10961,6 +10975,7 @@ CREATE OR ALTER PROCEDURE dbo.sp_reverse_dispensation_item
     @return_location_id bigint,
     @disposition varchar(20),
     @reason nvarchar(500),
+    @sellable_inspection_confirmed bit=0,
     @reversal_movement_id bigint OUTPUT
 AS
 BEGIN
@@ -10969,6 +10984,10 @@ BEGIN
     IF @disposition NOT IN ('SELLABLE','QUARANTINE','DESTROY')
         THROW 53337,N'Phân loại hàng trả không hợp lệ.',1;
     IF NULLIF(LTRIM(RTRIM(@reason)),N'') IS NULL THROW 53338,N'Bắt buộc nhập lý do đảo cấp phát.',1;
+    IF @disposition='SELLABLE' AND COALESCE(@sellable_inspection_confirmed,0)<>1
+        THROW 53352,N'Hoàn về kho bán yêu cầu xác nhận kiểm tra chất lượng hàng trả.',1;
+    IF @disposition<>'SELLABLE' AND COALESCE(@sellable_inspection_confirmed,0)<>0
+        THROW 53352,N'Xác nhận kiểm tra kho bán chỉ hợp lệ với phân loại SELLABLE.',1;
 
     DECLARE @branch_id bigint;
     SELECT @branch_id=d.branch_id
@@ -10979,7 +10998,8 @@ BEGIN
     BEGIN TRY
         BEGIN TRANSACTION;
         DECLARE @dispensation_id bigint,@prescription_item_id bigint,@batch_id bigint,
-                @quantity decimal(18,3),@prescription_id bigint,@source_movement_id bigint;
+                @quantity decimal(18,3),@prescription_id bigint,@source_movement_id bigint,
+                @batch_status varchar(20),@batch_expiry date,@business_date date;
         SELECT @dispensation_id=di.dispensation_id,@prescription_item_id=di.prescription_item_id,
                @batch_id=di.medicine_batch_id,@quantity=di.quantity,@prescription_id=d.prescription_id
         FROM dbo.dispensation_items di WITH (UPDLOCK,HOLDLOCK)
@@ -10993,6 +11013,11 @@ BEGIN
         FROM dbo.inventory_movements WITH (UPDLOCK,HOLDLOCK)
         WHERE dispensation_item_id=@dispensation_item_id AND movement_type='DISPENSE';
         IF @source_movement_id IS NULL THROW 53341,N'Không tìm thấy bút toán cấp thuốc gốc.',1;
+        SELECT @batch_status=status,@batch_expiry=expiry_date
+        FROM dbo.medicine_batches WITH (UPDLOCK,HOLDLOCK) WHERE medicine_batch_id=@batch_id;
+        EXEC dbo.sp_get_branch_business_date @branch_id,NULL,@business_date OUTPUT;
+        IF @disposition='SELLABLE' AND (@batch_status<>'AVAILABLE' OR @batch_expiry<=@business_date)
+            THROW 53353,N'Lô không còn đủ điều kiện bán; hàng trả phải vào khu cách ly.',1;
         IF NOT EXISTS (SELECT 1 FROM dbo.inventory_locations WHERE inventory_location_id=@return_location_id
                        AND branch_id=@branch_id AND is_active=1
                        AND ((@disposition='QUARANTINE' AND location_type='QUARANTINE')
@@ -11028,9 +11053,11 @@ BEGIN
              TRY_CONVERT(uniqueidentifier,SESSION_CONTEXT(N'request_id')));
         SET @reversal_movement_id=SCOPE_IDENTITY();
         INSERT dbo.dispensation_item_reversals
-            (dispensation_item_id,reversal_movement_id,return_location_id,disposition,reason,reversed_by_user_id)
+            (dispensation_item_id,reversal_movement_id,return_location_id,disposition,reason,
+             sellable_inspection_confirmed,reversed_by_user_id)
         VALUES
-            (@dispensation_item_id,@reversal_movement_id,@return_location_id,@disposition,@reason,@actor_user_id);
+            (@dispensation_item_id,@reversal_movement_id,@return_location_id,@disposition,@reason,
+             @sellable_inspection_confirmed,@actor_user_id);
         UPDATE dbo.prescription_items SET dispensed_quantity=dispensed_quantity-@quantity
         WHERE prescription_item_id=@prescription_item_id AND dispensed_quantity>=@quantity;
         IF @@ROWCOUNT=0 THROW 53345,N'Lượng đã cấp không đủ để đảo; dữ liệu cần đối soát.',1;
@@ -11047,7 +11074,9 @@ BEGIN
 
         DECLARE @entity_id varchar(100)=CONVERT(varchar(100),@dispensation_item_id);
         DECLARE @audit_json nvarchar(max)=CONCAT(N'{"reversal_movement_id":',@reversal_movement_id,
-                                                 N',"disposition":"',@disposition,N'"}');
+                                                 N',"disposition":"',@disposition,
+                                                 N'","sellableInspectionConfirmed":',
+                                                 CASE WHEN @sellable_inspection_confirmed=1 THEN N'true' ELSE N'false' END,N'}');
         EXEC dbo.sp_write_audit @actor_user_id,@branch_id,'DISPENSATION_ITEM_REVERSED',
              'DISPENSATION_ITEM',@entity_id,NULL,@audit_json;
         COMMIT TRANSACTION;
@@ -11688,6 +11717,7 @@ GO
 CREATE OR ALTER PROCEDURE dbo.sp_clinic_reverse_dispensation_item
     @actor_user_id bigint,@dispensation_item_public_id uniqueidentifier,
     @return_location_public_id uniqueidentifier,@disposition varchar(20),@reason nvarchar(500),
+    @sellable_inspection_confirmed bit=0,
     @movement_public_id uniqueidentifier OUTPUT
 AS
 BEGIN
@@ -11703,16 +11733,22 @@ BEGIN
     SELECT @location_id=inventory_location_id FROM dbo.inventory_locations WHERE public_id=@return_location_public_id;
     IF @item_id IS NULL OR @location_id IS NULL THROW 53916,N'Dòng cấp hoặc kho trả không tồn tại.',1;
     EXEC dbo.sp_assert_permission @actor_user_id,'PHARMACY_DISPENSE',@branch_id;
+    IF @disposition='SELLABLE' AND COALESCE(@sellable_inspection_confirmed,0)<>1
+       THROW 53352,N'Hoàn về kho bán yêu cầu xác nhận kiểm tra chất lượng hàng trả.',1;
+    IF @disposition<>'SELLABLE' AND COALESCE(@sellable_inspection_confirmed,0)<>0
+       THROW 53352,N'Xác nhận kiểm tra kho bán chỉ hợp lệ với phân loại SELLABLE.',1;
     EXEC dbo.sp_get_branch_business_date @branch_id,NULL,@business_date OUTPUT;
     IF @disposition='SELLABLE' AND (@batch_status<>'AVAILABLE' OR @expiry<=@business_date)
-       THROW 53917,N'Lô không còn đủ điều kiện bán; phải trả vào khu cách ly.',1;
+       THROW 53353,N'Lô không còn đủ điều kiện bán; phải trả vào khu cách ly.',1;
     SET @lock_resource=CONCAT(N'pharmacy-stock:',@location_id,N':',@medicine_id);
     BEGIN TRY
         BEGIN TRANSACTION;
         EXEC @lock_result=sys.sp_getapplock @Resource=@lock_resource,
             @LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000;
         IF @lock_result<0 THROW 53912,N'Không thể khóa tồn kho.',1;
-        EXEC dbo.sp_reverse_dispensation_item @actor_user_id,@item_id,@location_id,@disposition,@reason,@id OUTPUT;
+        EXEC dbo.sp_reverse_dispensation_item @actor_user_id=@actor_user_id,@dispensation_item_id=@item_id,
+            @return_location_id=@location_id,@disposition=@disposition,@reason=@reason,
+            @sellable_inspection_confirmed=@sellable_inspection_confirmed,@reversal_movement_id=@id OUTPUT;
         SELECT @movement_public_id=public_id FROM dbo.inventory_movements WHERE inventory_movement_id=@id;
         COMMIT TRANSACTION;
     END TRY BEGIN CATCH IF XACT_STATE()<>0 ROLLBACK TRANSACTION; THROW; END CATCH;

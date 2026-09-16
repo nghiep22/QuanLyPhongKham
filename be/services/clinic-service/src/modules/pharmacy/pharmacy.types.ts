@@ -62,6 +62,7 @@ export interface PharmacyRepository {
   completeDispensation(actor: ClinicPrincipal, dispensationId: string, requestId: string): Promise<void>;
   cancelDispensation(actor: ClinicPrincipal, dispensationId: string, reason: string, requestId: string): Promise<void>;
   reverse(actor: ClinicPrincipal, dispensationItemId: string, returnLocationId: string,
-    disposition: 'SELLABLE' | 'QUARANTINE', reason: string, requestId: string): Promise<string>;
+    disposition: 'SELLABLE' | 'QUARANTINE', reason: string, sellableInspectionConfirmed: boolean,
+    requestId: string): Promise<string>;
   reconcile(actor: ClinicPrincipal, branchId: string, requestId: string): Promise<ReconciliationDifference[]>;
 }

@@ -34,6 +34,7 @@ function fixture() {
     issue: vi.fn().mockImplementation(async () => { rx.status = 'ISSUED'; }),
     receive: vi.fn().mockResolvedValue(randomUUID()),
     dispense: vi.fn().mockResolvedValue(randomUUID()),
+    reverse: vi.fn().mockResolvedValue(randomUUID()),
     reconcile: vi.fn().mockResolvedValue([]),
   } as unknown as PharmacyRepository;
   const app = createApp({ databaseProbe: async () => ({ database: 'test' }),
@@ -111,5 +112,21 @@ describe('pharmacy API', () => {
     expect(result.body.error.code).toBe('PHARMACY_ALLERGY_CONFLICT');
     expect(result.body.error.message).toContain('Bác sĩ');
     expect(JSON.stringify(result.body)).not.toContain('amoxicillin');
+  });
+  it('requires a quality inspection acknowledgement before returning medicine to sellable stock', async () => {
+    const { app, repository } = fixture();
+    const endpoint = `/api/v1/pharmacy/dispensation-items/${randomUUID()}/reverse`;
+    const rejected = await request(app).post(endpoint).set(authorization)
+      .send({ returnLocationPublicId: locationId, disposition: 'SELLABLE', reason: 'Bao bì còn nguyên vẹn' });
+    const accepted = await request(app).post(endpoint).set(authorization)
+      .send({ returnLocationPublicId: locationId, disposition: 'SELLABLE', reason: 'Bao bì còn nguyên vẹn',
+        sellableInspectionConfirmed: true });
+    const quarantined = await request(app).post(endpoint).set(authorization)
+      .send({ returnLocationPublicId: locationId, disposition: 'QUARANTINE', reason: 'Cần kiểm tra thêm' });
+    expect(rejected.status).toBe(400);
+    expect(accepted.status).toBe(200);
+    expect(quarantined.status).toBe(200);
+    expect(vi.mocked(repository.reverse).mock.calls[0]?.[5]).toBe(true);
+    expect(vi.mocked(repository.reverse).mock.calls[1]?.[5]).toBe(false);
   });
 });

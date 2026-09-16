@@ -35,7 +35,17 @@ const open = z.object({ locationPublicId: uuid }).strict();
 const dispense = z.object({ prescriptionItemPublicId: uuid, batchPublicId: uuid, quantity,
   allergyOverrideReason: z.string().trim().max(500).nullable().optional() }).strict();
 const reverse = z.object({ returnLocationPublicId: uuid, disposition: z.enum(['SELLABLE', 'QUARANTINE']),
-  reason }).strict();
+  reason, sellableInspectionConfirmed: z.boolean().default(false) }).strict()
+  .superRefine((value, context) => {
+    if (value.disposition === 'SELLABLE' && !value.sellableInspectionConfirmed) {
+      context.addIssue({ code: 'custom', path: ['sellableInspectionConfirmed'],
+        message: 'Hoàn về kho bán yêu cầu xác nhận kiểm tra chất lượng hàng trả.' });
+    }
+    if (value.disposition !== 'SELLABLE' && value.sellableInspectionConfirmed) {
+      context.addIssue({ code: 'custom', path: ['sellableInspectionConfirmed'],
+        message: 'Xác nhận này chỉ dùng khi hoàn về kho bán.' });
+    }
+  });
 const reasonBody = z.object({ reason }).strict();
 
 function validate<T>(schema: z.ZodType<T>, value: unknown): T {
@@ -147,7 +157,8 @@ export function createPharmacyRouter(auth: PrincipalAuthenticator, service: Phar
   router.post('/pharmacy/dispensation-items/:itemId/reverse', route(async (req, res) => {
     const input = validate(reverse, req.body); const current = await actor(req, auth);
     const publicId = await service.run(() => db.reverse(current, validate(uuid, req.params.itemId),
-      input.returnLocationPublicId, input.disposition, input.reason, res.locals.requestId));
+      input.returnLocationPublicId, input.disposition, input.reason, input.sellableInspectionConfirmed,
+      res.locals.requestId));
     success(res, { publicId });
   }));
   return router;

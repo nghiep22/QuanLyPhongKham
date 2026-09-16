@@ -1764,6 +1764,10 @@ export type ReverseDispensationRequest = {
     returnLocationPublicId: string;
     disposition: 'SELLABLE' | 'QUARANTINE';
     reason: string;
+    /**
+     * Must be true only for SELLABLE after the returned medicine passed a physical quality inspection.
+     */
+    sellableInspectionConfirmed?: boolean;
 };
 
 /**

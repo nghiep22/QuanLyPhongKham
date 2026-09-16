@@ -169,10 +169,12 @@ export class SqlPharmacyRepository implements PharmacyRepository {
       { name: 'reason', type: sql.NVarChar(500), value: reason }], requestId);
   }
   reverse(actor: ClinicPrincipal, itemId: string, locationId: string, disposition: 'SELLABLE' | 'QUARANTINE',
-    reason: string, requestId: string) {
+    reason: string, sellableInspectionConfirmed: boolean, requestId: string) {
     return this.create(actor, 'dbo.sp_clinic_reverse_dispensation_item', [uid('dispensation_item_public_id', itemId),
       uid('return_location_public_id', locationId), { name: 'disposition', type: sql.VarChar(20), value: disposition },
-      { name: 'reason', type: sql.NVarChar(500), value: reason }], 'movement_public_id', requestId);
+      { name: 'reason', type: sql.NVarChar(500), value: reason },
+      { name: 'sellable_inspection_confirmed', type: sql.Bit, value: sellableInspectionConfirmed }],
+    'movement_public_id', requestId);
   }
   async reconcile(actor: ClinicPrincipal, branchId: string, requestId: string) {
     const result = await executeCommand<Row>('dbo.sp_clinic_reconcile_stock', [actorParam(actor),

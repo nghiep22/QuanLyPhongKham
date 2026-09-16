@@ -104,6 +104,8 @@ xóa `request_id`, `actor_user_id`, `branch_id` trong `SESSION_CONTEXT`.
 - Đơn quá `valid_until` theo business date chi nhánh được chuyển `EXPIRED` bằng
   transition idempotent dùng chung giữa command và worker. Trạng thái, audit và
   outbox được commit trước lỗi từ chối cấp; completion/reversal không hồi sinh đơn.
+- Hoàn về tồn bán bắt buộc xác nhận kiểm tra hàng trả và lô phải còn `AVAILABLE`,
+  chưa hết hạn theo business date; nếu không phải đưa vào cách ly.
 - Mọi mutation tồn kho khóa ứng dụng theo vị trí + thuốc, sau đó khóa prescription,
   dòng kê, lô và balance trong transaction. Harness hai quầy thật bao phủ race mở
   phiên, retry cùng idempotency key, FEFO, giới hạn đơn và đối soát ledger.

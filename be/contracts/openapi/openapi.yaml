@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Private Clinic API
-  version: 0.15.0
+  version: 0.16.0
   description: Public contract for the private clinic management system.
 servers:
   - url: http://localhost:5000
@@ -5814,10 +5814,15 @@ components:
     ReverseDispensationRequest:
       type: object
       required: [returnLocationPublicId, disposition, reason]
+      additionalProperties: false
       properties:
         returnLocationPublicId: { type: string, format: uuid }
         disposition: { type: string, enum: [SELLABLE, QUARANTINE] }
         reason: { type: string, minLength: 5, maxLength: 500 }
+        sellableInspectionConfirmed:
+          type: boolean
+          default: false
+          description: Must be true only for SELLABLE after the returned medicine passed a physical quality inspection.
     MoneyDecimal:
       type: string
       pattern: '^[0-9]+(?:\.[0-9]{1,4})?$'

@@ -319,6 +319,9 @@ BEGIN TRY
       @disposition='QUARANTINE',@reason=N'Kiểm thử đảo cấp vào cách ly',
       @movement_public_id=@reversal_public_id OUTPUT;
     IF NOT EXISTS (SELECT 1 FROM dbo.inventory_movements WHERE public_id=@reversal_public_id AND movement_type='REVERSAL')
+      OR NOT EXISTS (SELECT 1 FROM dbo.dispensation_item_reversals r
+        JOIN dbo.inventory_movements m ON m.inventory_movement_id=r.reversal_movement_id
+        WHERE m.public_id=@reversal_public_id AND r.sellable_inspection_confirmed=0)
       OR NOT EXISTS (SELECT 1 FROM dbo.prescriptions WHERE public_id=@prescription_public_id AND status='PARTIALLY_DISPENSED')
       THROW 55935,N'Đảo cấp không cập nhật ledger và đơn.',1;
     SET @computed_signature_hash=NULL;
