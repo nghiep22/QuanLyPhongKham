@@ -392,12 +392,27 @@ Phạm vi đã hoàn thành:
   Web chỉ hiện hành động ngoại lệ khi principal có capability và API trả conflict
   riêng nếu còn lượt đứng trước. OpenAPI 3.1 v0.15/generated types/client đồng bộ.
 
+## DONE — Slice 22: Concurrent Pharmacy Dispensing Safety
+
+- Harness chạy hai session SQL thật chứng minh unique filtered index và khóa
+  prescription chỉ cho đúng một phiên cấp phát `DRAFT`; quầy thua nhận conflict
+  nghiệp vụ ổn định thay vì tạo phiên trùng.
+- Hai request đồng thời dùng cùng `Idempotency-Key` cùng trả một public UUID và
+  chỉ tạo một dòng cấp/movement. Replay sau race cũng trả resource cũ, không trừ
+  tồn lần hai.
+- Race lô cũ/lô mới dùng khóa ứng dụng `pharmacy-stock:{location}:{medicine}` và
+  khóa dòng prescription/item/batch/balance. Lô FEFO luôn thắng; request lô mới
+  bị chặn bởi FEFO hoặc giới hạn còn kê tùy thứ tự khóa.
+- Hậu kiểm xác minh `dispensed_quantity` không vượt số kê, tồn hai lô không âm,
+  chỉ có hai ledger movement tương ứng và reconciliation không có sai lệch. Fixture
+  domain được dọn sạch; audit được giữ append-only theo thiết kế.
+
 ### Bằng chứng xác minh local toàn bộ
 
 | Kiểm tra | Kết quả |
 |---|---|
 | Baseline SQL chạy lại idempotent | Đạt; 73 bảng, 23 view, 165 procedure, 31 trigger |
-| SQL auth session/staff RBAC/staff safety/password lifecycle/patient registration/patient link/catalog-directory/patient registry/scheduling-appointments/reception-queue/clinical-core/pharmacy-core/pharmacy-FEFO/pharmacy-allergy/billing-core/reports-core/notifications-outbox regression | 17/17 PASS; rollback sạch. Hai harness SQL thật xác minh queue gọi hai ticket khác nhau và payment race chỉ một quầy thu được toàn bộ dư nợ |
+| SQL auth session/staff RBAC/staff safety/password lifecycle/patient registration/patient link/catalog-directory/patient registry/scheduling-appointments/reception-queue/clinical-core/pharmacy-core/pharmacy-FEFO/pharmacy-allergy/billing-core/reports-core/notifications-outbox regression | 17/17 PASS; rollback sạch. Ba harness SQL thật xác minh queue không gọi trùng, payment không thu vượt và pharmacy giữ FEFO/idempotency/giới hạn đơn–tồn khi hai quầy race |
 | OpenAPI lint + code generation | Đạt; contract hợp lệ và generated code sinh lặp lại ổn định |
 | npm run lint | Đạt, không cảnh báo |
 | npm run typecheck | Đạt |
@@ -433,9 +448,9 @@ Phạm vi đã hoàn thành:
 - Phase 6 còn kết quả nhiều phiên bản, đính kèm tệp và chữ ký số có kiểm chứng
   certificate; lõi bác sĩ hoàn tất/ký/bổ sung/hủy, công bố, lịch sử bệnh nhân và
   xác minh lại dấu SHA-256 đã hoàn thành qua Slice 11/16/17/18.
-- Phase 7 còn quản lý nhà cung cấp, cập nhật/khóa danh mục thuốc, cảnh báo lô sắp
-  hết hạn và harness hai quầy cấp đồng thời; lõi kê đơn–nhập kho–cấp–đảo–đối soát,
-  tự hết hạn đơn và recheck dị ứng chuẩn hóa của Slice 12/19/20 đã hoàn thành.
+- Phase 7 còn quản lý nhà cung cấp, cập nhật/khóa danh mục thuốc và cảnh báo lô sắp
+  hết hạn; lõi kê đơn–nhập kho–cấp–đảo–đối soát, tự hết hạn đơn, recheck dị ứng
+  chuẩn hóa và race hai quầy của Slice 12/19/20/22 đã hoàn thành.
 - Phase 8 còn in/xuất hóa đơn, tích hợp payment gateway/webhook và hồ sơ claim bảo
   hiểm; lõi hóa đơn–thu–hoàn–VOID của Slice 13 đã hoàn thành.
 - Phase 9 còn replay dead-letter thủ công và export CSV/XLSX; lõi báo cáo,

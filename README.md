@@ -218,7 +218,10 @@ Nhập và cấp thuốc dùng `Idempotency-Key`. Thuốc ánh xạ tới catalo
 hóa; hệ thống kiểm tra chính xác khi kê và kiểm tra lại khi cấp. Bác sĩ/dược sĩ cần
 quyền override riêng cùng lý do được lưu và audit. Sau phát hành không sửa nội dung đơn. Đơn quá ngày
 hiệu lực theo chi nhánh được worker chuyển `EXPIRED`; nếu dược sĩ mở trước lượt
-quét, command vẫn lưu trạng thái, audit và outbox rồi mới từ chối cấp.
+quét, command vẫn lưu trạng thái, audit và outbox rồi mới từ chối cấp. Cấp phát
+khóa theo quầy + thuốc và khóa dòng đơn/tồn; harness hai phiên SQL thật xác minh
+chỉ một phiên DRAFT được mở, retry đồng thời trả cùng resource, lô FEFO thắng race,
+không cấp vượt đơn, không âm tồn và balance luôn khớp ledger.
 
 Nhân viên có quyền mở **Thu ngân** để tạo hóa đơn DRAFT từ lượt khám, đồng bộ
 dịch vụ hoàn tất và thuốc đã cấp, thêm khoản thu thủ công, ghi phần bảo hiểm rồi
@@ -272,6 +275,7 @@ sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\r
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\notifications-outbox.test.sql
 .\be\database\tests\reception-queue.concurrent.ps1
 .\be\database\tests\billing-payment.concurrent.ps1
+.\be\database\tests\pharmacy-dispense.concurrent.ps1
 ```
 
 Chi tiết nghiệp vụ và thứ tự phát triển nằm trong [PROJECT_PLAN.md](./PROJECT_PLAN.md).

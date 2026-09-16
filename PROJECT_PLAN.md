@@ -26,7 +26,7 @@ Tài liệu này không thay thế đặc tả chi tiết của từng màn hìn
 | Thư mục `fe/` và `be/` | Đã tạo |
 | SQL Server `quan_ly_phong_kham.sql` | Baseline candidate: đã có luồng lõi, còn gap/defect P0 tại mục 8.12 |
 | Database objects | 73 bảng, 23 view, 165 stored procedure, 31 trigger |
-| Kiểm thử database | Baseline idempotent; 17 regression suite đến reports/outbox-notification đều đạt, cùng harness đồng thời queue và payment; chưa coi production-ready trước khi hoàn tất mọi ca P0 |
+| Kiểm thử database | Baseline idempotent; 17 regression suite đến reports/outbox-notification đều đạt, cùng harness đồng thời queue, payment và pharmacy dispensing; chưa coi production-ready trước khi hoàn tất mọi ca P0 |
 | Gateway | Đã scaffold; live/ready, request ID và route Auth/Clinic hoạt động |
 | Auth Service | Slice 06 hoàn tất: auth/session, workforce/RBAC, OTP và yêu cầu/duyệt/thu hồi patient portal link |
 | Clinic Service | Slice 13 hoàn tất: tiếp nhận, khám, nhà thuốc và hóa đơn/thanh toán/hoàn tiền theo chi nhánh |
@@ -1177,6 +1177,7 @@ Health readiness phải kiểm tra dependency cần thiết nhưng có timeout n
 | Slice 19 — Durable Prescription Expiration | **DONE** | 2026-09-16 | Defect P0 hết hạn đơn: lệnh mở cấp phát và Scheduler Worker dùng chung transition idempotent theo business date chi nhánh; `EXPIRED`, audit và outbox public UUID được commit trước lỗi từ chối cấp. Job có batch/khóa SQL, quyền riêng `clinic_job_executor`; completion/reversal không thể hồi sinh đơn. Baseline 165 procedure, pharmacy regression và 124 application test đạt. |
 | Slice 20 — Normalized Medication Allergy Safety | **DONE** | 2026-09-16 | RX-03 và defect P0 đối chiếu dị ứng: catalog `allergens` cùng mapping nhiều-nhiều thuốc–dị nguyên thay so khớp chuỗi `LIKE`; dữ liệu cũ được backfill. Kê đơn và cấp phát đều recheck mapping chính xác, tách permission override bác sĩ/dược sĩ, bắt lý do tối thiểu 10 ký tự, lưu trên dòng append-only và audit public UUID. Retry cấp phát giữ nguyên resource; OpenAPI v0.14/client và Admin Web hiển thị mapping/cảnh báo. Baseline 73 bảng, pharmacy regression và 126 application test đạt. |
 | Slice 21 — Queue-safe Encounter Start | **DONE** | 2026-09-16 | CLI-01 và defect P0 start encounter: đường thường chỉ chuyển ticket `CALLED` sang `SERVING`; ngoại lệ tách permission `ENCOUNTERS_QUEUE_BYPASS`, bắt lý do tối thiểu 10 ký tự và chỉ áp dụng cho ticket `WAITING` đang đứng đầu theo priority/FIFO dưới khóa transaction. Bypass ghi audit có lý do, outbox metadata-only bằng public UUID; OpenAPI v0.15/client và Admin Web có hành động riêng theo capability. Clinical SQL regression cùng 128 application test đạt. |
+| Slice 22 — Concurrent Pharmacy Dispensing Safety | **DONE** | 2026-09-16 | Hardening cấp phát: harness hai session SQL thật kiểm tra race mở phiên, retry đồng thời cùng idempotency key và race lô FEFO cũ/mới. Đúng một phiên DRAFT được mở; retry trả cùng resource; lô cũ luôn thắng, lượng cấp không vượt số kê, tồn không âm và balance khớp ledger. Fixture domain được dọn sạch, audit append-only được giữ. |
 
 Phase 1 và Slice 02–07 đã hoàn thành về source code và kiểm thử local. Phase 2
 đã đạt luồng MVP về source code và kiểm thử local. Các
@@ -1199,9 +1200,10 @@ nhân/người giám hộ xem lịch sử đã công bố từ UI đến SQL. D�
 recompute khi đọc và ổn định qua cấp/đảo thuốc; xác minh chữ ký số bằng certificate,
 kết quả nhiều phiên bản và đính kèm tệp còn dành cho các lát cắt P1 tiếp theo.
 Phase 7 đã có luồng từ kê đơn đến nhập kho/cấp phát/đảo cấp và đối soát tồn; đối
-chiếu dị ứng dùng mapping chuẩn hóa và được kiểm tra lại lúc cấp qua Slice 20. Quản lý
-nhà cung cấp, cập nhật danh mục thuốc, cảnh báo lô sắp hết hạn và kiểm thử hai quầy
-cấp phát đồng thời còn dành cho lát cắt hardening tiếp theo.
+chiếu dị ứng dùng mapping chuẩn hóa và được kiểm tra lại lúc cấp qua Slice 20.
+Slice 22 đã xác minh race hai quầy giữ đúng idempotency, FEFO, giới hạn đơn và
+ledger. Quản lý nhà cung cấp, cập nhật danh mục thuốc và cảnh báo lô sắp hết hạn
+còn dành cho lát cắt tiếp theo.
 Phase 8 đã có màn Thu ngân từ lượt khám đến hóa đơn, thu nhiều lần, hoàn tiền,
 VOID và hóa đơn thay thế. In/xuất hóa đơn, tích hợp payment gateway/webhook và
 claim bảo hiểm còn dành cho P1/P2.
