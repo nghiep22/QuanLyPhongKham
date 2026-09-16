@@ -1349,6 +1349,7 @@ export type ClinicalEncounterDetail = ClinicalEncounterSummary & {
         schemaVersion: string;
         sha256: string;
         signedAtUtc: string;
+        isVerified: boolean;
     } | null;
     historyOfPresentIllness: string | null;
     physicalExamination: string | null;
@@ -1466,6 +1467,7 @@ export type PatientClinicalRecord = PatientClinicalRecordSummary & {
         schemaVersion: string;
         sha256: string;
         signedAtUtc: string;
+        isVerified: boolean;
     };
     vitalSigns: Array<ClinicalVitalSignsRequest & {
         publicId: string;

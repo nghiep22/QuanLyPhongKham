@@ -200,8 +200,11 @@ Bệnh nhân/người giám hộ mở tab **Kết quả** trên Mobile để ch�
 xác minh và xem lịch sử khám, chẩn đoán, sinh hiệu, dặn dò, kết quả FINAL cùng
 dấu vết SHA-256. Chỉ hồ sơ đã được bác sĩ công bố mới xuất hiện; kết quả nội bộ
 chưa công bố không được trả về API và quyền đọc mất hiệu lực ngay khi liên kết
-hồ sơ bị thu hồi. Dấu SHA-256 hiện là bằng chứng toàn vẹn nội bộ, không được mô
-tả như chữ ký số đã xác minh chứng thư.
+hồ sơ bị thu hồi. Khi mở chi tiết, backend recompute manifest canonical theo
+version và trả `isVerified`; Web/Mobile cảnh báo nếu nội dung hiện tại không khớp
+dấu đã lưu. Manifest V3 ký snapshot kê đơn nhưng loại trạng thái và lượng đã cấp
+có thể đổi, nên cấp/đảo thuốc hợp lệ không làm sai dấu. SHA-256 này vẫn là bằng
+chứng toàn vẹn nội bộ, không được mô tả như chữ ký số đã xác minh chứng thư.
 
 Bác sĩ chọn **Kê đơn thuốc** trong lượt đang khám để tạo đơn DRAFT, thêm thuốc,
 liều và hướng dẫn rồi phát hành. Màn **Nhà thuốc** cho nhân viên có quyền tạo lô,

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Private Clinic API
-  version: 0.12.0
+  version: 0.13.0
   description: Public contract for the private clinic management system.
 servers:
   - url: http://localhost:5000
@@ -5247,11 +5247,12 @@ components:
             signature:
               oneOf:
                 - type: object
-                  required: [schemaVersion, sha256, signedAtUtc]
+                  required: [schemaVersion, sha256, signedAtUtc, isVerified]
                   properties:
                     schemaVersion: { type: string }
                     sha256: { type: string, pattern: '^[0-9A-F]{64}$' }
                     signedAtUtc: { type: string, format: date-time }
+                    isVerified: { type: boolean }
                 - type: 'null'
             historyOfPresentIllness: { type: [string, 'null'] }
             physicalExamination: { type: [string, 'null'] }
@@ -5424,11 +5425,12 @@ components:
             signature:
               type: object
               additionalProperties: false
-              required: [schemaVersion, sha256, signedAtUtc]
+              required: [schemaVersion, sha256, signedAtUtc, isVerified]
               properties:
                 schemaVersion: { type: string }
                 sha256: { type: string, pattern: '^[0-9A-F]{64}$' }
                 signedAtUtc: { type: string, format: date-time }
+                isVerified: { type: boolean }
             vitalSigns:
               type: array
               items:

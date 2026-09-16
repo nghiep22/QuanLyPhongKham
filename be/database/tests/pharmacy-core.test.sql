@@ -13,7 +13,7 @@ BEGIN TRY
         (N'sp_start_encounter'),(N'sp_update_encounter_clinical_notes'),(N'sp_add_vital_signs'),
         (N'sp_add_encounter_diagnosis'),(N'sp_order_encounter_service'),(N'sp_finalize_service_result'),
         (N'sp_complete_encounter'),(N'sp_sign_encounter'),(N'sp_add_encounter_amendment'),
-        (N'sp_cancel_encounter')
+        (N'sp_cancel_encounter'),(N'sp_compute_encounter_signature_hash')
     ) forbidden(name) JOIN sys.database_permissions dp ON dp.major_id=OBJECT_ID(N'dbo.'+forbidden.name)
       WHERE dp.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'clinic_api_executor')
         AND dp.permission_name='EXECUTE' AND dp.state IN('G','W'))
@@ -195,6 +195,23 @@ BEGIN TRY
     IF NOT EXISTS (SELECT 1 FROM dbo.prescriptions WHERE public_id=@prescription_public_id AND status='ISSUED')
       THROW 55933,N'Đơn không được phát hành.',1;
 
+    DECLARE @diagnosis_public_id uniqueidentifier,@signature_hash binary(32),@computed_signature_hash binary(32);
+    EXEC dbo.sp_clinic_add_encounter_diagnosis @actor_user_id=@doctor_user_id,
+      @encounter_public_id=@encounter_public_id,@diagnosis_code='Z01',
+      @diagnosis_name=N'Khám và cấp thuốc kiểm thử',@diagnosis_type='FINAL',@is_primary=1,
+      @diagnosis_public_id=@diagnosis_public_id OUTPUT;
+    UPDATE dbo.encounter_services SET status='COMPLETED',performed_by_user_id=@doctor_user_id,
+      performed_at_utc=SYSUTCDATETIME() WHERE encounter_id=@encounter_id AND status='ORDERED';
+    EXEC dbo.sp_clinic_complete_encounter @actor_user_id=@doctor_user_id,@encounter_public_id=@encounter_public_id;
+    EXEC dbo.sp_clinic_sign_encounter @actor_user_id=@doctor_user_id,
+      @encounter_public_id=@encounter_public_id,@payload_sha256=@signature_hash OUTPUT;
+    EXEC dbo.sp_compute_encounter_signature_hash @encounter_id=@encounter_id,
+      @canonical_schema_version='CLINIC_RECORD_V3',@payload_sha256=@computed_signature_hash OUTPUT;
+    IF @signature_hash IS NULL OR @computed_signature_hash<>@signature_hash OR NOT EXISTS (
+      SELECT 1 FROM dbo.encounter_signatures WHERE encounter_id=@encounter_id
+        AND canonical_schema_version='CLINIC_RECORD_V3')
+      THROW 55940,N'Không tạo hoặc xác minh được chữ ký V3 trước khi cấp thuốc.',1;
+
     EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=@admin_id;
     EXEC dbo.sp_clinic_open_dispensation @actor_user_id=@admin_id,
       @prescription_public_id=@prescription_public_id,@location_public_id=@location_public_id,
@@ -217,6 +234,11 @@ BEGIN TRY
       @dispensation_public_id=@dispensation_public_id;
     IF NOT EXISTS (SELECT 1 FROM dbo.prescriptions WHERE public_id=@prescription_public_id AND status='DISPENSED')
       THROW 55934,N'Đơn chưa chuyển DISPENSED.',1;
+    SET @computed_signature_hash=NULL;
+    EXEC dbo.sp_compute_encounter_signature_hash @encounter_id=@encounter_id,
+      @canonical_schema_version='CLINIC_RECORD_V3',@payload_sha256=@computed_signature_hash OUTPUT;
+    IF @computed_signature_hash<>@signature_hash
+      THROW 55941,N'Cấp thuốc làm thay đổi hash hồ sơ đã ký.',1;
     EXEC dbo.sp_clinic_pharmacy_workspace @actor_user_id=@admin_id,@branch_public_id=@branch_public_id;
     EXEC dbo.sp_clinic_get_prescription @actor_user_id=@admin_id,@prescription_public_id=@prescription_public_id;
     EXEC dbo.sp_clinic_reverse_dispensation_item @actor_user_id=@admin_id,
@@ -226,6 +248,11 @@ BEGIN TRY
     IF NOT EXISTS (SELECT 1 FROM dbo.inventory_movements WHERE public_id=@reversal_public_id AND movement_type='REVERSAL')
       OR NOT EXISTS (SELECT 1 FROM dbo.prescriptions WHERE public_id=@prescription_public_id AND status='PARTIALLY_DISPENSED')
       THROW 55935,N'Đảo cấp không cập nhật ledger và đơn.',1;
+    SET @computed_signature_hash=NULL;
+    EXEC dbo.sp_compute_encounter_signature_hash @encounter_id=@encounter_id,
+      @canonical_schema_version='CLINIC_RECORD_V3',@payload_sha256=@computed_signature_hash OUTPUT;
+    IF @computed_signature_hash<>@signature_hash
+      THROW 55942,N'Đảo cấp thuốc làm thay đổi hash hồ sơ đã ký.',1;
     DECLARE @differences TABLE(locationPublicId varchar(36),batchPublicId varchar(36),
       batchNumber nvarchar(80),balanceQuantity varchar(30),ledgerQuantity varchar(30));
     INSERT @differences EXEC dbo.sp_clinic_reconcile_stock @actor_user_id=@admin_id,

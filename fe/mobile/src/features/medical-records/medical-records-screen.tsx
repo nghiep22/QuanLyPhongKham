@@ -163,6 +163,9 @@ function RecordDetail({ record }: { record: PatientClinicalRecord }) {
     </Section>}
     <View style={styles.integrityCard}><Text style={styles.integrityTitle}>Dấu vết toàn vẹn hồ sơ</Text>
       <Text style={styles.integrityBody}>Hồ sơ được khóa lúc {dateTime(record.signature.signedAtUtc)} theo {record.signature.schemaVersion}.</Text>
+      <Text style={record.signature.isVerified ? styles.integrityOk : styles.integrityError}>
+        {record.signature.isVerified ? 'Nội dung hiện tại khớp dấu SHA-256 đã lưu.' : 'Cảnh báo: nội dung hiện tại không khớp dấu đã lưu.'}
+      </Text>
       <Text selectable style={styles.hash}>{record.signature.sha256}</Text></View>
   </View>;
 }
@@ -220,6 +223,8 @@ const styles = StyleSheet.create({
   resultBadge: { alignSelf: 'flex-start', backgroundColor: colors.successSoft, borderRadius: radii.pill, color: colors.success, fontSize: 9, fontWeight: '900', marginTop: 7, paddingHorizontal: 8, paddingVertical: 4 },
   integrityCard: { backgroundColor: colors.accentSoft, borderRadius: radii.medium, padding: 16 },
   integrityTitle: { color: '#80591F', fontSize: 13, fontWeight: '900' }, integrityBody: { color: '#795F38', fontSize: 11, lineHeight: 17, marginTop: 5 },
+  integrityOk: { color: colors.success, fontSize: 11, fontWeight: '900', marginTop: 7 },
+  integrityError: { color: colors.danger, fontSize: 11, fontWeight: '900', marginTop: 7 },
   hash: { color: '#795F38', fontFamily: 'monospace', fontSize: 9, marginTop: 9 }, muted: { color: colors.inkMuted, fontSize: 12, lineHeight: 19 },
   state: { alignItems: 'center', gap: 10, padding: 30 },
   errorCard: { alignItems: 'center', backgroundColor: colors.dangerSoft, borderRadius: radii.medium, gap: 8, marginTop: 18, padding: 17 },

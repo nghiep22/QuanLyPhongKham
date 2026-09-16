@@ -9239,6 +9239,205 @@ BEGIN
 END;
 GO
 
+/*
+  Canonical signature manifests are versioned and computed in one place so the
+  signing and verification paths cannot drift. V2 is retained only to verify
+  records signed by an earlier baseline. V3 deliberately excludes mutable
+  dispensing state (prescription.status and item.dispensed_quantity) while
+  covering the immutable clinical prescription snapshot in full.
+*/
+CREATE OR ALTER PROCEDURE dbo.sp_compute_encounter_signature_hash
+    @encounter_id bigint,
+    @canonical_schema_version varchar(30),
+    @payload_sha256 binary(32) OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF NOT EXISTS (SELECT 1 FROM dbo.encounters WHERE encounter_id=@encounter_id)
+        THROW 53802,N'Lượt khám không tồn tại.',1;
+
+    DECLARE @base_material nvarchar(max),@vital_material nvarchar(max),
+            @diagnosis_material nvarchar(max),@service_material nvarchar(max),
+            @result_material nvarchar(max),@rx_material nvarchar(max),
+            @attachment_material nvarchar(max),@staff_material nvarchar(max),
+            @canonical nvarchar(max);
+
+    IF @canonical_schema_version='CLINIC_RECORD_V2'
+    BEGIN
+        SELECT @base_material=CONCAT(encounter_id,'|',encounter_code,'|',branch_id,'|',patient_id,'|',
+                    attending_doctor_id,'|',CONVERT(varchar(33),arrived_at_utc,126),'|',
+                    CONVERT(varchar(33),started_at_utc,126),'|',CONVERT(varchar(33),completed_at_utc,126),'|',
+                    COALESCE(chief_complaint,N''),'|',COALESCE(history_of_present_illness,N''),'|',
+                    COALESCE(physical_examination,N''),'|',COALESCE(clinical_assessment,N''),'|',
+                    COALESCE(treatment_plan,N''),'|',COALESCE(follow_up_instructions,N''),'|',
+                    COALESCE(CONVERT(char(10),follow_up_date,23),''))
+        FROM dbo.encounters WHERE encounter_id=@encounter_id;
+        SELECT @vital_material=STRING_AGG(CONVERT(nvarchar(max),CONCAT(
+            vital_sign_id,':',CONVERT(varchar(33),measured_at_utc,126),':',
+            COALESCE(CONVERT(varchar(30),temperature_c),''),':',COALESCE(CONVERT(varchar(30),pulse_bpm),''),':',
+            COALESCE(CONVERT(varchar(30),respiratory_rate_bpm),''),':',COALESCE(CONVERT(varchar(30),systolic_bp_mmhg),''),':',
+            COALESCE(CONVERT(varchar(30),diastolic_bp_mmhg),''),':',COALESCE(CONVERT(varchar(30),spo2_percent),''),':',
+            COALESCE(CONVERT(varchar(30),height_cm),''),':',COALESCE(CONVERT(varchar(30),weight_kg),''),':',
+            COALESCE(CONVERT(varchar(30),pain_score),''),':',COALESCE(notes,N''))),N'||')
+            WITHIN GROUP (ORDER BY vital_sign_id)
+        FROM dbo.encounter_vital_signs WHERE encounter_id=@encounter_id;
+        SELECT @diagnosis_material=STRING_AGG(CONVERT(nvarchar(max),CONCAT(
+            encounter_diagnosis_id,':',diagnosis_code_snapshot,':',diagnosis_name_snapshot,':',
+            diagnosis_type,':',is_primary,':',COALESCE(notes,N''))),N'||')
+            WITHIN GROUP (ORDER BY encounter_diagnosis_id)
+        FROM dbo.encounter_diagnoses WHERE encounter_id=@encounter_id;
+        SELECT @service_material=STRING_AGG(CONVERT(nvarchar(max),CONCAT(
+            encounter_service_id,':',service_code_snapshot,':',service_name_snapshot,':',
+            quantity,':',unit_price_snapshot,':',discount_amount,':',status)),N'||')
+            WITHIN GROUP (ORDER BY encounter_service_id)
+        FROM dbo.encounter_services WHERE encounter_id=@encounter_id;
+        SELECT @result_material=STRING_AGG(CONVERT(nvarchar(max),CONCAT(
+            sr.service_result_id,':',sr.encounter_service_id,':',sr.result_version,':',sr.status,':',
+            COALESCE(sr.summary,N''),':',COALESCE(sr.conclusion,N''),':',COALESCE(sr.result_json,N''),':',
+            COALESCE(CONVERT(varchar(30),rv.service_result_value_id),''),':',COALESCE(rv.item_code,''),':',
+            COALESCE(rv.item_name,N''),':',COALESCE(rv.value_text,N''),':',
+            COALESCE(CONVERT(varchar(60),rv.value_numeric),''),':',COALESCE(rv.unit,N''),':',
+            COALESCE(rv.reference_range,N''),':',COALESCE(rv.abnormal_flag,''))),N'||')
+            WITHIN GROUP (ORDER BY sr.service_result_id,rv.service_result_value_id)
+        FROM dbo.service_results sr
+        JOIN dbo.encounter_services es ON es.encounter_service_id=sr.encounter_service_id
+        LEFT JOIN dbo.service_result_values rv ON rv.service_result_id=sr.service_result_id
+        WHERE es.encounter_id=@encounter_id;
+        SELECT @rx_material=STRING_AGG(CONVERT(nvarchar(max),CONCAT(
+            p.prescription_id,':',p.prescription_code,':',p.status,':',pi.prescription_item_id,':',
+            pi.medicine_id,':',pi.prescribed_quantity,':',pi.dose,':',pi.frequency,':',pi.usage_instruction)),N'||')
+            WITHIN GROUP (ORDER BY p.prescription_id,pi.prescription_item_id)
+        FROM dbo.prescriptions p JOIN dbo.prescription_items pi ON pi.prescription_id=p.prescription_id
+        WHERE p.encounter_id=@encounter_id;
+        SELECT @attachment_material=STRING_AGG(CONVERT(nvarchar(max),CONCAT(
+            medical_attachment_id,':',storage_key,':',CONVERT(varchar(64),sha256_hash,2))),N'||')
+            WITHIN GROUP (ORDER BY medical_attachment_id)
+        FROM dbo.medical_attachments WHERE encounter_id=@encounter_id;
+        SELECT @staff_material=STRING_AGG(CONVERT(nvarchar(max),CONCAT(
+            encounter_staff_assignment_id,':',employee_id,':',assignment_role,':',
+            CONVERT(varchar(33),assigned_at_utc,126),':',COALESCE(CONVERT(varchar(33),ended_at_utc,126),''))),N'||')
+            WITHIN GROUP (ORDER BY encounter_staff_assignment_id)
+        FROM dbo.encounter_staff_assignments WHERE encounter_id=@encounter_id;
+        SET @canonical=CONCAT(N'CLINIC_RECORD_V2|',@base_material,
+            N'|VT|',COALESCE(@vital_material,N''),N'|DX|',COALESCE(@diagnosis_material,N''),
+            N'|SV|',COALESCE(@service_material,N''),N'|RS|',COALESCE(@result_material,N''),
+            N'|RX|',COALESCE(@rx_material,N''),N'|AT|',COALESCE(@attachment_material,N''),
+            N'|ST|',COALESCE(@staff_material,N''));
+    END
+    ELSE IF @canonical_schema_version='CLINIC_RECORD_V3'
+    BEGIN
+        SELECT @base_material=(SELECT
+            CONVERT(varchar(36),e.public_id) AS encounterPublicId,e.encounter_code AS encounterCode,
+            CONVERT(varchar(36),b.public_id) AS branchPublicId,
+            CONVERT(varchar(36),p.public_id) AS patientPublicId,
+            CONVERT(varchar(36),d.public_id) AS doctorPublicId,
+            CONVERT(varchar(36),r.public_id) AS roomPublicId,e.encounter_source AS encounterSource,
+            CONVERT(varchar(33),e.arrived_at_utc,126) AS arrivedAtUtc,
+            CONVERT(varchar(33),e.started_at_utc,126) AS startedAtUtc,
+            CONVERT(varchar(33),e.completed_at_utc,126) AS completedAtUtc,
+            e.chief_complaint AS chiefComplaint,e.history_of_present_illness AS historyOfPresentIllness,
+            e.physical_examination AS physicalExamination,e.clinical_assessment AS clinicalAssessment,
+            e.treatment_plan AS treatmentPlan,e.follow_up_instructions AS followUpInstructions,
+            CONVERT(char(10),e.follow_up_date,23) AS followUpDate
+        FROM dbo.encounters e JOIN dbo.branches b ON b.branch_id=e.branch_id
+        JOIN dbo.patients p ON p.patient_id=e.patient_id JOIN dbo.doctors d ON d.doctor_id=e.attending_doctor_id
+        LEFT JOIN dbo.rooms r ON r.room_id=e.room_id WHERE e.encounter_id=@encounter_id
+        FOR JSON PATH,INCLUDE_NULL_VALUES,WITHOUT_ARRAY_WRAPPER);
+        SELECT @vital_material=(SELECT CONVERT(varchar(36),v.public_id) AS publicId,
+            CONVERT(varchar(33),v.measured_at_utc,126) AS measuredAtUtc,
+            CONVERT(varchar(30),v.temperature_c) AS temperatureC,CONVERT(varchar(30),v.pulse_bpm) AS pulseBpm,
+            CONVERT(varchar(30),v.respiratory_rate_bpm) AS respiratoryRateBpm,
+            CONVERT(varchar(30),v.systolic_bp_mmhg) AS systolicBpMmhg,
+            CONVERT(varchar(30),v.diastolic_bp_mmhg) AS diastolicBpMmhg,
+            CONVERT(varchar(30),v.spo2_percent) AS spo2Percent,CONVERT(varchar(30),v.height_cm) AS heightCm,
+            CONVERT(varchar(30),v.weight_kg) AS weightKg,CONVERT(varchar(30),v.pain_score) AS painScore,
+            v.notes,CONVERT(varchar(36),u.public_id) AS measuredByUserPublicId
+        FROM dbo.encounter_vital_signs v JOIN dbo.users u ON u.user_id=v.measured_by_user_id
+        WHERE v.encounter_id=@encounter_id ORDER BY v.vital_sign_id
+        FOR JSON PATH,INCLUDE_NULL_VALUES);
+        SELECT @diagnosis_material=(SELECT CONVERT(varchar(36),dx.public_id) AS publicId,
+            dx.diagnosis_code_snapshot AS code,dx.diagnosis_name_snapshot AS name,
+            dx.diagnosis_type AS type,dx.is_primary AS isPrimary,dx.notes,
+            CONVERT(varchar(33),dx.created_at_utc,126) AS createdAtUtc,
+            CONVERT(varchar(36),u.public_id) AS recordedByUserPublicId
+        FROM dbo.encounter_diagnoses dx JOIN dbo.users u ON u.user_id=dx.recorded_by_user_id
+        WHERE dx.encounter_id=@encounter_id ORDER BY dx.encounter_diagnosis_id
+        FOR JSON PATH,INCLUDE_NULL_VALUES);
+        SELECT @service_material=(SELECT CONVERT(varchar(36),es.public_id) AS publicId,
+            CONVERT(varchar(36),svc.public_id) AS servicePublicId,es.service_code_snapshot AS code,
+            es.service_name_snapshot AS name,es.service_type_snapshot AS type,
+            CONVERT(varchar(40),es.quantity) AS quantity,CONVERT(varchar(40),es.unit_price_snapshot) AS unitPrice,
+            CONVERT(varchar(40),es.discount_amount) AS discountAmount,es.status,es.notes,
+            CONVERT(varchar(33),es.ordered_at_utc,126) AS orderedAtUtc,
+            CONVERT(varchar(33),es.performed_at_utc,126) AS performedAtUtc,
+            CONVERT(varchar(33),es.cancelled_at_utc,126) AS cancelledAtUtc,es.cancellation_reason AS cancellationReason,
+            CONVERT(varchar(36),ordered_user.public_id) AS orderedByUserPublicId,
+            CONVERT(varchar(36),performed_user.public_id) AS performedByUserPublicId,
+            CONVERT(varchar(36),cancelled_user.public_id) AS cancelledByUserPublicId
+        FROM dbo.encounter_services es JOIN dbo.services svc ON svc.service_id=es.service_id
+        JOIN dbo.users ordered_user ON ordered_user.user_id=es.ordered_by_user_id
+        LEFT JOIN dbo.users performed_user ON performed_user.user_id=es.performed_by_user_id
+        LEFT JOIN dbo.users cancelled_user ON cancelled_user.user_id=es.cancelled_by_user_id
+        WHERE es.encounter_id=@encounter_id ORDER BY es.encounter_service_id
+        FOR JSON PATH,INCLUDE_NULL_VALUES);
+        SELECT @result_material=(SELECT CONVERT(varchar(36),sr.public_id) AS publicId,
+            CONVERT(varchar(36),es.public_id) AS encounterServicePublicId,sr.result_version AS resultVersion,
+            sr.status,sr.summary,sr.conclusion,sr.result_json AS resultJson,
+            CONVERT(varchar(33),sr.entered_at_utc,126) AS enteredAtUtc,
+            CONVERT(varchar(33),sr.verified_at_utc,126) AS verifiedAtUtc,
+            CONVERT(varchar(36),entered_user.public_id) AS enteredByUserPublicId,
+            CONVERT(varchar(36),verified_user.public_id) AS verifiedByUserPublicId,
+            rv.item_code AS valueCode,rv.item_name AS valueName,rv.value_text AS valueText,
+            CONVERT(varchar(80),rv.value_numeric) AS valueNumeric,rv.unit,rv.reference_range AS referenceRange,
+            rv.abnormal_flag AS abnormalFlag,rv.display_order AS displayOrder
+        FROM dbo.service_results sr JOIN dbo.encounter_services es ON es.encounter_service_id=sr.encounter_service_id
+        JOIN dbo.users entered_user ON entered_user.user_id=sr.entered_by_user_id
+        LEFT JOIN dbo.users verified_user ON verified_user.user_id=sr.verified_by_user_id
+        LEFT JOIN dbo.service_result_values rv ON rv.service_result_id=sr.service_result_id
+        WHERE es.encounter_id=@encounter_id ORDER BY sr.service_result_id,rv.service_result_value_id
+        FOR JSON PATH,INCLUDE_NULL_VALUES);
+        SELECT @rx_material=(SELECT CONVERT(varchar(36),p.public_id) AS prescriptionPublicId,
+            p.prescription_code AS prescriptionCode,CONVERT(varchar(33),p.issued_at_utc,126) AS issuedAtUtc,
+            CONVERT(char(10),p.valid_until,23) AS validUntil,p.clinical_notes AS clinicalNotes,
+            p.general_instructions AS generalInstructions,CONVERT(varchar(36),pi.public_id) AS itemPublicId,
+            CONVERT(varchar(36),m.public_id) AS medicinePublicId,pi.medicine_name_snapshot AS medicineName,
+            pi.strength_snapshot AS strength,pi.dosage_form_snapshot AS dosageForm,pi.route_snapshot AS route,
+            CONVERT(varchar(40),pi.prescribed_quantity) AS prescribedQuantity,pi.dose,pi.frequency,
+            pi.duration_days AS durationDays,pi.timing_instruction AS timingInstruction,
+            pi.usage_instruction AS usageInstruction,pi.sort_order AS sortOrder
+        FROM dbo.prescriptions p LEFT JOIN dbo.prescription_items pi ON pi.prescription_id=p.prescription_id
+        LEFT JOIN dbo.medicines m ON m.medicine_id=pi.medicine_id
+        WHERE p.encounter_id=@encounter_id ORDER BY p.prescription_id,pi.prescription_item_id
+        FOR JSON PATH,INCLUDE_NULL_VALUES);
+        SELECT @attachment_material=(SELECT a.storage_key AS storageKey,a.file_name AS fileName,a.mime_type AS mimeType,
+            a.byte_size AS byteSize,CONVERT(varchar(64),a.sha256_hash,2) AS sha256,a.category,a.description,
+            CONVERT(varchar(36),es.public_id) AS encounterServicePublicId,
+            CONVERT(varchar(36),u.public_id) AS uploadedByUserPublicId,
+            CONVERT(varchar(33),a.uploaded_at_utc,126) AS uploadedAtUtc
+        FROM dbo.medical_attachments a LEFT JOIN dbo.encounter_services es ON es.encounter_service_id=a.encounter_service_id
+        JOIN dbo.users u ON u.user_id=a.uploaded_by_user_id
+        WHERE a.encounter_id=@encounter_id ORDER BY a.medical_attachment_id
+        FOR JSON PATH,INCLUDE_NULL_VALUES);
+        SELECT @staff_material=(SELECT CONVERT(varchar(36),emp.public_id) AS employeePublicId,
+            assignment.assignment_role AS assignmentRole,
+            CONVERT(varchar(33),assignment.assigned_at_utc,126) AS assignedAtUtc,
+            CONVERT(varchar(33),assignment.ended_at_utc,126) AS endedAtUtc
+        FROM dbo.encounter_staff_assignments assignment
+        JOIN dbo.employees emp ON emp.employee_id=assignment.employee_id
+        WHERE assignment.encounter_id=@encounter_id ORDER BY assignment.encounter_staff_assignment_id
+        FOR JSON PATH,INCLUDE_NULL_VALUES);
+        SET @canonical=CONCAT(N'CLINIC_RECORD_V3|BASE|',COALESCE(@base_material,N'{}'),
+            N'|VITALS|',COALESCE(@vital_material,N'[]'),N'|DIAGNOSES|',COALESCE(@diagnosis_material,N'[]'),
+            N'|SERVICES|',COALESCE(@service_material,N'[]'),N'|RESULTS|',COALESCE(@result_material,N'[]'),
+            N'|PRESCRIPTIONS|',COALESCE(@rx_material,N'[]'),N'|ATTACHMENTS|',COALESCE(@attachment_material,N'[]'),
+            N'|STAFF|',COALESCE(@staff_material,N'[]'));
+    END
+    ELSE THROW 53265,N'Phiên bản canonical manifest không được hỗ trợ.',1;
+
+    SET @payload_sha256=HASHBYTES('SHA2_256',@canonical);
+END;
+GO
+
 CREATE OR ALTER PROCEDURE dbo.sp_sign_encounter
     @actor_user_id bigint,
     @encounter_id bigint,
@@ -9266,15 +9465,8 @@ BEGIN
 
     BEGIN TRY
         BEGIN TRANSACTION;
-        DECLARE @status varchar(20),@base_material nvarchar(max);
-        SELECT @status=status,
-               @base_material=CONCAT(encounter_id,'|',encounter_code,'|',branch_id,'|',patient_id,'|',
-                    attending_doctor_id,'|',CONVERT(varchar(33),arrived_at_utc,126),'|',
-                    CONVERT(varchar(33),started_at_utc,126),'|',CONVERT(varchar(33),completed_at_utc,126),'|',
-                    COALESCE(chief_complaint,N''),'|',COALESCE(history_of_present_illness,N''),'|',
-                    COALESCE(physical_examination,N''),'|',COALESCE(clinical_assessment,N''),'|',
-                    COALESCE(treatment_plan,N''),'|',COALESCE(follow_up_instructions,N''),'|',
-                    COALESCE(CONVERT(char(10),follow_up_date,23),''))
+        DECLARE @status varchar(20);
+        SELECT @status=status
         FROM dbo.encounters WITH (UPDLOCK,HOLDLOCK) WHERE encounter_id=@encounter_id;
         IF @status='SIGNED'
         BEGIN
@@ -9294,69 +9486,8 @@ BEGIN
         IF EXISTS (SELECT 1 FROM dbo.prescriptions WHERE encounter_id=@encounter_id AND status='DRAFT')
             THROW 53247,N'Còn đơn thuốc DRAFT.',1;
 
-        DECLARE @vital_material nvarchar(max),@diagnosis_material nvarchar(max),
-                @service_material nvarchar(max),@result_material nvarchar(max),
-                @rx_material nvarchar(max),@attachment_material nvarchar(max),
-                @staff_material nvarchar(max);
-
-        SELECT @vital_material=STRING_AGG(CONVERT(nvarchar(max),CONCAT(
-            vital_sign_id,':',CONVERT(varchar(33),measured_at_utc,126),':',
-            COALESCE(CONVERT(varchar(30),temperature_c),''),':',COALESCE(CONVERT(varchar(30),pulse_bpm),''),':',
-            COALESCE(CONVERT(varchar(30),respiratory_rate_bpm),''),':',COALESCE(CONVERT(varchar(30),systolic_bp_mmhg),''),':',
-            COALESCE(CONVERT(varchar(30),diastolic_bp_mmhg),''),':',COALESCE(CONVERT(varchar(30),spo2_percent),''),':',
-            COALESCE(CONVERT(varchar(30),height_cm),''),':',COALESCE(CONVERT(varchar(30),weight_kg),''),':',
-            COALESCE(CONVERT(varchar(30),pain_score),''),':',COALESCE(notes,N''))),N'||')
-            WITHIN GROUP (ORDER BY vital_sign_id)
-        FROM dbo.encounter_vital_signs WHERE encounter_id=@encounter_id;
-        SELECT @diagnosis_material=STRING_AGG(CONVERT(nvarchar(max),CONCAT(
-            encounter_diagnosis_id,':',diagnosis_code_snapshot,':',diagnosis_name_snapshot,':',
-            diagnosis_type,':',is_primary,':',COALESCE(notes,N''))),N'||')
-            WITHIN GROUP (ORDER BY encounter_diagnosis_id)
-        FROM dbo.encounter_diagnoses WHERE encounter_id=@encounter_id;
-
-        SELECT @service_material=STRING_AGG(CONVERT(nvarchar(max),CONCAT(
-            encounter_service_id,':',service_code_snapshot,':',service_name_snapshot,':',
-            quantity,':',unit_price_snapshot,':',discount_amount,':',status)),N'||')
-            WITHIN GROUP (ORDER BY encounter_service_id)
-        FROM dbo.encounter_services WHERE encounter_id=@encounter_id;
-
-        SELECT @result_material=STRING_AGG(CONVERT(nvarchar(max),CONCAT(
-            sr.service_result_id,':',sr.encounter_service_id,':',sr.result_version,':',sr.status,':',
-            COALESCE(sr.summary,N''),':',COALESCE(sr.conclusion,N''),':',COALESCE(sr.result_json,N''),':',
-            COALESCE(CONVERT(varchar(30),rv.service_result_value_id),''),':',COALESCE(rv.item_code,''),':',
-            COALESCE(rv.item_name,N''),':',COALESCE(rv.value_text,N''),':',
-            COALESCE(CONVERT(varchar(60),rv.value_numeric),''),':',COALESCE(rv.unit,N''),':',
-            COALESCE(rv.reference_range,N''),':',COALESCE(rv.abnormal_flag,''))),N'||')
-            WITHIN GROUP (ORDER BY sr.service_result_id,rv.service_result_value_id)
-        FROM dbo.service_results sr
-        JOIN dbo.encounter_services es ON es.encounter_service_id=sr.encounter_service_id
-        LEFT JOIN dbo.service_result_values rv ON rv.service_result_id=sr.service_result_id
-        WHERE es.encounter_id=@encounter_id;
-
-        SELECT @rx_material=STRING_AGG(CONVERT(nvarchar(max),CONCAT(
-            p.prescription_id,':',p.prescription_code,':',p.status,':',pi.prescription_item_id,':',
-            pi.medicine_id,':',pi.prescribed_quantity,':',pi.dose,':',pi.frequency,':',pi.usage_instruction)),N'||')
-            WITHIN GROUP (ORDER BY p.prescription_id,pi.prescription_item_id)
-        FROM dbo.prescriptions p JOIN dbo.prescription_items pi ON pi.prescription_id=p.prescription_id
-        WHERE p.encounter_id=@encounter_id;
-
-        SELECT @attachment_material=STRING_AGG(CONVERT(nvarchar(max),CONCAT(
-            medical_attachment_id,':',storage_key,':',CONVERT(varchar(64),sha256_hash,2))),N'||')
-            WITHIN GROUP (ORDER BY medical_attachment_id)
-        FROM dbo.medical_attachments WHERE encounter_id=@encounter_id;
-
-        SELECT @staff_material=STRING_AGG(CONVERT(nvarchar(max),CONCAT(
-            encounter_staff_assignment_id,':',employee_id,':',assignment_role,':',
-            CONVERT(varchar(33),assigned_at_utc,126),':',COALESCE(CONVERT(varchar(33),ended_at_utc,126),''))),N'||')
-            WITHIN GROUP (ORDER BY encounter_staff_assignment_id)
-        FROM dbo.encounter_staff_assignments WHERE encounter_id=@encounter_id;
-
-        DECLARE @canonical nvarchar(max)=CONCAT(N'CLINIC_RECORD_V2|',@base_material,
-            N'|VT|',COALESCE(@vital_material,N''),N'|DX|',COALESCE(@diagnosis_material,N''),
-            N'|SV|',COALESCE(@service_material,N''),N'|RS|',COALESCE(@result_material,N''),
-            N'|RX|',COALESCE(@rx_material,N''),N'|AT|',COALESCE(@attachment_material,N''),
-            N'|ST|',COALESCE(@staff_material,N''));
-        SET @payload_sha256=HASHBYTES('SHA2_256',@canonical);
+        EXEC dbo.sp_compute_encounter_signature_hash @encounter_id=@encounter_id,
+            @canonical_schema_version='CLINIC_RECORD_V3',@payload_sha256=@payload_sha256 OUTPUT;
 
         UPDATE dbo.encounters
            SET status='SIGNED',signed_at_utc=SYSUTCDATETIME(),signed_by_user_id=@actor_user_id,
@@ -9366,7 +9497,7 @@ BEGIN
             (encounter_id,canonical_schema_version,payload_sha256,signature_type,
              signature_algorithm,signature_value,certificate_thumbprint,signed_by_user_id)
         VALUES
-            (@encounter_id,'CLINIC_RECORD_V2',@payload_sha256,@signature_type,
+            (@encounter_id,'CLINIC_RECORD_V3',@payload_sha256,@signature_type,
              @signature_algorithm,@signature_value,@certificate_thumbprint,@actor_user_id);
 
         DECLARE @entity_id varchar(100);
@@ -9525,6 +9656,17 @@ BEGIN
     IF @doctor_user_id IS NULL OR @doctor_user_id<>@actor_user_id
         THROW 53261,N'Chỉ bác sĩ phụ trách được đọc hồ sơ khám.',1;
 
+    DECLARE @signature_schema varchar(30),@stored_signature_hash binary(32),
+            @computed_signature_hash binary(32),@signature_is_verified bit=NULL;
+    SELECT @signature_schema=canonical_schema_version,@stored_signature_hash=payload_sha256
+    FROM dbo.encounter_signatures WHERE encounter_id=@encounter_id;
+    IF @signature_schema IS NOT NULL
+    BEGIN
+        EXEC dbo.sp_compute_encounter_signature_hash @encounter_id=@encounter_id,
+            @canonical_schema_version=@signature_schema,@payload_sha256=@computed_signature_hash OUTPUT;
+        SET @signature_is_verified=IIF(@computed_signature_hash=@stored_signature_hash,1,0);
+    END;
+
     SELECT CONVERT(varchar(36),e.public_id) AS publicId,e.encounter_code AS code,
            e.encounter_source AS source,e.status,e.arrived_at_utc AS arrivedAtUtc,
            e.started_at_utc AS startedAtUtc,e.completed_at_utc AS completedAtUtc,e.signed_at_utc AS signedAtUtc,
@@ -9539,7 +9681,7 @@ BEGIN
            CONVERT(varchar(36),r.public_id) AS roomPublicId,r.room_name AS roomName,
            qt.display_number AS queueDisplayNumber,qt.status AS queueStatus,
            sig.canonical_schema_version AS signatureSchemaVersion,sig.payload_sha256 AS signatureSha256,
-           sig.signed_at_utc AS signatureSignedAtUtc
+           sig.signed_at_utc AS signatureSignedAtUtc,@signature_is_verified AS signatureIsVerified
     FROM dbo.encounters e JOIN dbo.patients p ON p.patient_id=e.patient_id
     JOIN dbo.doctors d ON d.doctor_id=e.attending_doctor_id
     JOIN dbo.employees emp ON emp.employee_id=d.employee_id
@@ -9969,8 +10111,16 @@ BEGIN
         WHERE ur.user_id=@actor_user_id AND ur.is_active=1 AND r.is_active=1 AND r.role_code='PATIENT'
           AND ur.valid_from_utc<=SYSUTCDATETIME()
           AND (ur.valid_to_utc IS NULL OR ur.valid_to_utc>SYSUTCDATETIME())
-      );
+    );
     IF @encounter_id IS NULL THROW 53806,N'Không tìm thấy hồ sơ lâm sàng đã công bố.',1;
+
+    DECLARE @signature_schema varchar(30),@stored_signature_hash binary(32),
+            @computed_signature_hash binary(32),@signature_is_verified bit;
+    SELECT @signature_schema=canonical_schema_version,@stored_signature_hash=payload_sha256
+    FROM dbo.encounter_signatures WHERE encounter_id=@encounter_id;
+    EXEC dbo.sp_compute_encounter_signature_hash @encounter_id=@encounter_id,
+        @canonical_schema_version=@signature_schema,@payload_sha256=@computed_signature_hash OUTPUT;
+    SET @signature_is_verified=IIF(@computed_signature_hash=@stored_signature_hash,1,0);
 
     SELECT CONVERT(varchar(36),e.public_id) AS publicId,e.encounter_code AS code,
            e.arrived_at_utc AS arrivedAtUtc,e.completed_at_utc AS completedAtUtc,
@@ -9985,6 +10135,7 @@ BEGIN
            b.timezone_name AS timezoneName,CONVERT(varchar(36),d.public_id) AS doctorPublicId,
            emp.full_name AS doctorName,sig.canonical_schema_version AS signatureSchemaVersion,
            sig.payload_sha256 AS signatureSha256,sig.signed_at_utc AS signatureSignedAtUtc,
+           @signature_is_verified AS signatureIsVerified,
            primary_dx.diagnosis_code_snapshot AS primaryDiagnosisCode,
            primary_dx.diagnosis_name_snapshot AS primaryDiagnosisName
     FROM dbo.encounters e
@@ -12610,6 +12761,7 @@ REVOKE EXECUTE ON OBJECT::dbo.sp_order_encounter_service FROM clinic_api_executo
 REVOKE EXECUTE ON OBJECT::dbo.sp_finalize_service_result FROM clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_complete_encounter FROM clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_sign_encounter FROM clinic_api_executor;
+REVOKE EXECUTE ON OBJECT::dbo.sp_compute_encounter_signature_hash FROM clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_add_encounter_amendment FROM clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_clinic_clinical_branches TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_clinic_list_encounters TO clinic_api_executor;

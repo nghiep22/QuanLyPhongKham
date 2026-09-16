@@ -71,7 +71,7 @@ export type AmendmentInput = { reason: string; content: string };
 export type ClinicalEncounterDetail = ClinicalEncounterSummary & ClinicalNotesInput & {
   signedAtUtc: string | null;
   patientRelease: { releasedAtUtc: string; releasedBy: string } | null;
-  signature: { schemaVersion: string; sha256: string; signedAtUtc: string } | null;
+  signature: { schemaVersion: string; sha256: string; signedAtUtc: string; isVerified: boolean } | null;
   vitalSigns: Array<VitalSignsInput & { publicId: string; measuredAtUtc: string; bmi: number | null; measuredBy: string }>;
   diagnoses: Array<DiagnosisInput & { publicId: string; createdAtUtc: string; recordedBy: string }>;
   services: Array<{
@@ -108,7 +108,7 @@ export type PatientClinicalRecordSummary = {
 
 export type PatientClinicalRecord = PatientClinicalRecordSummary & ClinicalNotesInput & {
   patient: PatientClinicalRecordSummary['patient'] & { dateOfBirth: string; gender: string };
-  signature: { schemaVersion: string; sha256: string; signedAtUtc: string };
+  signature: { schemaVersion: string; sha256: string; signedAtUtc: string; isVerified: boolean };
   vitalSigns: Array<VitalSignsInput & { publicId: string; measuredAtUtc: string; bmi: number | null }>;
   diagnoses: Array<DiagnosisInput & { publicId: string; createdAtUtc: string }>;
   services: Array<{

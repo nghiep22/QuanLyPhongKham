@@ -220,6 +220,7 @@ header { display: flex; align-items: center; justify-content: space-between; gap
 .clinical-service p { margin-bottom: 0; }
 .clinical-signature { display: grid; gap: 6px; margin-top: 16px; padding: 12px; border-radius: 10px; background: #eef8f5; }
 .clinical-signature code { overflow-wrap: anywhere; font-size: 12px; }
+.clinical-signature-failed { background: #fff0ef; color: #9b2c2c; }
 .status-in_progress { background: #fff6df; color: #805910; }
 .status-completed { background: #e5efff; color: #3657a5; }
 .status-signed { background: #dff3ec; color: #17614f; }

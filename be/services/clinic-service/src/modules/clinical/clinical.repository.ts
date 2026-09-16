@@ -32,7 +32,8 @@ function detail(result: Awaited<ReturnType<typeof executeCommand<Row>>>): Clinic
   if (!base) throw Object.assign(new Error('Encounter not found.'), { number: 53802 });
   let signature: ClinicalEncounterDetail['signature'] = null;
   if (base.signatureSha256 != null) signature = { schemaVersion: String(base.signatureSchemaVersion),
-    sha256: hex(base.signatureSha256), signedAtUtc: utc(base.signatureSignedAtUtc) };
+    sha256: hex(base.signatureSha256), signedAtUtc: utc(base.signatureSignedAtUtc),
+    isVerified: Boolean(base.signatureIsVerified) };
   return {
     ...summary(base), signedAtUtc: nullableUtc(base.signedAtUtc), signature,
     patientRelease: base.patientReleasedAtUtc == null ? null : {
@@ -91,7 +92,7 @@ function patientRecord(result: Awaited<ReturnType<typeof executeCommand<Row>>>):
     followUpInstructions: nullable(base.followUpInstructions),
     followUpDate: base.followUpDate == null ? null : dateOnly(base.followUpDate),
     signature: { schemaVersion: String(base.signatureSchemaVersion), sha256: hex(base.signatureSha256),
-      signedAtUtc: utc(base.signatureSignedAtUtc) },
+      signedAtUtc: utc(base.signatureSignedAtUtc), isVerified: Boolean(base.signatureIsVerified) },
     vitalSigns: (sets[1] ?? []).map((row) => ({ publicId: String(row.publicId), measuredAtUtc: utc(row.measuredAtUtc),
       temperatureC: numberOrNull(row.temperatureC), pulseBpm: numberOrNull(row.pulseBpm),
       respiratoryRateBpm: numberOrNull(row.respiratoryRateBpm), systolicBpMmhg: numberOrNull(row.systolicBpMmhg),

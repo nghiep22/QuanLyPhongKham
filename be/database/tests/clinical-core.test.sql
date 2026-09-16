@@ -13,7 +13,7 @@ BEGIN TRY
         (N'sp_start_encounter'),(N'sp_update_encounter_clinical_notes'),(N'sp_add_vital_signs'),
         (N'sp_add_encounter_diagnosis'),(N'sp_order_encounter_service'),(N'sp_finalize_service_result'),
         (N'sp_complete_encounter'),(N'sp_sign_encounter'),(N'sp_add_encounter_amendment'),
-        (N'sp_cancel_encounter')
+        (N'sp_cancel_encounter'),(N'sp_compute_encounter_signature_hash')
     ) forbidden(name) JOIN sys.database_permissions dp ON dp.major_id=OBJECT_ID(N'dbo.'+forbidden.name)
       WHERE dp.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'clinic_api_executor')
         AND dp.permission_name='EXECUTE' AND dp.state IN('G','W'))
@@ -171,8 +171,14 @@ BEGIN TRY
     EXEC dbo.sp_clinic_sign_encounter @actor_user_id=@doctor_user_id,
       @encounter_public_id=@encounter_public_id,@payload_sha256=@retry_hash OUTPUT;
     IF @signature_hash IS NULL OR @retry_hash<>@signature_hash OR NOT EXISTS (
-      SELECT 1 FROM dbo.encounter_signatures WHERE encounter_id=@encounter_id AND payload_sha256=@signature_hash)
+      SELECT 1 FROM dbo.encounter_signatures WHERE encounter_id=@encounter_id
+        AND canonical_schema_version='CLINIC_RECORD_V3' AND payload_sha256=@signature_hash)
       THROW 55907,N'Chữ ký hash không ổn định hoặc không lưu.',1;
+    DECLARE @computed_signature_hash binary(32);
+    EXEC dbo.sp_compute_encounter_signature_hash @encounter_id=@encounter_id,
+      @canonical_schema_version='CLINIC_RECORD_V3',@payload_sha256=@computed_signature_hash OUTPUT;
+    IF @computed_signature_hash<>@signature_hash
+      THROW 55915,N'Manifest V3 không xác minh lại được ngay sau khi ký.',1;
     DECLARE @history TABLE
     (
       publicId varchar(36),code varchar(40),arrivedAtUtc datetime2(3),completedAtUtc datetime2(3),

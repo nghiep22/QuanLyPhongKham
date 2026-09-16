@@ -158,7 +158,9 @@ function EncounterEditor({ item, busy, run }: { item: ClinicalEncounterDetail; b
         <span><b>Bác sĩ:</b> {item.doctor.fullName}</span><span><b>Phòng:</b> {item.room?.name ?? 'Chưa xếp'}</span>
         <span><b>Đến lúc:</b> {utc(item.arrivedAtUtc)}</span><span><b>Lý do:</b> {item.chiefComplaint ?? 'Chưa ghi'}</span></div>
       {item.status === 'WAITING' && item.queue?.status !== 'CALLED' && <p className="appointment-warning">Quầy cần gọi số trước khi bác sĩ bắt đầu khám.</p>}
-      {item.signature && <div className="clinical-signature"><strong>Hồ sơ đã khóa · {utc(item.signature.signedAtUtc)}</strong>
+      {item.signature && <div className={`clinical-signature ${item.signature.isVerified ? '' : 'clinical-signature-failed'}`}>
+        <strong>{item.signature.isVerified ? 'Toàn vẹn đã xác minh' : 'Cảnh báo: hồ sơ không khớp dấu đã ký'} · {utc(item.signature.signedAtUtc)}</strong>
+        <span>{item.signature.schemaVersion}</span>
         <code>{item.signature.sha256}</code></div>}
       {item.patientRelease && <p className="form-success">Đã công bố cho bệnh nhân lúc {utc(item.patientRelease.releasedAtUtc)}
         {' '}bởi {item.patientRelease.releasedBy}.</p>}

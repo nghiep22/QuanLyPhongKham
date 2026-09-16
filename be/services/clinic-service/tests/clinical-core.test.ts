@@ -80,8 +80,8 @@ class MemoryClinical implements ClinicalRepository {
   }
   sign() {
     if (this.item.status !== 'COMPLETED') return Promise.reject({ number: 53244 });
-    this.item.status = 'SIGNED'; this.item.signature = { schemaVersion: 'CLINIC_RECORD_V2',
-      sha256: 'A'.repeat(64), signedAtUtc: '2026-09-13T03:00:00.000Z' };
+    this.item.status = 'SIGNED'; this.item.signature = { schemaVersion: 'CLINIC_RECORD_V3',
+      sha256: 'A'.repeat(64), signedAtUtc: '2026-09-13T03:00:00.000Z', isVerified: true };
     return Promise.resolve({ publicId: encounterId, sha256: 'A'.repeat(64) });
   }
   releaseToPatient() {
@@ -196,8 +196,8 @@ describe('clinical core API', () => {
   it('keeps signed records private until the attending doctor releases them', async () => {
     const server = app(repository); repository.item.status = 'SIGNED';
     repository.item.completedAtUtc = '2026-09-13T02:50:00.000Z';
-    repository.item.signature = { schemaVersion: 'CLINIC_RECORD_V2', sha256: 'A'.repeat(64),
-      signedAtUtc: '2026-09-13T03:00:00.000Z' };
+    repository.item.signature = { schemaVersion: 'CLINIC_RECORD_V3', sha256: 'A'.repeat(64),
+      signedAtUtc: '2026-09-13T03:00:00.000Z', isVerified: true };
     const before = await request(server).get('/api/v1/patient/clinical-records').set({ authorization: 'Bearer patient' })
       .query({ patientPublicId: repository.item.patient.publicId });
     const released = await request(server).post(`/api/v1/encounters/${encounterId}/release-to-patient`).set(auth);
@@ -206,8 +206,10 @@ describe('clinical core API', () => {
     const detail = await request(server).get(`/api/v1/patient/clinical-records/${encounterId}`)
       .set({ authorization: 'Bearer patient' }).query({ patientPublicId: repository.item.patient.publicId });
     expect(before.body.data).toEqual([]); expect(released.body.data.patientRelease.releasedBy).toBe('Bác sĩ Bình');
+    expect(released.body.data.signature.isVerified).toBe(true);
     expect(after.body.data[0].publicId).toBe(encounterId);
     expect(detail.body.data.signature.sha256).toBe('A'.repeat(64));
+    expect(detail.body.data.signature.isVerified).toBe(true);
   });
 
   it('denies history after the patient link is revoked', async () => {

@@ -25,7 +25,7 @@ Tài liệu này không thay thế đặc tả chi tiết của từng màn hìn
 |---|---|
 | Thư mục `fe/` và `be/` | Đã tạo |
 | SQL Server `quan_ly_phong_kham.sql` | Baseline candidate: đã có luồng lõi, còn gap/defect P0 tại mục 8.12 |
-| Database objects | 71 bảng, 23 view, 162 stored procedure, 31 trigger |
+| Database objects | 71 bảng, 23 view, 163 stored procedure, 31 trigger |
 | Kiểm thử database | Baseline idempotent; 17 regression suite đến reports/outbox-notification đều đạt, cùng harness đồng thời queue và payment; chưa coi production-ready trước khi hoàn tất mọi ca P0 |
 | Gateway | Đã scaffold; live/ready, request ID và route Auth/Clinic hoạt động |
 | Auth Service | Slice 06 hoàn tất: auth/session, workforce/RBAC, OTP và yêu cầu/duyệt/thu hồi patient portal link |
@@ -678,7 +678,7 @@ Trong bảng này, **P0** nghĩa là phải chốt thiết kế trước và ho�
 | P0 | System procedure sinh slot dành cho Worker | Khung | Worker được cấp đúng `EXECUTE`, không cần actor Admin/`SCHEDULES_MANAGE` và vẫn có audit |
 | P0 | Outbox event coverage và envelope version | Khung | Không chỉ `APPOINTMENT_CREATED`; event ghi cùng transaction và handler idempotent theo `eventId` |
 | P0 | Audit search/enrichment/verify | Khung | `AUDIT_VIEW`, branch scope, pagination; IP/user-agent/request context được ghi và chain verification đạt |
-| P0 | Canonical payload dùng khi ký hồ sơ | Có defect | Bỏ trạng thái cấp phát có thể đổi khỏi payload hoặc lưu snapshot bất biến; bump schema version, liệt kê field coverage và kiểm thử recompute sau cấp/reversal |
+| P0 | Canonical payload dùng khi ký hồ sơ | **DONE — Slice 18** | Manifest V3 bao phủ snapshot lâm sàng bất biến, loại trạng thái/lượng cấp phát có thể đổi; cùng một procedure dùng cho ký và xác minh, regression recompute sau cấp/reversal đạt |
 | P0 | Tự chuyển prescription hết hạn | Có defect | Không `UPDATE` rồi `THROW` trong transaction bị rollback; có command/worker idempotent lưu `EXPIRED` và audit |
 | P0 | Đối chiếu dị ứng hoạt chất khi kê/cấp | Mới | Allergen được chuẩn hóa/mapping với medicine; cảnh báo rõ, override có permission/lý do/audit |
 | P0 | Start encounter tuân thủ queue | Có defect | Ticket phải `CALLED` đúng lượt trước khi `SERVING`; bypass cần permission/lý do và không phá priority/FIFO |
@@ -1173,6 +1173,7 @@ Health readiness phải kiểm tra dependency cần thiết nhưng có timeout n
 | Slice 15 — Outbox Publisher & Appointment Reminders | **DONE** | 2026-09-14 | Outbox có envelope/version/event ID/dedupe/correlation, claim lease an toàn nhiều worker, retry exponential và dead-letter. Scheduler tạo reminder idempotent theo appointment + thời điểm + lead time; materializer bỏ reminder stale và hủy bản còn chờ khi reschedule/cancel/expire. Publisher và notification adapter hỗ trợ console metadata-only ở development, webhook HTTPS + bearer ở production; SQL login worker riêng fail closed. 17 SQL regression + 113 application test đạt. Replay dead-letter thủ công và export CSV/XLSX còn P1. |
 | Slice 16 — Safe Encounter Cancellation | **DONE** | 2026-09-15 | Nhân viên có `ENCOUNTERS_CREATE` hủy lượt WAITING/IN_PROGRESS bằng public UUID và lý do bắt buộc từ bảng hàng đợi Admin. Transaction đóng ticket, dịch vụ mở, đơn/hóa đơn DRAFT, phân công và appointment; chặn khi còn thuốc đã cấp chưa đảo hoặc có thanh toán. Retry idempotent; audit/outbox dùng public ID và phát `APPOINTMENT_CANCELLED` để dừng reminder. OpenAPI v0.11/client, Clinic Service, Admin Web, SQL regression và Gateway smoke đồng bộ; 120 application test đạt. |
 | Slice 17 — Released Patient Clinical History | **DONE** | 2026-09-16 | CLI-15 và chính sách P0 công bố kết quả: bác sĩ phụ trách chỉ công bố hồ sơ `SIGNED`; trạng thái công bố idempotent, append-only nằm ngoài cây lâm sàng bất biến và phát audit/outbox bằng public UUID. Patient/guardian chỉ xem lịch sử, chẩn đoán, sinh hiệu và kết quả FINAL đã công bố qua liên kết `ACTIVE`; thu hồi link mất quyền ngay. OpenAPI v0.12/client, Clinic Service, Admin Web và tab Kết quả trên Mobile đồng bộ; SQL regression + 122 application test đạt. |
+| Slice 18 — Verifiable Clinical Signature Manifest V3 | **DONE** | 2026-09-16 | CLI-11 và defect P0 canonical payload: thuật toán ký/xác minh dùng chung một procedure có version; V3 dùng public UUID và snapshot lâm sàng bất biến đầy đủ, không đưa `prescription.status` hoặc `dispensed_quantity` có thể đổi vào hash. V2 vẫn được hỗ trợ để xác minh hồ sơ cũ. Doctor/Patient thấy trạng thái `isVerified` trên Web/Mobile; regression chứng minh ký → cấp đủ → đảo cấp vẫn giữ nguyên hash. OpenAPI v0.13/client, 17 SQL regression + 122 application test đạt. |
 
 Phase 1 và Slice 02–07 đã hoàn thành về source code và kiểm thử local. Phase 2
 đã đạt luồng MVP về source code và kiểm thử local. Các
@@ -1190,8 +1191,9 @@ Phase 5 đã có quầy tiếp nhận dùng được từ Admin Web đến SQL: 
 cấp số và call-next an toàn khi nhiều quầy cùng gọi. Recall/skip/cancel/transfer
 ticket, bảng hiển thị công khai và ước lượng thời gian chờ vẫn thuộc P1/P2.
 Phase 6 đã có luồng bác sĩ hoàn tất/ký/công bố hồ sơ, hủy lượt an toàn và bệnh
-nhân/người giám hộ xem lịch sử đã công bố từ UI đến SQL. Kết quả nhiều phiên bản,
-chữ ký số được xác minh và đính kèm tệp còn dành cho các lát cắt P1 tiếp theo.
+nhân/người giám hộ xem lịch sử đã công bố từ UI đến SQL. Dấu SHA-256 V3 được
+recompute khi đọc và ổn định qua cấp/đảo thuốc; xác minh chữ ký số bằng certificate,
+kết quả nhiều phiên bản và đính kèm tệp còn dành cho các lát cắt P1 tiếp theo.
 Phase 7 đã có luồng từ kê đơn đến nhập kho/cấp phát/đảo cấp và đối soát tồn. Quản lý
 nhà cung cấp, cập nhật danh mục thuốc, cảnh báo lô sắp hết hạn và kiểm thử hai quầy
 cấp phát đồng thời còn dành cho lát cắt hardening tiếp theo.

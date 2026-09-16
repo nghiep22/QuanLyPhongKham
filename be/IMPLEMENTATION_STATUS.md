@@ -331,16 +331,32 @@ Phạm vi đã hoàn thành:
 - OpenAPI 3.1 v0.12, generated types/fetch client, Clinic Service và regression
   SQL clinical-core đã đồng bộ từ UI đến database.
 
+## DONE — Slice 18: Verifiable Clinical Signature Manifest V3
+
+- Việc ký và xác minh lại dùng chung `sp_compute_encounter_signature_hash`, tránh
+  hai thuật toán canonical bị lệch. Procedure vẫn đọc được V2 cho hồ sơ cũ; chữ
+  ký mới dùng `CLINIC_RECORD_V3`.
+- Manifest V3 dùng public UUID và biểu diễn JSON có thứ tự để bao phủ nội dung
+  encounter, sinh hiệu, chẩn đoán, dịch vụ/kết quả, đơn thuốc, tệp và care team.
+  Snapshot kê đơn bất biến được ký đầy đủ; `prescription.status` và
+  `dispensed_quantity` thuộc vòng đời cấp phát có thể đổi nên bị loại khỏi hash.
+- Doctor và Patient nhận `signature.isVerified` được recompute khi đọc. Admin Web
+  và Mobile hiển thị trạng thái khớp/cảnh báo rõ, đồng thời vẫn gọi đây là dấu
+  toàn vẹn SHA-256 chứ không phải chữ ký số đã xác minh certificate.
+- Regression pharmacy ký trước khi cấp thuốc, sau đó cấp đủ và đảo một phần; cả
+  hai lần recompute vẫn bằng hash đã lưu. API types/OpenAPI 3.1 v0.13 và generated
+  client đã đồng bộ.
+
 ### Bằng chứng xác minh local toàn bộ
 
 | Kiểm tra | Kết quả |
 |---|---|
-| Baseline SQL chạy lại idempotent | Đạt; 71 bảng, 23 view, 162 procedure, 31 trigger |
+| Baseline SQL chạy lại idempotent | Đạt; 71 bảng, 23 view, 163 procedure, 31 trigger |
 | SQL auth session/staff RBAC/staff safety/password lifecycle/patient registration/patient link/catalog-directory/patient registry/scheduling-appointments/reception-queue/clinical-core/pharmacy-core/pharmacy-FEFO/pharmacy-allergy/billing-core/reports-core/notifications-outbox regression | 17/17 PASS; rollback sạch. Hai harness SQL thật xác minh queue gọi hai ticket khác nhau và payment race chỉ một quầy thu được toàn bộ dư nợ |
 | OpenAPI lint + code generation | Đạt; contract hợp lệ và generated code sinh lặp lại ổn định |
 | npm run lint | Đạt, không cảnh báo |
 | npm run typecheck | Đạt |
-| npm test | 122 test đạt (Admin 5, Auth 34, Mobile 14, Clinic 57, Worker 12), gồm công bố/lịch sử lâm sàng, hủy lượt an toàn và outbox/delivery worker |
+| npm test | 122 test đạt (Admin 5, Auth 34, Mobile 14, Clinic 57, Worker 12), gồm công bố/lịch sử lâm sàng, xác minh manifest V3, hủy lượt an toàn và outbox/delivery worker |
 | npm run build | Đạt; .NET 0 warning/0 error |
 | npm run doctor:mobile | 21/21; Expo SDK 57 và các package liên quan khớp patch tương thích (`expo` 57.0.23) |
 | Gateway → Auth → SQL smoke test | Registration thiếu idempotency key trả 400; challenge lạ trả generic OTP 400; ba route patient-access mới đi đúng Auth và trả 401 + request ID + `Cache-Control: no-store` khi thiếu token |
@@ -370,8 +386,8 @@ Phạm vi đã hoàn thành:
 - Phase 5 còn recall/skip/cancel/transfer ticket có lý do, đóng phiên, bảng hiển
   thị công khai và ước lượng thời gian chờ; lõi Reception & Queue của Slice 10 đã hoàn thành.
 - Phase 6 còn kết quả nhiều phiên bản, đính kèm tệp và chữ ký số có kiểm chứng
-  certificate; lõi bác sĩ hoàn tất/ký/bổ sung/hủy, công bố và lịch sử bệnh nhân
-  đã hoàn thành qua Slice 11/16/17.
+  certificate; lõi bác sĩ hoàn tất/ký/bổ sung/hủy, công bố, lịch sử bệnh nhân và
+  xác minh lại dấu SHA-256 đã hoàn thành qua Slice 11/16/17/18.
 - Phase 7 còn quản lý nhà cung cấp, cập nhật/khóa danh mục thuốc, cảnh báo lô sắp
   hết hạn và harness hai quầy cấp đồng thời; lõi kê đơn–nhập kho–cấp–đảo–đối soát
   của Slice 12 đã hoàn thành.
