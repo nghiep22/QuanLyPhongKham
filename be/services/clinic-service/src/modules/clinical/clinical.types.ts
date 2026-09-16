@@ -70,6 +70,7 @@ export type AmendmentInput = { reason: string; content: string };
 
 export type ClinicalEncounterDetail = ClinicalEncounterSummary & ClinicalNotesInput & {
   signedAtUtc: string | null;
+  patientRelease: { releasedAtUtc: string; releasedBy: string } | null;
   signature: { schemaVersion: string; sha256: string; signedAtUtc: string } | null;
   vitalSigns: Array<VitalSignsInput & { publicId: string; measuredAtUtc: string; bmi: number | null; measuredBy: string }>;
   diagnoses: Array<DiagnosisInput & { publicId: string; createdAtUtc: string; recordedBy: string }>;
@@ -91,6 +92,46 @@ export type ClinicalEncounterDetail = ClinicalEncounterSummary & ClinicalNotesIn
   availableServices: Array<{ publicId: string; code: string; name: string; type: string; priceAmount: string }>;
 };
 
+export type PatientClinicalRecordSummary = {
+  publicId: string;
+  code: string;
+  arrivedAtUtc: string;
+  completedAtUtc: string;
+  signedAtUtc: string;
+  releasedAtUtc: string;
+  chiefComplaint: string | null;
+  patient: { publicId: string; code: string; fullName: string };
+  branch: { publicId: string; name: string; timezoneName: string };
+  doctor: { publicId: string; fullName: string };
+  primaryDiagnosis: { code: string; name: string } | null;
+};
+
+export type PatientClinicalRecord = PatientClinicalRecordSummary & ClinicalNotesInput & {
+  patient: PatientClinicalRecordSummary['patient'] & { dateOfBirth: string; gender: string };
+  signature: { schemaVersion: string; sha256: string; signedAtUtc: string };
+  vitalSigns: Array<VitalSignsInput & { publicId: string; measuredAtUtc: string; bmi: number | null }>;
+  diagnoses: Array<DiagnosisInput & { publicId: string; createdAtUtc: string }>;
+  services: Array<{
+    publicId: string;
+    code: string;
+    name: string;
+    type: string;
+    status: 'ORDERED' | 'IN_PROGRESS' | 'COMPLETED';
+    notes: string | null;
+    result: null | {
+      publicId: string;
+      version: number;
+      status: 'FINAL' | 'AMENDED';
+      releasedToPatient: true;
+      summary: string | null;
+      conclusion: string | null;
+      result: unknown;
+      releasedAtUtc: string;
+    };
+  }>;
+  amendments: Array<{ publicId: string; number: number; reason: string; content: string; amendedAtUtc: string }>;
+};
+
 export type ClinicalCommandResult = { publicId: string; sha256?: string };
 
 export interface ClinicalRepository {
@@ -109,6 +150,10 @@ export interface ClinicalRepository {
     requestId: string): Promise<ClinicalCommandResult>;
   complete(actor: ClinicPrincipal, encounterPublicId: string, requestId: string): Promise<void>;
   sign(actor: ClinicPrincipal, encounterPublicId: string, requestId: string): Promise<ClinicalCommandResult>;
+  releaseToPatient(actor: ClinicPrincipal, encounterPublicId: string, requestId: string): Promise<void>;
   amend(actor: ClinicPrincipal, encounterPublicId: string, input: AmendmentInput,
     requestId: string): Promise<ClinicalCommandResult>;
+  patientHistory(actor: ClinicPrincipal, patientPublicId: string, requestId: string): Promise<PatientClinicalRecordSummary[]>;
+  patientRecord(actor: ClinicPrincipal, patientPublicId: string, encounterPublicId: string,
+    requestId: string): Promise<PatientClinicalRecord>;
 }

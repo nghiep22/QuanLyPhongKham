@@ -14,14 +14,14 @@ function errorNumber(error: unknown): number | undefined {
 function mapError(error: unknown): never {
   const code = errorNumber(error);
   if (code === 51002 || [53219, 53222, 53224, 53226, 53230, 53236, 53241, 53249,
-    53259, 53260, 53261].includes(code ?? 0)) {
+    53259, 53260, 53261, 53264].includes(code ?? 0)) {
     throw new HttpError(403, 'CLINICAL_FORBIDDEN', 'Bạn không có quyền thực hiện thao tác lâm sàng này.');
   }
-  if ([53801, 53802, 53803, 53804].includes(code ?? 0)) {
+  if ([53801, 53802, 53803, 53804, 53806].includes(code ?? 0)) {
     throw new HttpError(404, 'CLINICAL_RESOURCE_NOT_FOUND', 'Không tìm thấy lượt khám hoặc tài nguyên lâm sàng.');
   }
   if ([2601, 2627, 53220, 53223, 53225, 53227, 53228, 53231, 53234, 53235, 53237,
-    53238, 53239, 53240, 53244, 53245, 53246, 53247, 53250, 53251, 53256, 53262,
+    53238, 53239, 53240, 53244, 53245, 53246, 53247, 53250, 53251, 53256, 53262, 53263,
     52031, 52032, 52033, 52035, 52036, 52037].includes(code ?? 0)) {
     throw new HttpError(409, 'CLINICAL_STATE_CONFLICT', 'Trạng thái hồ sơ vừa thay đổi hoặc chưa đủ điều kiện.');
   }
@@ -67,7 +67,17 @@ export class ClinicalService {
   async sign(actor: ClinicPrincipal, encounterPublicId: string, requestId: string) {
     try { return await this.repository.sign(actor, encounterPublicId, requestId); } catch (error) { mapError(error); }
   }
+  async releaseToPatient(actor: ClinicPrincipal, encounterPublicId: string, requestId: string) {
+    try { await this.repository.releaseToPatient(actor, encounterPublicId, requestId); } catch (error) { mapError(error); }
+  }
   async amend(actor: ClinicPrincipal, encounterPublicId: string, input: AmendmentInput, requestId: string) {
     try { return await this.repository.amend(actor, encounterPublicId, input, requestId); } catch (error) { mapError(error); }
+  }
+  async patientHistory(actor: ClinicPrincipal, patientPublicId: string, requestId: string) {
+    try { return await this.repository.patientHistory(actor, patientPublicId, requestId); } catch (error) { mapError(error); }
+  }
+  async patientRecord(actor: ClinicPrincipal, patientPublicId: string, encounterPublicId: string, requestId: string) {
+    try { return await this.repository.patientRecord(actor, patientPublicId, encounterPublicId, requestId); }
+    catch (error) { mapError(error); }
   }
 }

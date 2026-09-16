@@ -13,6 +13,7 @@ import {
   type DiscoveryStackParamList,
 } from '../discovery/discovery-screens';
 import { PatientAccessScreen } from '../patient-access/patient-access-screen';
+import { MedicalRecordsScreen } from '../medical-records/medical-records-screen';
 import { apiClient } from '../../shared/api/client';
 import { cardShadow, colors, radii } from '../../shared/ui/theme';
 
@@ -20,6 +21,7 @@ export type PatientTabParamList = {
   Home: undefined;
   Explore: NavigatorScreenParams<DiscoveryStackParamList> | undefined;
   Booking: BookingIntent | undefined;
+  Records: undefined;
   Profiles: undefined;
   Account: undefined;
 };
@@ -37,6 +39,7 @@ const tabMeta: Record<keyof PatientTabParamList, { glyph: string; label: string 
   Home: { glyph: '⌂', label: 'Trang chủ' },
   Explore: { glyph: '✦', label: 'Khám phá' },
   Booking: { glyph: '▦', label: 'Lịch khám' },
+  Records: { glyph: '◇', label: 'Kết quả' },
   Profiles: { glyph: '♡', label: 'Hồ sơ' },
   Account: { glyph: '●', label: 'Tài khoản' },
 };
@@ -67,6 +70,7 @@ export function PatientTabs({ user, onLogout, initialBookingIntent, onBookingInt
     <Tab.Screen name="Booking" initialParams={initialBookingIntent}>
       {({ route }) => <AppointmentScreen bookingIntent={route.params} onBookingIntentHandled={onBookingIntentHandled} />}
     </Tab.Screen>
+    <Tab.Screen name="Records" component={MedicalRecordsScreen} />
     <Tab.Screen name="Profiles" component={PatientAccessScreen} />
     <Tab.Screen name="Account">
       {(props) => <AccountScreen {...props} user={user} onLogout={onLogout} />}

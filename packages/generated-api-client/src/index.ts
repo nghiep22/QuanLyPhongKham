@@ -423,10 +423,22 @@ export function createApiClient(options: ApiClientOptions) {
       sign: (encounterId: string) => request<import('@clinic/generated-api-types').ClinicalCommandResponse>(
         `/api/v1/encounters/${encodeURIComponent(encounterId)}/sign`, { method: 'POST' },
       ),
+      releaseToPatient: (encounterId: string) => request<import('@clinic/generated-api-types').ClinicalEncounterResponse>(
+        `/api/v1/encounters/${encodeURIComponent(encounterId)}/release-to-patient`, { method: 'POST' },
+      ),
       amend: (encounterId: string, body: import('@clinic/generated-api-types').ClinicalAmendmentRequest) =>
         request<import('@clinic/generated-api-types').ClinicalCommandResponse>(
           `/api/v1/encounters/${encodeURIComponent(encounterId)}/amendments`,
           { method: 'POST', body: JSON.stringify(body) },
+        ),
+    },
+    patientClinicalRecords: {
+      list: (patientPublicId: string) => request<import('@clinic/generated-api-types').PatientClinicalRecordListResponse>(
+        `/api/v1/patient/clinical-records?${new URLSearchParams({ patientPublicId })}`,
+      ),
+      get: (patientPublicId: string, encounterId: string) =>
+        request<import('@clinic/generated-api-types').PatientClinicalRecordResponse>(
+          `/api/v1/patient/clinical-records/${encodeURIComponent(encounterId)}?${new URLSearchParams({ patientPublicId })}`,
         ),
     },
     patients: {

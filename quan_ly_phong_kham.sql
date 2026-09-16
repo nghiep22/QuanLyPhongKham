@@ -1910,6 +1910,20 @@ BEGIN
 END;
 GO
 
+IF OBJECT_ID(N'dbo.clinical_record_releases', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.clinical_record_releases
+    (
+        encounter_id        bigint NOT NULL,
+        released_by_user_id bigint NOT NULL,
+        released_at_utc     datetime2(3) NOT NULL CONSTRAINT DF_clinical_record_releases_at DEFAULT SYSUTCDATETIME(),
+        CONSTRAINT PK_clinical_record_releases PRIMARY KEY CLUSTERED (encounter_id),
+        CONSTRAINT FK_clinical_record_releases_encounter FOREIGN KEY (encounter_id) REFERENCES dbo.encounters(encounter_id),
+        CONSTRAINT FK_clinical_record_releases_user FOREIGN KEY (released_by_user_id) REFERENCES dbo.users(user_id)
+    );
+END;
+GO
+
 IF OBJECT_ID(N'dbo.encounter_amendments', N'U') IS NULL
 BEGIN
     CREATE TABLE dbo.encounter_amendments
@@ -4254,6 +4268,17 @@ BEGIN
         WHERE d.status IN ('FINAL','AMENDED','CANCELLED')
     )
         THROW 52036, N'Phiên bản kết quả đã chốt là bất biến.', 1;
+END;
+GO
+
+CREATE OR ALTER TRIGGER dbo.trg_clinical_record_releases_append_only
+ON dbo.clinical_record_releases
+AFTER UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF EXISTS (SELECT 1 FROM deleted)
+        THROW 52040, N'Trạng thái công bố hồ sơ là append-only.', 1;
 END;
 GO
 
@@ -9503,6 +9528,7 @@ BEGIN
     SELECT CONVERT(varchar(36),e.public_id) AS publicId,e.encounter_code AS code,
            e.encounter_source AS source,e.status,e.arrived_at_utc AS arrivedAtUtc,
            e.started_at_utc AS startedAtUtc,e.completed_at_utc AS completedAtUtc,e.signed_at_utc AS signedAtUtc,
+           release_state.released_at_utc AS patientReleasedAtUtc,release_user.display_name AS patientReleasedBy,
            e.chief_complaint AS chiefComplaint,e.history_of_present_illness AS historyOfPresentIllness,
            e.physical_examination AS physicalExamination,e.clinical_assessment AS clinicalAssessment,
            e.treatment_plan AS treatmentPlan,e.follow_up_instructions AS followUpInstructions,
@@ -9520,6 +9546,8 @@ BEGIN
     LEFT JOIN dbo.rooms r ON r.room_id=e.room_id
     LEFT JOIN dbo.queue_tickets qt ON qt.encounter_id=e.encounter_id
     LEFT JOIN dbo.encounter_signatures sig ON sig.encounter_id=e.encounter_id
+    LEFT JOIN dbo.clinical_record_releases release_state ON release_state.encounter_id=e.encounter_id
+    LEFT JOIN dbo.users release_user ON release_user.user_id=release_state.released_by_user_id
     WHERE e.encounter_id=@encounter_id;
 
     SELECT CONVERT(varchar(36),v.public_id) AS publicId,v.measured_at_utc AS measuredAtUtc,
@@ -9808,6 +9836,211 @@ BEGIN
         IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
         THROW;
     END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_clinic_release_encounter_to_patient
+    @actor_user_id bigint,
+    @encounter_public_id uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    DECLARE @encounter_id bigint,@branch_id bigint,@doctor_user_id bigint;
+    SELECT @encounter_id=e.encounter_id,@branch_id=e.branch_id,@doctor_user_id=emp.user_id
+    FROM dbo.encounters e
+    JOIN dbo.doctors d ON d.doctor_id=e.attending_doctor_id
+    JOIN dbo.employees emp ON emp.employee_id=d.employee_id
+    WHERE e.public_id=@encounter_public_id;
+    IF @encounter_id IS NULL THROW 53802,N'Lượt khám không tồn tại.',1;
+    EXEC dbo.sp_assert_permission @actor_user_id,'ENCOUNTERS_SIGN',@branch_id;
+    IF @doctor_user_id<>@actor_user_id
+        THROW 53264,N'Chỉ bác sĩ phụ trách được công bố hồ sơ cho bệnh nhân.',1;
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        DECLARE @status varchar(20),@released_at_utc datetime2(3);
+        SELECT @status=status
+        FROM dbo.encounters WITH (UPDLOCK,HOLDLOCK) WHERE encounter_id=@encounter_id;
+        SELECT @released_at_utc=released_at_utc FROM dbo.clinical_record_releases WITH (UPDLOCK,HOLDLOCK)
+        WHERE encounter_id=@encounter_id;
+        IF @released_at_utc IS NOT NULL
+        BEGIN
+            COMMIT TRANSACTION;
+            RETURN;
+        END;
+        IF @status<>'SIGNED'
+            THROW 53263,N'Chỉ công bố hồ sơ đã ký.',1;
+        SET @released_at_utc=SYSUTCDATETIME();
+        INSERT dbo.clinical_record_releases(encounter_id,released_by_user_id,released_at_utc)
+        VALUES(@encounter_id,@actor_user_id,@released_at_utc);
+
+        INSERT dbo.outbox_events(aggregate_type,aggregate_id,event_type,payload_json)
+        VALUES('ENCOUNTER',CONVERT(varchar(36),@encounter_public_id),'CLINICAL_RECORD_RELEASED',
+          CONCAT(N'{"encounterPublicId":"',CONVERT(varchar(36),@encounter_public_id),
+                 N'","releasedAtUtc":"',CONVERT(varchar(33),@released_at_utc,126),N'"}'));
+        DECLARE @entity_id varchar(100)=CONVERT(varchar(36),@encounter_public_id);
+        DECLARE @audit_json nvarchar(max)=CONCAT(N'{"releasedAtUtc":"',CONVERT(varchar(33),@released_at_utc,126),N'"}');
+        EXEC dbo.sp_write_audit @actor_user_id,@branch_id,'CLINICAL_RECORD_RELEASED',
+             'ENCOUNTER',@entity_id,NULL,@audit_json;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_clinic_list_patient_clinical_records
+    @actor_user_id bigint,
+    @patient_public_id uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    EXEC dbo.sp_assert_actor @actor_user_id;
+    DECLARE @patient_id bigint;
+    SELECT @patient_id=p.patient_id
+    FROM dbo.patients p
+    JOIN dbo.user_patient_access access_link ON access_link.patient_id=p.patient_id
+    WHERE p.public_id=@patient_public_id AND access_link.user_id=@actor_user_id
+      AND access_link.status='ACTIVE' AND access_link.revoked_at_utc IS NULL
+      AND EXISTS
+      (
+        SELECT 1 FROM dbo.user_roles ur JOIN dbo.roles r ON r.role_id=ur.role_id
+        WHERE ur.user_id=@actor_user_id AND ur.is_active=1 AND r.is_active=1 AND r.role_code='PATIENT'
+          AND ur.valid_from_utc<=SYSUTCDATETIME()
+          AND (ur.valid_to_utc IS NULL OR ur.valid_to_utc>SYSUTCDATETIME())
+      );
+    IF @patient_id IS NULL THROW 51002,N'Không có quyền xem hồ sơ bệnh nhân.',1;
+
+    SELECT TOP(100) CONVERT(varchar(36),e.public_id) AS publicId,e.encounter_code AS code,
+           e.arrived_at_utc AS arrivedAtUtc,e.completed_at_utc AS completedAtUtc,
+           e.signed_at_utc AS signedAtUtc,release_state.released_at_utc AS releasedAtUtc,
+           e.chief_complaint AS chiefComplaint,
+           CONVERT(varchar(36),p.public_id) AS patientPublicId,p.patient_code AS patientCode,
+           p.full_name AS patientName,CONVERT(varchar(36),b.public_id) AS branchPublicId,
+           b.branch_name AS branchName,b.timezone_name AS timezoneName,
+           CONVERT(varchar(36),d.public_id) AS doctorPublicId,emp.full_name AS doctorName,
+           primary_dx.diagnosis_code_snapshot AS primaryDiagnosisCode,
+           primary_dx.diagnosis_name_snapshot AS primaryDiagnosisName
+    FROM dbo.encounters e
+    JOIN dbo.patients p ON p.patient_id=e.patient_id
+    JOIN dbo.branches b ON b.branch_id=e.branch_id
+    JOIN dbo.doctors d ON d.doctor_id=e.attending_doctor_id
+    JOIN dbo.employees emp ON emp.employee_id=d.employee_id
+    JOIN dbo.clinical_record_releases release_state ON release_state.encounter_id=e.encounter_id
+    OUTER APPLY
+    (
+      SELECT TOP(1) dx.diagnosis_code_snapshot,dx.diagnosis_name_snapshot
+      FROM dbo.encounter_diagnoses dx
+      WHERE dx.encounter_id=e.encounter_id AND dx.is_primary=1
+      ORDER BY dx.encounter_diagnosis_id
+    ) primary_dx
+    WHERE e.patient_id=@patient_id AND e.status='SIGNED'
+    ORDER BY e.arrived_at_utc DESC,e.encounter_id DESC;
+
+    DECLARE @patient_entity_id varchar(100)=CONVERT(varchar(36),@patient_public_id);
+    EXEC dbo.sp_write_audit @actor_user_id,NULL,'PATIENT_CLINICAL_HISTORY_READ',
+         'PATIENT',@patient_entity_id;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_clinic_get_patient_clinical_record
+    @actor_user_id bigint,
+    @patient_public_id uniqueidentifier,
+    @encounter_public_id uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    EXEC dbo.sp_assert_actor @actor_user_id;
+    DECLARE @encounter_id bigint;
+    SELECT @encounter_id=e.encounter_id
+    FROM dbo.encounters e
+    JOIN dbo.patients p ON p.patient_id=e.patient_id AND p.public_id=@patient_public_id
+    JOIN dbo.user_patient_access access_link ON access_link.patient_id=e.patient_id
+    JOIN dbo.clinical_record_releases release_state ON release_state.encounter_id=e.encounter_id
+    WHERE e.public_id=@encounter_public_id AND e.status='SIGNED'
+      AND access_link.user_id=@actor_user_id AND access_link.status='ACTIVE'
+      AND access_link.revoked_at_utc IS NULL
+      AND EXISTS
+      (
+        SELECT 1 FROM dbo.user_roles ur JOIN dbo.roles r ON r.role_id=ur.role_id
+        WHERE ur.user_id=@actor_user_id AND ur.is_active=1 AND r.is_active=1 AND r.role_code='PATIENT'
+          AND ur.valid_from_utc<=SYSUTCDATETIME()
+          AND (ur.valid_to_utc IS NULL OR ur.valid_to_utc>SYSUTCDATETIME())
+      );
+    IF @encounter_id IS NULL THROW 53806,N'Không tìm thấy hồ sơ lâm sàng đã công bố.',1;
+
+    SELECT CONVERT(varchar(36),e.public_id) AS publicId,e.encounter_code AS code,
+           e.arrived_at_utc AS arrivedAtUtc,e.completed_at_utc AS completedAtUtc,
+           e.signed_at_utc AS signedAtUtc,release_state.released_at_utc AS releasedAtUtc,
+           e.chief_complaint AS chiefComplaint,e.history_of_present_illness AS historyOfPresentIllness,
+           e.physical_examination AS physicalExamination,e.clinical_assessment AS clinicalAssessment,
+           e.treatment_plan AS treatmentPlan,e.follow_up_instructions AS followUpInstructions,
+           e.follow_up_date AS followUpDate,
+           CONVERT(varchar(36),p.public_id) AS patientPublicId,p.patient_code AS patientCode,
+           p.full_name AS patientName,p.date_of_birth AS patientDateOfBirth,p.gender AS patientGender,
+           CONVERT(varchar(36),b.public_id) AS branchPublicId,b.branch_name AS branchName,
+           b.timezone_name AS timezoneName,CONVERT(varchar(36),d.public_id) AS doctorPublicId,
+           emp.full_name AS doctorName,sig.canonical_schema_version AS signatureSchemaVersion,
+           sig.payload_sha256 AS signatureSha256,sig.signed_at_utc AS signatureSignedAtUtc,
+           primary_dx.diagnosis_code_snapshot AS primaryDiagnosisCode,
+           primary_dx.diagnosis_name_snapshot AS primaryDiagnosisName
+    FROM dbo.encounters e
+    JOIN dbo.patients p ON p.patient_id=e.patient_id
+    JOIN dbo.branches b ON b.branch_id=e.branch_id
+    JOIN dbo.doctors d ON d.doctor_id=e.attending_doctor_id
+    JOIN dbo.employees emp ON emp.employee_id=d.employee_id
+    JOIN dbo.encounter_signatures sig ON sig.encounter_id=e.encounter_id
+    JOIN dbo.clinical_record_releases release_state ON release_state.encounter_id=e.encounter_id
+    OUTER APPLY
+    (
+      SELECT TOP(1) dx.diagnosis_code_snapshot,dx.diagnosis_name_snapshot
+      FROM dbo.encounter_diagnoses dx
+      WHERE dx.encounter_id=e.encounter_id AND dx.is_primary=1
+      ORDER BY dx.encounter_diagnosis_id
+    ) primary_dx
+    WHERE e.encounter_id=@encounter_id;
+
+    SELECT CONVERT(varchar(36),v.public_id) AS publicId,v.measured_at_utc AS measuredAtUtc,
+           v.temperature_c AS temperatureC,v.pulse_bpm AS pulseBpm,
+           v.respiratory_rate_bpm AS respiratoryRateBpm,v.systolic_bp_mmhg AS systolicBpMmhg,
+           v.diastolic_bp_mmhg AS diastolicBpMmhg,v.spo2_percent AS spo2Percent,
+           v.height_cm AS heightCm,v.weight_kg AS weightKg,v.bmi,v.pain_score AS painScore,v.notes
+    FROM dbo.encounter_vital_signs v WHERE v.encounter_id=@encounter_id
+    ORDER BY v.measured_at_utc DESC,v.vital_sign_id DESC;
+
+    SELECT CONVERT(varchar(36),dx.public_id) AS publicId,dx.diagnosis_code_snapshot AS code,
+           dx.diagnosis_name_snapshot AS name,dx.diagnosis_type AS type,dx.is_primary AS isPrimary,
+           dx.notes,dx.created_at_utc AS createdAtUtc
+    FROM dbo.encounter_diagnoses dx WHERE dx.encounter_id=@encounter_id
+    ORDER BY dx.is_primary DESC,dx.created_at_utc,dx.encounter_diagnosis_id;
+
+    SELECT CONVERT(varchar(36),es.public_id) AS publicId,es.service_code_snapshot AS code,
+           es.service_name_snapshot AS name,es.service_type_snapshot AS type,es.status,es.notes,
+           CONVERT(varchar(36),sr.public_id) AS resultPublicId,sr.result_version AS resultVersion,
+           sr.status AS resultStatus,sr.summary AS resultSummary,sr.conclusion AS resultConclusion,
+           sr.result_json AS resultJson,release_state.released_at_utc AS resultReleasedAtUtc
+    FROM dbo.encounter_services es
+    JOIN dbo.clinical_record_releases release_state ON release_state.encounter_id=es.encounter_id
+    OUTER APPLY
+    (
+      SELECT TOP(1) x.* FROM dbo.service_results x
+      WHERE x.encounter_service_id=es.encounter_service_id AND x.status IN ('FINAL','AMENDED')
+      ORDER BY x.result_version DESC
+    ) sr
+    WHERE es.encounter_id=@encounter_id AND es.status<>'CANCELLED'
+    ORDER BY es.ordered_at_utc,es.encounter_service_id;
+
+    SELECT CONVERT(varchar(36),a.public_id) AS publicId,a.amendment_no AS number,a.reason,
+           a.amendment_content AS content,a.amended_at_utc AS amendedAtUtc
+    FROM dbo.encounter_amendments a WHERE a.encounter_id=@encounter_id
+    ORDER BY a.amendment_no;
+
+    DECLARE @record_entity_id varchar(100)=CONVERT(varchar(36),@encounter_public_id);
+    EXEC dbo.sp_write_audit @actor_user_id,NULL,'PATIENT_CLINICAL_RECORD_READ',
+         'ENCOUNTER',@record_entity_id;
 END;
 GO
 
@@ -12391,6 +12624,9 @@ GRANT EXECUTE ON OBJECT::dbo.sp_clinic_complete_encounter TO clinic_api_executor
 GRANT EXECUTE ON OBJECT::dbo.sp_clinic_sign_encounter TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_clinic_add_encounter_amendment TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_clinic_cancel_encounter TO clinic_api_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_clinic_release_encounter_to_patient TO clinic_api_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_clinic_list_patient_clinical_records TO clinic_api_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_clinic_get_patient_clinical_record TO clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_cancel_encounter FROM clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_create_prescription FROM clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_add_prescription_item FROM clinic_api_executor;

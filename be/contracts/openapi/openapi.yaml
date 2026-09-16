@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Private Clinic API
-  version: 0.11.0
+  version: 0.12.0
   description: Public contract for the private clinic management system.
 servers:
   - url: http://localhost:5000
@@ -1883,6 +1883,22 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/encounters/{encounterId}/release-to-patient:
+    post:
+      operationId: releaseClinicalEncounterToPatient
+      summary: Release a signed clinical record and its final results to linked patient accounts
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/EncounterId' }]
+      responses:
+        '200':
+          description: Released encounter; retries return the original release metadata.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClinicalEncounterResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /api/v1/encounters/{encounterId}/amendments:
     post:
       operationId: amendClinicalEncounter
@@ -1904,6 +1920,46 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/patient/clinical-records:
+    get:
+      operationId: listPatientClinicalRecords
+      summary: List signed records released to an actively linked patient profile
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: patientPublicId
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Released clinical history, newest first.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PatientClinicalRecordListResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/patient/clinical-records/{encounterId}:
+    get:
+      operationId: getPatientClinicalRecord
+      summary: Read one released record through an active patient or guardian link
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/EncounterId'
+        - name: patientPublicId
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Released notes, diagnoses, results, amendments and integrity hash.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PatientClinicalRecordResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /api/v1/pharmacy/branches:
     get:
       operationId: listPharmacyBranches
@@ -5177,9 +5233,17 @@ components:
         - type: object
           required: [signedAtUtc, signature, historyOfPresentIllness, physicalExamination,
             clinicalAssessment, treatmentPlan, followUpInstructions, followUpDate,
-            vitalSigns, diagnoses, services, amendments, availableServices]
+            patientRelease, vitalSigns, diagnoses, services, amendments, availableServices]
           properties:
             signedAtUtc: { type: [string, 'null'], format: date-time }
+            patientRelease:
+              oneOf:
+                - type: object
+                  required: [releasedAtUtc, releasedBy]
+                  properties:
+                    releasedAtUtc: { type: string, format: date-time }
+                    releasedBy: { type: string }
+                - type: 'null'
             signature:
               oneOf:
                 - type: object
@@ -5287,6 +5351,159 @@ components:
           properties:
             publicId: { type: string, format: uuid }
             sha256: { type: string, pattern: '^[0-9A-F]{64}$' }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    PatientClinicalRecordSummary:
+      type: object
+      additionalProperties: false
+      required: [publicId, code, arrivedAtUtc, completedAtUtc, signedAtUtc, releasedAtUtc,
+        chiefComplaint, patient, branch, doctor, primaryDiagnosis]
+      properties:
+        publicId: { type: string, format: uuid }
+        code: { type: string }
+        arrivedAtUtc: { type: string, format: date-time }
+        completedAtUtc: { type: string, format: date-time }
+        signedAtUtc: { type: string, format: date-time }
+        releasedAtUtc: { type: string, format: date-time }
+        chiefComplaint: { type: [string, 'null'] }
+        patient:
+          type: object
+          additionalProperties: false
+          required: [publicId, code, fullName]
+          properties:
+            publicId: { type: string, format: uuid }
+            code: { type: string }
+            fullName: { type: string }
+        branch:
+          type: object
+          additionalProperties: false
+          required: [publicId, name, timezoneName]
+          properties:
+            publicId: { type: string, format: uuid }
+            name: { type: string }
+            timezoneName: { type: string }
+        doctor:
+          type: object
+          additionalProperties: false
+          required: [publicId, fullName]
+          properties:
+            publicId: { type: string, format: uuid }
+            fullName: { type: string }
+        primaryDiagnosis:
+          oneOf:
+            - type: object
+              additionalProperties: false
+              required: [code, name]
+              properties:
+                code: { type: string }
+                name: { type: string }
+            - type: 'null'
+    PatientClinicalRecord:
+      allOf:
+        - $ref: '#/components/schemas/PatientClinicalRecordSummary'
+        - type: object
+          required: [historyOfPresentIllness, physicalExamination, clinicalAssessment, treatmentPlan,
+            followUpInstructions, followUpDate, signature, vitalSigns, diagnoses, services, amendments]
+          properties:
+            patient:
+              type: object
+              additionalProperties: false
+              required: [publicId, code, fullName, dateOfBirth, gender]
+              properties:
+                publicId: { type: string, format: uuid }
+                code: { type: string }
+                fullName: { type: string }
+                dateOfBirth: { type: string, format: date }
+                gender: { type: string, enum: [MALE, FEMALE, OTHER] }
+            historyOfPresentIllness: { type: [string, 'null'] }
+            physicalExamination: { type: [string, 'null'] }
+            clinicalAssessment: { type: [string, 'null'] }
+            treatmentPlan: { type: [string, 'null'] }
+            followUpInstructions: { type: [string, 'null'] }
+            followUpDate: { type: [string, 'null'], format: date }
+            signature:
+              type: object
+              additionalProperties: false
+              required: [schemaVersion, sha256, signedAtUtc]
+              properties:
+                schemaVersion: { type: string }
+                sha256: { type: string, pattern: '^[0-9A-F]{64}$' }
+                signedAtUtc: { type: string, format: date-time }
+            vitalSigns:
+              type: array
+              items:
+                allOf:
+                  - $ref: '#/components/schemas/ClinicalVitalSignsRequest'
+                  - type: object
+                    required: [publicId, measuredAtUtc, bmi]
+                    properties:
+                      publicId: { type: string, format: uuid }
+                      measuredAtUtc: { type: string, format: date-time }
+                      bmi: { type: [number, 'null'] }
+            diagnoses:
+              type: array
+              items:
+                allOf:
+                  - $ref: '#/components/schemas/ClinicalDiagnosisRequest'
+                  - type: object
+                    required: [publicId, type, isPrimary, createdAtUtc]
+                    properties:
+                      publicId: { type: string, format: uuid }
+                      createdAtUtc: { type: string, format: date-time }
+            services:
+              type: array
+              items:
+                type: object
+                additionalProperties: false
+                required: [publicId, code, name, type, status, notes, result]
+                properties:
+                  publicId: { type: string, format: uuid }
+                  code: { type: string }
+                  name: { type: string }
+                  type: { type: string }
+                  status: { type: string, enum: [ORDERED, IN_PROGRESS, COMPLETED] }
+                  notes: { type: [string, 'null'] }
+                  result:
+                    oneOf:
+                      - type: object
+                        additionalProperties: false
+                        required: [publicId, version, status, releasedToPatient, summary, conclusion, result, releasedAtUtc]
+                        properties:
+                          publicId: { type: string, format: uuid }
+                          version: { type: integer, minimum: 1 }
+                          status: { type: string, enum: [FINAL, AMENDED] }
+                          releasedToPatient: { type: boolean, const: true }
+                          summary: { type: [string, 'null'] }
+                          conclusion: { type: [string, 'null'] }
+                          result: {}
+                          releasedAtUtc: { type: string, format: date-time }
+                      - type: 'null'
+            amendments:
+              type: array
+              items:
+                type: object
+                additionalProperties: false
+                required: [publicId, number, reason, content, amendedAtUtc]
+                properties:
+                  publicId: { type: string, format: uuid }
+                  number: { type: integer, minimum: 1 }
+                  reason: { type: string }
+                  content: { type: string }
+                  amendedAtUtc: { type: string, format: date-time }
+    PatientClinicalRecordListResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/PatientClinicalRecordSummary' } }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    PatientClinicalRecordResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data: { $ref: '#/components/schemas/PatientClinicalRecord' }
         meta: { $ref: '#/components/schemas/ResponseMeta' }
         requestId: { $ref: '#/components/schemas/RequestId' }
     PharmacyBranch:

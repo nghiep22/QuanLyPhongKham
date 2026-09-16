@@ -5,21 +5,28 @@ import { createApp } from '../src/app.js';
 import { ClinicalService } from '../src/modules/clinical/clinical.service.js';
 import type {
   AmendmentInput, ClinicalEncounterDetail, ClinicalNotesInput, ClinicalRepository,
-  DiagnosisInput, EncounterStatus, FinalizeResultInput, OrderServiceInput, VitalSignsInput,
+  DiagnosisInput, EncounterStatus, FinalizeResultInput, OrderServiceInput, PatientClinicalRecord,
+  VitalSignsInput,
 } from '../src/modules/clinical/clinical.types.js';
 import type { ClinicPrincipal, PrincipalAuthenticator } from '../src/modules/identity/index.js';
 
 const branchId = randomUUID(); const encounterId = randomUUID(); const serviceId = randomUUID();
 const principal: ClinicPrincipal = { userId: 42, publicId: randomUUID(), tokenVersion: 1,
   roles: [{ code: 'DOCTOR', branchId: 1 }] };
+const patientPrincipal: ClinicPrincipal = { userId: 84, publicId: randomUUID(), tokenVersion: 1,
+  roles: [{ code: 'PATIENT', branchId: null }] };
 class Auth implements PrincipalAuthenticator {
-  authenticate(token: string) { return token === 'doctor' ? Promise.resolve(principal) : Promise.reject(new Error('bad token')); }
+  authenticate(token: string) {
+    if (token === 'doctor') return Promise.resolve(principal);
+    if (token === 'patient') return Promise.resolve(patientPrincipal);
+    return Promise.reject(new Error('bad token'));
+  }
 }
 
 function encounter(): ClinicalEncounterDetail {
   return { publicId: encounterId, code: 'LK-1', source: 'WALK_IN', status: 'WAITING',
     arrivedAtUtc: '2026-09-13T02:00:00.000Z', startedAtUtc: null, completedAtUtc: null, signedAtUtc: null,
-    signature: null, chiefComplaint: 'Đau đầu',
+    patientRelease: null, signature: null, chiefComplaint: 'Đau đầu',
     patient: { publicId: randomUUID(), code: 'BN-1', fullName: 'Nguyễn An', dateOfBirth: '1990-01-01', gender: 'OTHER' },
     doctor: { publicId: randomUUID(), fullName: 'Bác sĩ Bình' },
     room: { publicId: randomUUID(), name: 'Phòng 1' }, queue: { displayNumber: 'A0001', status: 'CALLED' },
@@ -33,7 +40,7 @@ function encounter(): ClinicalEncounterDetail {
 
 class MemoryClinical implements ClinicalRepository {
   item = encounter();
-  denied = false;
+  denied = false; linked = true;
   branches() { return Promise.resolve([{ publicId: branchId, code: 'MAIN', name: 'Chi nhánh chính',
     timezoneName: 'SE Asia Standard Time' }]); }
   list(_actor: ClinicPrincipal, _branchId: string, statuses: EncounterStatus[]) {
@@ -77,11 +84,45 @@ class MemoryClinical implements ClinicalRepository {
       sha256: 'A'.repeat(64), signedAtUtc: '2026-09-13T03:00:00.000Z' };
     return Promise.resolve({ publicId: encounterId, sha256: 'A'.repeat(64) });
   }
+  releaseToPatient() {
+    if (this.item.status !== 'SIGNED') return Promise.reject({ number: 53263 });
+    this.item.patientRelease = { releasedAtUtc: '2026-09-13T03:05:00.000Z', releasedBy: 'Bác sĩ Bình' };
+    return Promise.resolve();
+  }
   amend(_actor: ClinicPrincipal, _id: string, input: AmendmentInput) {
     if (this.item.status !== 'SIGNED') return Promise.reject({ number: 53250 });
     const publicId = randomUUID(); this.item.amendments.push({ ...input, publicId, number: 1,
       hash: 'B'.repeat(64), amendedAtUtc: '2026-09-13T04:00:00.000Z', amendedBy: 'Bác sĩ Bình' });
     return Promise.resolve({ publicId, sha256: 'B'.repeat(64) });
+  }
+  patientHistory() {
+    if (!this.linked) return Promise.reject({ number: 51002 });
+    if (!this.item.patientRelease) return Promise.resolve([]);
+    return Promise.resolve([{ publicId: this.item.publicId, code: this.item.code, arrivedAtUtc: this.item.arrivedAtUtc,
+      completedAtUtc: this.item.completedAtUtc!, signedAtUtc: this.item.signature!.signedAtUtc,
+      releasedAtUtc: this.item.patientRelease.releasedAtUtc, chiefComplaint: this.item.chiefComplaint,
+      patient: this.item.patient, branch: { publicId: branchId, name: 'Chi nhánh chính', timezoneName: 'SE Asia Standard Time' },
+      doctor: this.item.doctor, primaryDiagnosis: this.item.diagnoses[0]
+        ? { code: this.item.diagnoses[0].code, name: this.item.diagnoses[0].name } : null }]);
+  }
+  patientRecord() {
+    if (!this.linked || !this.item.patientRelease) return Promise.reject({ number: 53806 });
+    const record: PatientClinicalRecord = { publicId: this.item.publicId, code: this.item.code,
+      arrivedAtUtc: this.item.arrivedAtUtc,
+      completedAtUtc: this.item.completedAtUtc!, signedAtUtc: this.item.signature!.signedAtUtc,
+      releasedAtUtc: this.item.patientRelease.releasedAtUtc,
+      chiefComplaint: this.item.chiefComplaint, patient: this.item.patient,
+      branch: { publicId: branchId, name: 'Chi nhánh chính', timezoneName: 'SE Asia Standard Time' },
+      doctor: this.item.doctor,
+      signature: this.item.signature!, primaryDiagnosis: this.item.diagnoses[0]
+        ? { code: this.item.diagnoses[0].code, name: this.item.diagnoses[0].name } : null,
+      historyOfPresentIllness: this.item.historyOfPresentIllness,
+      physicalExamination: this.item.physicalExamination, clinicalAssessment: this.item.clinicalAssessment,
+      treatmentPlan: this.item.treatmentPlan, followUpInstructions: this.item.followUpInstructions,
+      followUpDate: this.item.followUpDate,
+      services: [], amendments: [], vitalSigns: [], diagnoses: [],
+    };
+    return Promise.resolve(record);
   }
 }
 
@@ -150,5 +191,29 @@ describe('clinical core API', () => {
       .send({ reason: 'Bổ sung sau ký', content: 'Đã tư vấn thêm.' });
     expect(changed.status).toBe(409); expect(amendment.status).toBe(201);
     expect(repository.item.amendments).toHaveLength(1);
+  });
+
+  it('keeps signed records private until the attending doctor releases them', async () => {
+    const server = app(repository); repository.item.status = 'SIGNED';
+    repository.item.completedAtUtc = '2026-09-13T02:50:00.000Z';
+    repository.item.signature = { schemaVersion: 'CLINIC_RECORD_V2', sha256: 'A'.repeat(64),
+      signedAtUtc: '2026-09-13T03:00:00.000Z' };
+    const before = await request(server).get('/api/v1/patient/clinical-records').set({ authorization: 'Bearer patient' })
+      .query({ patientPublicId: repository.item.patient.publicId });
+    const released = await request(server).post(`/api/v1/encounters/${encounterId}/release-to-patient`).set(auth);
+    const after = await request(server).get('/api/v1/patient/clinical-records').set({ authorization: 'Bearer patient' })
+      .query({ patientPublicId: repository.item.patient.publicId });
+    const detail = await request(server).get(`/api/v1/patient/clinical-records/${encounterId}`)
+      .set({ authorization: 'Bearer patient' }).query({ patientPublicId: repository.item.patient.publicId });
+    expect(before.body.data).toEqual([]); expect(released.body.data.patientRelease.releasedBy).toBe('Bác sĩ Bình');
+    expect(after.body.data[0].publicId).toBe(encounterId);
+    expect(detail.body.data.signature.sha256).toBe('A'.repeat(64));
+  });
+
+  it('denies history after the patient link is revoked', async () => {
+    repository.linked = false;
+    const response = await request(app(repository)).get('/api/v1/patient/clinical-records')
+      .set({ authorization: 'Bearer patient' }).query({ patientPublicId: repository.item.patient.publicId });
+    expect(response.status).toBe(403); expect(response.body.error.code).toBe('CLINICAL_FORBIDDEN');
   });
 });

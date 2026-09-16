@@ -313,47 +313,65 @@ Phạm vi đã hoàn thành:
 - OpenAPI 3.1 v0.11, generated client/types, Clinic Service và Admin Web đã đồng bộ.
   Regression SQL rollback sạch, API test và smoke Gateway → Auth/Clinic → SQL đạt.
 
+## DONE — Slice 17: Released Patient Clinical History
+
+- Bác sĩ phụ trách có `ENCOUNTERS_SIGN` chỉ được công bố hồ sơ `SIGNED`; retry là
+  idempotent. Trạng thái công bố nằm trong bảng 1:1 append-only riêng nên không
+  cần nới trigger bất biến của encounter, kết quả FINAL hoặc chữ ký/hash.
+- Một lần công bố áp dụng cho snapshot hồ sơ đã ký và mọi kết quả FINAL/AMENDED
+  thuộc lượt. Audit và outbox `CLINICAL_RECORD_RELEASED` dùng public UUID; API
+  trả rõ `releasedToPatient=true` và thời điểm công bố cho kết quả được phép xem.
+- Patient/guardian chỉ liệt kê và mở hồ sơ khi có `user_patient_access` ACTIVE và
+  role PATIENT còn hiệu lực. Hồ sơ chưa công bố bị ẩn; liên kết bị thu hồi mất
+  quyền ngay, không rò sự tồn tại của hồ sơ qua endpoint chi tiết.
+- Admin Web có hành động công bố và trạng thái người/thời điểm công bố. Mobile có
+  tab Kết quả để chọn hồ sơ được ủy quyền, xem lịch sử, chẩn đoán, sinh hiệu,
+  dặn dò, kết quả và dấu vết SHA-256; UI không mô tả hash attestation là chữ ký
+  số đã xác minh chứng thư.
+- OpenAPI 3.1 v0.12, generated types/fetch client, Clinic Service và regression
+  SQL clinical-core đã đồng bộ từ UI đến database.
+
 ### Bằng chứng xác minh local toàn bộ
 
 | Kiểm tra | Kết quả |
 |---|---|
-| Baseline SQL chạy lại idempotent | Đạt; 70 bảng, 23 view, 159 procedure, 30 trigger |
+| Baseline SQL chạy lại idempotent | Đạt; 71 bảng, 23 view, 162 procedure, 31 trigger |
 | SQL auth session/staff RBAC/staff safety/password lifecycle/patient registration/patient link/catalog-directory/patient registry/scheduling-appointments/reception-queue/clinical-core/pharmacy-core/pharmacy-FEFO/pharmacy-allergy/billing-core/reports-core/notifications-outbox regression | 17/17 PASS; rollback sạch. Hai harness SQL thật xác minh queue gọi hai ticket khác nhau và payment race chỉ một quầy thu được toàn bộ dư nợ |
 | OpenAPI lint + code generation | Đạt; contract hợp lệ và generated code sinh lặp lại ổn định |
 | npm run lint | Đạt, không cảnh báo |
 | npm run typecheck | Đạt |
-| npm test | 120 test đạt (Admin 5, Auth 34, Mobile 14, Clinic 55, Worker 12), gồm hủy lượt an toàn và outbox/delivery worker |
+| npm test | 122 test đạt (Admin 5, Auth 34, Mobile 14, Clinic 57, Worker 12), gồm công bố/lịch sử lâm sàng, hủy lượt an toàn và outbox/delivery worker |
 | npm run build | Đạt; .NET 0 warning/0 error |
-| npm run doctor:mobile | 21/21; ba gói Expo SDK 57 đã được nâng đúng patch tương thích |
+| npm run doctor:mobile | 21/21; Expo SDK 57 và các package liên quan khớp patch tương thích (`expo` 57.0.23) |
 | Gateway → Auth → SQL smoke test | Registration thiếu idempotency key trả 400; challenge lạ trả generic OTP 400; ba route patient-access mới đi đúng Auth và trả 401 + request ID + `Cache-Control: no-store` khi thiếu token |
 | Clinic Catalog → SQL smoke test | Public branch/service trả dữ liệu và giá hiệu lực từ SQL thật; Admin Catalog thiếu token trả 401; read repository trả đủ branch/service/doctor và lịch sử giá |
 | Gateway → Auth/Clinic → SQL patient smoke test | Demo Admin đăng nhập; lấy chi nhánh, tra cứu, mở hồ sơ thật đạt; đọc lâm sàng không có care relationship trả 403 |
 | Gateway → Clinic → SQL scheduling smoke test | Public availability trả 200 từ SQL thật; patient/admin appointments và schedules thiếu token trả 401; route Admin đi đúng Clinic; request ID xuyên suốt; Gateway readiness trả 200 |
 | Gateway → Clinic → SQL reception smoke test | `receptionist.demo` đăng nhập qua Gateway; đọc branch/workspace từ SQL thật; queue rỗng trả `data: null` khi call-next; request ID xuyên suốt; logout đạt |
 | Gateway → Clinic → SQL encounter cancellation smoke test | `receptionist.demo` gọi endpoint hủy bằng public UUID không tồn tại qua Gateway; Clinic trả đúng 404 `RECEPTION_RESOURCE_NOT_FOUND`, có request ID xuyên suốt và logout đạt. Transaction hủy thật được xác minh bằng SQL regression rollback sạch |
-| Gateway → Auth/Clinic → SQL clinical smoke test | `doctor.demo` đăng nhập qua Gateway; danh sách chi nhánh lâm sàng và lượt khám đọc từ SQL thật trả 200, status sai trả 400, request ID xuyên suốt và logout đạt. Luồng ghi/hoàn tất/ký được xác minh bằng regression SQL rollback sạch |
+| Gateway → Auth/Clinic → SQL clinical smoke test | `patient.demo` đọc lịch sử hồ sơ liên kết qua Gateway trả 200; hồ sơ ngoài liên kết 403, chi tiết chưa công bố 404, thiếu token 401. `doctor.demo` gọi công bố public UUID không tồn tại trả 404; request ID xuyên suốt. Luồng ghi/hoàn tất/ký/công bố/đọc được xác minh bằng regression SQL rollback sạch |
 | Gateway → Auth/Clinic → SQL pharmacy smoke test | `pharmacist.demo` và `doctor.demo` đăng nhập qua Gateway; scoped pharmacy branches, workspace và đối soát đọc SQL thật trả 200, request ID xuyên suốt. Luồng ghi nhập/cấp/đảo được kiểm tra trong SQL regression rollback sạch |
 | Gateway → Auth/Clinic → SQL billing smoke test | `cashier.demo` đăng nhập qua Gateway; billing branches/workspace đọc SQL thật trả 200 với request ID xuyên suốt; thiếu token trả 401 và logout đạt. Luồng ghi/phát hành/thu/hoàn/VOID được xác minh bằng SQL regression rollback sạch |
 | Gateway → Auth/Clinic → SQL reports smoke test | `manager.demo` nhận đủ ba capability và ba report trả 200; `cashier.demo` chỉ đọc revenue, `pharmacist.demo` chỉ đọc inventory, nhóm trái quyền trả 403; request ID xuyên suốt và logout đạt |
 | Scheduler Worker smoke test | Worker khởi động đủ năm job hold/slot/reminder/outbox/notification; sinh slot hệ thống đạt và `/health/live`, `/health/ready` cùng trả 200 với SQL thật |
-| npm audit --omit=dev --audit-level=high | Đạt; 0 high/critical. Còn 17 moderate từ dependency bắc cầu Expo/React Navigation, chưa có bản sửa không breaking |
+| npm audit --omit=dev --audit-level=high | Đạt; 0 high/critical. Còn 13 moderate từ dependency bắc cầu Expo/React Navigation, chưa có bản sửa không breaking |
 
 ## Chưa hoàn thành
 
 - Phase 0 baseline freeze tổng thể, checksum và các defect P0 ngoài phạm vi Auth.
 - Lần chạy GitHub Actions và branch protection chỉ xác minh được sau khi push.
-- Theo dõi bản vá upstream cho 17 cảnh báo moderate bắc cầu Expo/React Navigation;
+- Theo dõi bản vá upstream cho 13 cảnh báo moderate bắc cầu Expo/React Navigation;
   không dùng `npm audit fix --force` vì công cụ đề xuất hạ Expo xuống bản breaking.
 - Các mục Auth P1 như MFA, quản lý permission động và lịch sử session.
-- Phase 3 còn quản lý liên hệ khẩn cấp, ghi dị ứng/bệnh nền và chính sách công bố
-  kết quả cho patient/guardian khi có luồng khám hoàn chỉnh.
+- Phase 3 còn quản lý liên hệ khẩn cấp và ghi dị ứng/bệnh nền; chính sách công bố
+  kết quả cho patient/guardian đã hoàn thành qua Slice 17.
 - Phase 4 còn time-off, ngày nghỉ/lịch đặc biệt và quy trình duyệt ca; core đặt
   lịch online/tại quầy và reminder đa kênh đã hoàn thành qua Slice 09/15.
 - Phase 5 còn recall/skip/cancel/transfer ticket có lý do, đóng phiên, bảng hiển
   thị công khai và ước lượng thời gian chờ; lõi Reception & Queue của Slice 10 đã hoàn thành.
-- Phase 6 còn lịch sử khám cho bệnh nhân theo chính sách công bố, kết quả nhiều
-  phiên bản, đính kèm tệp và chữ ký số có kiểm chứng certificate; lõi bác sĩ
-  hoàn tất/ký/bổ sung và hủy lượt an toàn đã hoàn thành qua Slice 11/16.
+- Phase 6 còn kết quả nhiều phiên bản, đính kèm tệp và chữ ký số có kiểm chứng
+  certificate; lõi bác sĩ hoàn tất/ký/bổ sung/hủy, công bố và lịch sử bệnh nhân
+  đã hoàn thành qua Slice 11/16/17.
 - Phase 7 còn quản lý nhà cung cấp, cập nhật/khóa danh mục thuốc, cảnh báo lô sắp
   hết hạn và harness hai quầy cấp đồng thời; lõi kê đơn–nhập kho–cấp–đảo–đối soát
   của Slice 12 đã hoàn thành.

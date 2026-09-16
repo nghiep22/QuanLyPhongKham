@@ -25,7 +25,7 @@ Tài liệu này không thay thế đặc tả chi tiết của từng màn hìn
 |---|---|
 | Thư mục `fe/` và `be/` | Đã tạo |
 | SQL Server `quan_ly_phong_kham.sql` | Baseline candidate: đã có luồng lõi, còn gap/defect P0 tại mục 8.12 |
-| Database objects | 70 bảng, 23 view, 158 stored procedure, 30 trigger |
+| Database objects | 71 bảng, 23 view, 162 stored procedure, 31 trigger |
 | Kiểm thử database | Baseline idempotent; 17 regression suite đến reports/outbox-notification đều đạt, cùng harness đồng thời queue và payment; chưa coi production-ready trước khi hoàn tất mọi ca P0 |
 | Gateway | Đã scaffold; live/ready, request ID và route Auth/Clinic hoạt động |
 | Auth Service | Slice 06 hoàn tất: auth/session, workforce/RBAC, OTP và yêu cầu/duyệt/thu hồi patient portal link |
@@ -659,7 +659,7 @@ Trong bảng này, **P0** nghĩa là phải chốt thiết kế trước và ho�
 | P0 | Ownership manifest và tách command chạm chéo service | **Một phần** | `sp_create_patient` đã không còn ghi `user_patient_access`, portal command chỉ cấp Auth; còn tạo manifest đủ owner/caller/`GRANT` cho 78 procedure |
 | P0 | Read model cho user, nhân viên, danh mục, bệnh nhân, lịch, encounter, đơn và hóa đơn | Khung | Mỗi màn hình có query phân trang, filter, branch scope và `GRANT` |
 | P0 | Cross-service read contract hai chiều | Mới | Clinic đọc principal/doctor/patient-access; Auth đọc active branch/specialty/service/patient reference; cột tối thiểu, version và `GRANT` rõ |
-| P0 | Chính sách đọc hồ sơ và công bố kết quả | Có defect | Staff theo care relationship; Patient theo link; Receptionist không đọc lâm sàng; result có `releasedToPatient` |
+| P0 | Chính sách đọc hồ sơ và công bố kết quả | **DONE — Slice 17** | Staff theo care relationship; Patient theo link ACTIVE và trạng thái công bố append-only; Receptionist không đọc lâm sàng; result có `releasedToPatient` |
 | P0 | Update/deactivate master data, nhân viên và bác sĩ | Khung | Không hard delete; có `rowversion`, audit và conflict test |
 | P0 | Cập nhật patient, liên hệ, dị ứng, bệnh nền, bảo hiểm và portal link | Khung | Có permission/patient scope và lịch sử thay đổi |
 | P0 | Permission chuyên biệt cho sinh hiệu, chốt kết quả và quản lý portal link | **Một phần** | `PATIENT_PORTAL_LINK_MANAGE` đã tách cho Manager/Receptionist; còn tách permission sinh hiệu và chốt result |
@@ -1172,6 +1172,7 @@ Health readiness phải kiểm tra dependency cần thiết nhưng có timeout n
 | Slice 14 — Operational Reports Core | **DONE** | 2026-09-14 | RPT-01–03: báo cáo vận hành lịch/lượt đến/no-show/thời gian chờ, doanh thu thu ròng theo ngày/phương thức, dịch vụ và thuốc sử dụng, tồn thấp/lô hết hạn 90 ngày. Khoảng ngày theo timezone chi nhánh, tối đa 366 ngày; capability tách Manager/Admin, Cashier và Pharmacist theo branch scope. API dùng pool `clinic_report_reader` riêng, fail closed khi thiếu credentials và mutation role không được cấp report procedure. Admin Web, OpenAPI v0.10/client đồng bộ; 16 SQL regression + 101 application test đạt. Export CSV/XLSX và worker thông báo còn mở. |
 | Slice 15 — Outbox Publisher & Appointment Reminders | **DONE** | 2026-09-14 | Outbox có envelope/version/event ID/dedupe/correlation, claim lease an toàn nhiều worker, retry exponential và dead-letter. Scheduler tạo reminder idempotent theo appointment + thời điểm + lead time; materializer bỏ reminder stale và hủy bản còn chờ khi reschedule/cancel/expire. Publisher và notification adapter hỗ trợ console metadata-only ở development, webhook HTTPS + bearer ở production; SQL login worker riêng fail closed. 17 SQL regression + 113 application test đạt. Replay dead-letter thủ công và export CSV/XLSX còn P1. |
 | Slice 16 — Safe Encounter Cancellation | **DONE** | 2026-09-15 | Nhân viên có `ENCOUNTERS_CREATE` hủy lượt WAITING/IN_PROGRESS bằng public UUID và lý do bắt buộc từ bảng hàng đợi Admin. Transaction đóng ticket, dịch vụ mở, đơn/hóa đơn DRAFT, phân công và appointment; chặn khi còn thuốc đã cấp chưa đảo hoặc có thanh toán. Retry idempotent; audit/outbox dùng public ID và phát `APPOINTMENT_CANCELLED` để dừng reminder. OpenAPI v0.11/client, Clinic Service, Admin Web, SQL regression và Gateway smoke đồng bộ; 120 application test đạt. |
+| Slice 17 — Released Patient Clinical History | **DONE** | 2026-09-16 | CLI-15 và chính sách P0 công bố kết quả: bác sĩ phụ trách chỉ công bố hồ sơ `SIGNED`; trạng thái công bố idempotent, append-only nằm ngoài cây lâm sàng bất biến và phát audit/outbox bằng public UUID. Patient/guardian chỉ xem lịch sử, chẩn đoán, sinh hiệu và kết quả FINAL đã công bố qua liên kết `ACTIVE`; thu hồi link mất quyền ngay. OpenAPI v0.12/client, Clinic Service, Admin Web và tab Kết quả trên Mobile đồng bộ; SQL regression + 122 application test đạt. |
 
 Phase 1 và Slice 02–07 đã hoàn thành về source code và kiểm thử local. Phase 2
 đã đạt luồng MVP về source code và kiểm thử local. Các
@@ -1180,17 +1181,17 @@ password lifecycle, branch-scoped authorization và database role tối thiểu 
 baseline freeze tổng thể vẫn mở; lần chạy CI/branch protection được xác minh sau khi push.
 Phase 3 đã hoàn thành Catalog/Directory và phần hồ sơ hành chính, chống trùng,
 đọc tóm tắt lâm sàng theo care relationship của Slice 08. Quản lý liên hệ khẩn cấp,
-ghi dị ứng/bệnh nền và chính sách công bố kết quả cho patient/guardian vẫn cần
-lát cắt riêng khi có luồng khám và trạng thái công bố.
+ghi dị ứng/bệnh nền vẫn cần lát cắt riêng; chính sách công bố kết quả cho
+patient/guardian đã hoàn thành ở Slice 17.
 Phase 4 đã có lát cắt dọc đặt lịch online/tại quầy dùng được từ UI đến SQL, đạt
 điều kiện double-booking/idempotency và có reminder email/SMS qua delivery adapter.
 Time-off, ngày nghỉ/lịch đặc biệt và quy trình duyệt ca còn dành cho lát cắt sau.
 Phase 5 đã có quầy tiếp nhận dùng được từ Admin Web đến SQL: check-in, walk-in,
 cấp số và call-next an toàn khi nhiều quầy cùng gọi. Recall/skip/cancel/transfer
 ticket, bảng hiển thị công khai và ước lượng thời gian chờ vẫn thuộc P1/P2.
-Phase 6 đã có luồng bác sĩ hoàn tất/ký hồ sơ và hủy lượt an toàn từ Admin Web đến
-SQL. Truy cập lịch sử cho bệnh nhân, kết quả nhiều phiên bản, chữ ký số được xác
-minh và đính kèm tệp sẽ được triển khai ở lát cắt tiếp theo.
+Phase 6 đã có luồng bác sĩ hoàn tất/ký/công bố hồ sơ, hủy lượt an toàn và bệnh
+nhân/người giám hộ xem lịch sử đã công bố từ UI đến SQL. Kết quả nhiều phiên bản,
+chữ ký số được xác minh và đính kèm tệp còn dành cho các lát cắt P1 tiếp theo.
 Phase 7 đã có luồng từ kê đơn đến nhập kho/cấp phát/đảo cấp và đối soát tồn. Quản lý
 nhà cung cấp, cập nhật danh mục thuốc, cảnh báo lô sắp hết hạn và kiểm thử hai quầy
 cấp phát đồng thời còn dành cho lát cắt hardening tiếp theo.

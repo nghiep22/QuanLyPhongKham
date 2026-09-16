@@ -24,7 +24,8 @@ BEGIN TRY
         (N'sp_clinic_add_vital_signs'),(N'sp_clinic_add_encounter_diagnosis'),
         (N'sp_clinic_order_encounter_service'),(N'sp_clinic_finalize_service_result'),
         (N'sp_clinic_complete_encounter'),(N'sp_clinic_sign_encounter'),
-        (N'sp_clinic_add_encounter_amendment')
+        (N'sp_clinic_add_encounter_amendment'),(N'sp_clinic_release_encounter_to_patient'),
+        (N'sp_clinic_list_patient_clinical_records'),(N'sp_clinic_get_patient_clinical_record')
     ) required(name) WHERE NOT EXISTS (SELECT 1 FROM sys.database_permissions dp
       WHERE dp.major_id=OBJECT_ID(N'dbo.'+required.name)
         AND dp.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'clinic_api_executor')
@@ -101,6 +102,14 @@ BEGIN TRY
       @phone='0908888888',@duplicate_override=1,
       @duplicate_reason=N'Fixture regression clinical.',
       @patient_id=@patient_id OUTPUT,@patient_public_id=@patient_public_id OUTPUT;
+    INSERT dbo.users(username,password_hash,display_name,status)
+    VALUES(CONCAT(N'clinical-patient-',@suffix),REPLICATE('x',60),N'Tài khoản bệnh nhân clinical','ACTIVE');
+    DECLARE @portal_user_id bigint=SCOPE_IDENTITY(),@patient_role_id bigint=(SELECT role_id FROM dbo.roles WHERE role_code='PATIENT');
+    INSERT dbo.user_roles(user_id,role_id,branch_id,granted_by_user_id)
+    VALUES(@portal_user_id,@patient_role_id,NULL,@admin_id);
+    INSERT dbo.user_patient_access(user_id,patient_id,relationship_type,status,is_booking_allowed,
+      verified_by_user_id,verified_branch_id,verified_at_utc)
+    VALUES(@portal_user_id,@patient_id,'SELF','ACTIVE',1,@admin_id,@branch_id,SYSUTCDATETIME());
 
     DECLARE @code varchar(40),@encounter_id bigint,@encounter_public_id uniqueidentifier,
             @ticket_id bigint,@display varchar(20);
@@ -164,6 +173,48 @@ BEGIN TRY
     IF @signature_hash IS NULL OR @retry_hash<>@signature_hash OR NOT EXISTS (
       SELECT 1 FROM dbo.encounter_signatures WHERE encounter_id=@encounter_id AND payload_sha256=@signature_hash)
       THROW 55907,N'Chữ ký hash không ổn định hoặc không lưu.',1;
+    DECLARE @history TABLE
+    (
+      publicId varchar(36),code varchar(40),arrivedAtUtc datetime2(3),completedAtUtc datetime2(3),
+      signedAtUtc datetime2(3),releasedAtUtc datetime2(3),chiefComplaint nvarchar(1000),
+      patientPublicId varchar(36),patientCode varchar(30),patientName nvarchar(200),
+      branchPublicId varchar(36),branchName nvarchar(200),timezoneName sysname,
+      doctorPublicId varchar(36),doctorName nvarchar(200),primaryDiagnosisCode varchar(30),
+      primaryDiagnosisName nvarchar(500)
+    );
+    EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=@portal_user_id;
+    INSERT @history EXEC dbo.sp_clinic_list_patient_clinical_records
+      @actor_user_id=@portal_user_id,@patient_public_id=@patient_public_id;
+    IF EXISTS (SELECT 1 FROM @history)
+      THROW 55911,N'Bệnh nhân thấy hồ sơ trước khi bác sĩ công bố.',1;
+
+    EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=@doctor_user_id;
+    EXEC dbo.sp_clinic_release_encounter_to_patient @actor_user_id=@doctor_user_id,
+      @encounter_public_id=@encounter_public_id;
+    EXEC dbo.sp_clinic_release_encounter_to_patient @actor_user_id=@doctor_user_id,
+      @encounter_public_id=@encounter_public_id;
+    IF NOT EXISTS (SELECT 1 FROM dbo.clinical_record_releases WHERE encounter_id=@encounter_id
+        AND released_at_utc IS NOT NULL AND released_by_user_id=@doctor_user_id)
+      OR (SELECT COUNT(*) FROM dbo.clinical_record_releases WHERE encounter_id=@encounter_id)<>1
+      THROW 55912,N'Công bố không tạo đúng một trạng thái append-only cho hồ sơ đã ký.',1;
+    DELETE @history;
+    EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=@portal_user_id;
+    INSERT @history EXEC dbo.sp_clinic_list_patient_clinical_records
+      @actor_user_id=@portal_user_id,@patient_public_id=@patient_public_id;
+    IF NOT EXISTS (SELECT 1 FROM @history WHERE publicId=CONVERT(varchar(36),@encounter_public_id)
+        AND primaryDiagnosisCode='R51')
+      THROW 55913,N'Lịch sử đã công bố không xuất hiện cho tài khoản được liên kết.',1;
+    EXEC dbo.sp_clinic_get_patient_clinical_record @actor_user_id=@portal_user_id,
+      @patient_public_id=@patient_public_id,@encounter_public_id=@encounter_public_id;
+    IF NOT EXISTS (SELECT 1 FROM dbo.audit_logs WHERE action_code='CLINICAL_RECORD_RELEASED'
+        AND entity_id=CONVERT(varchar(36),@encounter_public_id))
+      OR NOT EXISTS (SELECT 1 FROM dbo.audit_logs WHERE action_code='PATIENT_CLINICAL_RECORD_READ'
+        AND entity_id=CONVERT(varchar(36),@encounter_public_id))
+      OR NOT EXISTS (SELECT 1 FROM dbo.outbox_events WHERE event_type='CLINICAL_RECORD_RELEASED'
+        AND aggregate_id=CONVERT(varchar(36),@encounter_public_id))
+      THROW 55914,N'Công bố/đọc hồ sơ chưa có audit hoặc outbox bằng public ID.',1;
+
+    EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=@doctor_user_id;
     EXEC dbo.sp_clinic_add_encounter_amendment @actor_user_id=@doctor_user_id,
       @encounter_public_id=@encounter_public_id,@reason=N'Bổ sung thông tin sau ký',
       @amendment_content=N'Đã tư vấn bệnh nhân về dấu hiệu cần quay lại.',

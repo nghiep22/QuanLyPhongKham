@@ -150,13 +150,18 @@ function EncounterEditor({ item, busy, run }: { item: ClinicalEncounterDetail; b
         {open && <button type="button" disabled={Boolean(busy)}
           onClick={() => void run('Hoàn tất lượt khám', () => apiClient.clinical.complete(item.publicId))}>Hoàn tất</button>}
         {item.status === 'COMPLETED' && <button type="button" disabled={Boolean(busy)}
-          onClick={() => void run('Ký hồ sơ', () => apiClient.clinical.sign(item.publicId))}>Ký hồ sơ</button>}</div></div>
+          onClick={() => void run('Ký hồ sơ', () => apiClient.clinical.sign(item.publicId))}>Ký hồ sơ</button>}
+        {item.status === 'SIGNED' && !item.patientRelease && <button type="button" disabled={Boolean(busy)}
+          onClick={() => void run('Công bố cho bệnh nhân', () => apiClient.clinical.releaseToPatient(item.publicId))}>
+          Công bố cho bệnh nhân</button>}</div></div>
       <div className="clinical-facts"><span><b>Số:</b> {item.queue?.displayNumber ?? '—'} ({item.queue?.status ?? '—'})</span>
         <span><b>Bác sĩ:</b> {item.doctor.fullName}</span><span><b>Phòng:</b> {item.room?.name ?? 'Chưa xếp'}</span>
         <span><b>Đến lúc:</b> {utc(item.arrivedAtUtc)}</span><span><b>Lý do:</b> {item.chiefComplaint ?? 'Chưa ghi'}</span></div>
       {item.status === 'WAITING' && item.queue?.status !== 'CALLED' && <p className="appointment-warning">Quầy cần gọi số trước khi bác sĩ bắt đầu khám.</p>}
       {item.signature && <div className="clinical-signature"><strong>Hồ sơ đã khóa · {utc(item.signature.signedAtUtc)}</strong>
         <code>{item.signature.sha256}</code></div>}
+      {item.patientRelease && <p className="form-success">Đã công bố cho bệnh nhân lúc {utc(item.patientRelease.releasedAtUtc)}
+        {' '}bởi {item.patientRelease.releasedBy}.</p>}
     </section>
     <section className="panel"><h2>Sinh hiệu</h2>
       {item.vitalSigns.map((vital) => <p className="clinical-record" key={vital.publicId}>

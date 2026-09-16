@@ -1341,6 +1341,10 @@ export type ClinicalAmendmentRequest = {
 
 export type ClinicalEncounterDetail = ClinicalEncounterSummary & {
     signedAtUtc: string | null;
+    patientRelease: {
+        releasedAtUtc: string;
+        releasedBy: string;
+    } | null;
     signature: {
         schemaVersion: string;
         sha256: string;
@@ -1412,6 +1416,101 @@ export type ClinicalCommandResponse = {
         publicId: string;
         sha256?: string;
     };
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type PatientClinicalRecordSummary = {
+    publicId: string;
+    code: string;
+    arrivedAtUtc: string;
+    completedAtUtc: string;
+    signedAtUtc: string;
+    releasedAtUtc: string;
+    chiefComplaint: string | null;
+    patient: {
+        publicId: string;
+        code: string;
+        fullName: string;
+    };
+    branch: {
+        publicId: string;
+        name: string;
+        timezoneName: string;
+    };
+    doctor: {
+        publicId: string;
+        fullName: string;
+    };
+    primaryDiagnosis: {
+        code: string;
+        name: string;
+    } | null;
+};
+
+export type PatientClinicalRecord = PatientClinicalRecordSummary & {
+    patient?: {
+        publicId: string;
+        code: string;
+        fullName: string;
+        dateOfBirth: string;
+        gender: 'MALE' | 'FEMALE' | 'OTHER';
+    };
+    historyOfPresentIllness: string | null;
+    physicalExamination: string | null;
+    clinicalAssessment: string | null;
+    treatmentPlan: string | null;
+    followUpInstructions: string | null;
+    followUpDate: string | null;
+    signature: {
+        schemaVersion: string;
+        sha256: string;
+        signedAtUtc: string;
+    };
+    vitalSigns: Array<ClinicalVitalSignsRequest & {
+        publicId: string;
+        measuredAtUtc: string;
+        bmi: number | null;
+    }>;
+    diagnoses: Array<ClinicalDiagnosisRequest & {
+        publicId: string;
+        createdAtUtc: string;
+    }>;
+    services: Array<{
+        publicId: string;
+        code: string;
+        name: string;
+        type: string;
+        status: 'ORDERED' | 'IN_PROGRESS' | 'COMPLETED';
+        notes: string | null;
+        result: {
+            publicId: string;
+            version: number;
+            status: 'FINAL' | 'AMENDED';
+            releasedToPatient: true;
+            summary: string | null;
+            conclusion: string | null;
+            result: unknown;
+            releasedAtUtc: string;
+        } | null;
+    }>;
+    amendments: Array<{
+        publicId: string;
+        number: number;
+        reason: string;
+        content: string;
+        amendedAtUtc: string;
+    }>;
+};
+
+export type PatientClinicalRecordListResponse = {
+    data: Array<PatientClinicalRecordSummary>;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type PatientClinicalRecordResponse = {
+    data: PatientClinicalRecord;
     meta: ResponseMeta;
     requestId: RequestId;
 };
@@ -4985,6 +5084,45 @@ export type SignClinicalEncounterResponses = {
 
 export type SignClinicalEncounterResponse = SignClinicalEncounterResponses[keyof SignClinicalEncounterResponses];
 
+export type ReleaseClinicalEncounterToPatientData = {
+    body?: never;
+    path: {
+        encounterId: string;
+    };
+    query?: never;
+    url: '/api/v1/encounters/{encounterId}/release-to-patient';
+};
+
+export type ReleaseClinicalEncounterToPatientErrors = {
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type ReleaseClinicalEncounterToPatientError = ReleaseClinicalEncounterToPatientErrors[keyof ReleaseClinicalEncounterToPatientErrors];
+
+export type ReleaseClinicalEncounterToPatientResponses = {
+    /**
+     * Released encounter; retries return the original release metadata.
+     */
+    200: ClinicalEncounterResponse;
+};
+
+export type ReleaseClinicalEncounterToPatientResponse = ReleaseClinicalEncounterToPatientResponses[keyof ReleaseClinicalEncounterToPatientResponses];
+
 export type AmendClinicalEncounterData = {
     body: ClinicalAmendmentRequest;
     path: {
@@ -5023,6 +5161,82 @@ export type AmendClinicalEncounterResponses = {
 };
 
 export type AmendClinicalEncounterResponse = AmendClinicalEncounterResponses[keyof AmendClinicalEncounterResponses];
+
+export type ListPatientClinicalRecordsData = {
+    body?: never;
+    path?: never;
+    query: {
+        patientPublicId: string;
+    };
+    url: '/api/v1/patient/clinical-records';
+};
+
+export type ListPatientClinicalRecordsErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+};
+
+export type ListPatientClinicalRecordsError = ListPatientClinicalRecordsErrors[keyof ListPatientClinicalRecordsErrors];
+
+export type ListPatientClinicalRecordsResponses = {
+    /**
+     * Released clinical history, newest first.
+     */
+    200: PatientClinicalRecordListResponse;
+};
+
+export type ListPatientClinicalRecordsResponse = ListPatientClinicalRecordsResponses[keyof ListPatientClinicalRecordsResponses];
+
+export type GetPatientClinicalRecordData = {
+    body?: never;
+    path: {
+        encounterId: string;
+    };
+    query: {
+        patientPublicId: string;
+    };
+    url: '/api/v1/patient/clinical-records/{encounterId}';
+};
+
+export type GetPatientClinicalRecordErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+};
+
+export type GetPatientClinicalRecordError = GetPatientClinicalRecordErrors[keyof GetPatientClinicalRecordErrors];
+
+export type GetPatientClinicalRecordResponses = {
+    /**
+     * Released notes, diagnoses, results, amendments and integrity hash.
+     */
+    200: PatientClinicalRecordResponse;
+};
+
+export type GetPatientClinicalRecordResponse = GetPatientClinicalRecordResponses[keyof GetPatientClinicalRecordResponses];
 
 export type ListPharmacyBranchesData = {
     body?: never;

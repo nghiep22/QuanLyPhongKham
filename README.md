@@ -147,7 +147,8 @@ và cập nhật với `ETag`. Hồ sơ có thể trùng cần lý do xác nhậ
 mới; số định danh đã dùng ở chi nhánh khác sẽ bị từ chối mà không trả thông tin
 chi nhánh đó. API lâm sàng `/api/v1/patients/{patientId}/clinical-summary` chỉ trả
 dị ứng/bệnh nền cho bác sĩ hoặc điều dưỡng có lượt chăm sóc đang mở, và audit
-mỗi lần đọc. Kết quả khám chưa được công bố cho patient/guardian.
+mỗi lần đọc. Patient/guardian không dùng endpoint nội bộ này; họ chỉ đọc hồ sơ
+đã ký và công bố qua tab **Kết quả** cùng liên kết hồ sơ còn hiệu lực.
 
 Bệnh nhân mở **Đặt lịch khám** trên Mobile để chọn hồ sơ được ủy quyền, chi nhánh,
 dịch vụ, ngày và slot còn trống; sau đó có thể xem, đổi hoặc hủy lịch. Admin/Manager/
@@ -191,7 +192,16 @@ Bác sĩ được phân công mở **Khám bệnh** sau khi số đã được g
 ghi sinh hiệu, bệnh sử, khám thực thể, chẩn đoán và chỉ định. Kết quả FINAL cần
 có nội dung trước khi hoàn tất; hệ thống yêu cầu một chẩn đoán chính và không
 còn dịch vụ bắt buộc đang mở. Sau khi ký, hồ sơ được khóa; nội dung bổ sung được
-ghi bằng phụ lục nối hash.
+ghi bằng phụ lục nối hash. Bác sĩ phụ trách dùng **Công bố cho bệnh nhân** sau
+khi ký; thao tác idempotent tạo trạng thái append-only, audit và outbox mà không
+sửa cây hồ sơ đã khóa.
+
+Bệnh nhân/người giám hộ mở tab **Kết quả** trên Mobile để chọn một hồ sơ đã được
+xác minh và xem lịch sử khám, chẩn đoán, sinh hiệu, dặn dò, kết quả FINAL cùng
+dấu vết SHA-256. Chỉ hồ sơ đã được bác sĩ công bố mới xuất hiện; kết quả nội bộ
+chưa công bố không được trả về API và quyền đọc mất hiệu lực ngay khi liên kết
+hồ sơ bị thu hồi. Dấu SHA-256 hiện là bằng chứng toàn vẹn nội bộ, không được mô
+tả như chữ ký số đã xác minh chứng thư.
 
 Bác sĩ chọn **Kê đơn thuốc** trong lượt đang khám để tạo đơn DRAFT, thêm thuốc,
 liều và hướng dẫn rồi phát hành. Màn **Nhà thuốc** cho nhân viên có quyền tạo lô,

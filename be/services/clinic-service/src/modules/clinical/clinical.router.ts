@@ -97,8 +97,22 @@ export function createClinicalRouter(auth: PrincipalAuthenticator, service: Clin
   }));
   router.post('/encounters/:encounterId/sign', asyncRoute(async (request, response) => success(response,
     await service.sign(await actor(request, auth), validate(uuid, request.params.encounterId), response.locals.requestId))));
+  router.post('/encounters/:encounterId/release-to-patient', asyncRoute(async (request, response) => {
+    const encounterId = validate(uuid, request.params.encounterId); const current = await actor(request, auth);
+    await service.releaseToPatient(current, encounterId, response.locals.requestId);
+    success(response, await service.get(current, encounterId, response.locals.requestId));
+  }));
   router.post('/encounters/:encounterId/amendments', asyncRoute(async (request, response) => success(response,
     await service.amend(await actor(request, auth), validate(uuid, request.params.encounterId),
       validate(amendment, request.body), response.locals.requestId), 201)));
+  router.get('/patient/clinical-records', asyncRoute(async (request, response) => {
+    const patientPublicId = validate(uuid, request.query.patientPublicId);
+    success(response, await service.patientHistory(await actor(request, auth), patientPublicId, response.locals.requestId));
+  }));
+  router.get('/patient/clinical-records/:encounterId', asyncRoute(async (request, response) => {
+    const patientPublicId = validate(uuid, request.query.patientPublicId);
+    success(response, await service.patientRecord(await actor(request, auth), patientPublicId,
+      validate(uuid, request.params.encounterId), response.locals.requestId));
+  }));
   return router;
 }

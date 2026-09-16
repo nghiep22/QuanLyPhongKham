@@ -3,7 +3,7 @@ import type { ClinicPrincipal } from '../identity/index.js';
 import type {
   AmendmentInput, ClinicalEncounterDetail, ClinicalEncounterSummary,
   ClinicalRepository, ClinicalNotesInput, DiagnosisInput, EncounterStatus, FinalizeResultInput,
-  OrderServiceInput, VitalSignsInput,
+  OrderServiceInput, PatientClinicalRecord, PatientClinicalRecordSummary, VitalSignsInput,
 } from './clinical.types.js';
 
 type Row = Record<string, unknown>;
@@ -35,6 +35,9 @@ function detail(result: Awaited<ReturnType<typeof executeCommand<Row>>>): Clinic
     sha256: hex(base.signatureSha256), signedAtUtc: utc(base.signatureSignedAtUtc) };
   return {
     ...summary(base), signedAtUtc: nullableUtc(base.signedAtUtc), signature,
+    patientRelease: base.patientReleasedAtUtc == null ? null : {
+      releasedAtUtc: utc(base.patientReleasedAtUtc), releasedBy: String(base.patientReleasedBy),
+    },
     historyOfPresentIllness: nullable(base.historyOfPresentIllness), physicalExamination: nullable(base.physicalExamination),
     clinicalAssessment: nullable(base.clinicalAssessment), treatmentPlan: nullable(base.treatmentPlan),
     followUpInstructions: nullable(base.followUpInstructions), followUpDate: base.followUpDate == null ? null : dateOnly(base.followUpDate),
@@ -59,6 +62,56 @@ function detail(result: Awaited<ReturnType<typeof executeCommand<Row>>>): Clinic
       amendedBy: String(row.amendedBy) })),
     availableServices: (sets[5] ?? []).map((row) => ({ publicId: String(row.publicId), code: String(row.code),
       name: String(row.name), type: String(row.type), priceAmount: String(row.priceAmount) })),
+  };
+}
+
+function patientSummary(row: Row): PatientClinicalRecordSummary {
+  return {
+    publicId: String(row.publicId), code: String(row.code), arrivedAtUtc: utc(row.arrivedAtUtc),
+    completedAtUtc: utc(row.completedAtUtc), signedAtUtc: utc(row.signedAtUtc), releasedAtUtc: utc(row.releasedAtUtc),
+    chiefComplaint: nullable(row.chiefComplaint),
+    patient: { publicId: String(row.patientPublicId), code: String(row.patientCode), fullName: String(row.patientName) },
+    branch: { publicId: String(row.branchPublicId), name: String(row.branchName), timezoneName: String(row.timezoneName) },
+    doctor: { publicId: String(row.doctorPublicId), fullName: String(row.doctorName) },
+    primaryDiagnosis: row.primaryDiagnosisCode == null ? null : {
+      code: String(row.primaryDiagnosisCode), name: String(row.primaryDiagnosisName),
+    },
+  };
+}
+
+function patientRecord(result: Awaited<ReturnType<typeof executeCommand<Row>>>): PatientClinicalRecord {
+  const sets = result.recordsets as unknown as Row[][]; const base = sets[0]?.[0];
+  if (!base) throw Object.assign(new Error('Released clinical record not found.'), { number: 53806 });
+  return {
+    ...patientSummary(base),
+    patient: { publicId: String(base.patientPublicId), code: String(base.patientCode), fullName: String(base.patientName),
+      dateOfBirth: dateOnly(base.patientDateOfBirth), gender: String(base.patientGender) },
+    historyOfPresentIllness: nullable(base.historyOfPresentIllness), physicalExamination: nullable(base.physicalExamination),
+    clinicalAssessment: nullable(base.clinicalAssessment), treatmentPlan: nullable(base.treatmentPlan),
+    followUpInstructions: nullable(base.followUpInstructions),
+    followUpDate: base.followUpDate == null ? null : dateOnly(base.followUpDate),
+    signature: { schemaVersion: String(base.signatureSchemaVersion), sha256: hex(base.signatureSha256),
+      signedAtUtc: utc(base.signatureSignedAtUtc) },
+    vitalSigns: (sets[1] ?? []).map((row) => ({ publicId: String(row.publicId), measuredAtUtc: utc(row.measuredAtUtc),
+      temperatureC: numberOrNull(row.temperatureC), pulseBpm: numberOrNull(row.pulseBpm),
+      respiratoryRateBpm: numberOrNull(row.respiratoryRateBpm), systolicBpMmhg: numberOrNull(row.systolicBpMmhg),
+      diastolicBpMmhg: numberOrNull(row.diastolicBpMmhg), spo2Percent: numberOrNull(row.spo2Percent),
+      heightCm: numberOrNull(row.heightCm), weightKg: numberOrNull(row.weightKg), bmi: numberOrNull(row.bmi),
+      painScore: numberOrNull(row.painScore), notes: nullable(row.notes) })),
+    diagnoses: (sets[2] ?? []).map((row) => ({ publicId: String(row.publicId), code: String(row.code),
+      name: String(row.name), type: row.type as DiagnosisInput['type'], isPrimary: Boolean(row.isPrimary),
+      notes: nullable(row.notes), createdAtUtc: utc(row.createdAtUtc) })),
+    services: (sets[3] ?? []).map((row) => ({ publicId: String(row.publicId), code: String(row.code),
+      name: String(row.name), type: String(row.type), status: row.status as PatientClinicalRecord['services'][number]['status'],
+      notes: nullable(row.notes), result: row.resultPublicId == null ? null : {
+        publicId: String(row.resultPublicId), version: Number(row.resultVersion),
+        status: row.resultStatus as 'FINAL' | 'AMENDED', releasedToPatient: true, summary: nullable(row.resultSummary),
+        conclusion: nullable(row.resultConclusion),
+        result: row.resultJson == null ? null : JSON.parse(String(row.resultJson)) as unknown,
+        releasedAtUtc: utc(row.resultReleasedAtUtc),
+      } })),
+    amendments: (sets[4] ?? []).map((row) => ({ publicId: String(row.publicId), number: Number(row.number),
+      reason: String(row.reason), content: String(row.content), amendedAtUtc: utc(row.amendedAtUtc) })),
   };
 }
 
@@ -143,11 +196,25 @@ export class SqlClinicalRepository implements ClinicalRepository {
       { name: 'payload_sha256', type: sql.VarBinary(32), value: null, direction: 'output' }], context(actor, requestId));
     return { publicId: encounterPublicId, sha256: hex(result.output.payload_sha256) };
   }
+  async releaseToPatient(actor: ClinicPrincipal, encounterPublicId: string, requestId: string) {
+    await executeCommand('dbo.sp_clinic_release_encounter_to_patient', [actorParam(actor), encounterParam(encounterPublicId)],
+      context(actor, requestId));
+  }
   async amend(actor: ClinicPrincipal, encounterPublicId: string, input: AmendmentInput, requestId: string) {
     const result = await executeCommand('dbo.sp_clinic_add_encounter_amendment', [actorParam(actor), encounterParam(encounterPublicId),
       { name: 'reason', type: sql.NVarChar(1000), value: input.reason },
       { name: 'amendment_content', type: sql.NVarChar(sql.MAX), value: input.content }, outId('amendment_public_id'),
       { name: 'amendment_hash', type: sql.VarBinary(32), value: null, direction: 'output' }], context(actor, requestId));
     return { publicId: String(result.output.amendment_public_id), sha256: hex(result.output.amendment_hash) };
+  }
+  async patientHistory(actor: ClinicPrincipal, patientPublicId: string, requestId: string) {
+    const result = await executeCommand<Row>('dbo.sp_clinic_list_patient_clinical_records', [actorParam(actor),
+      { name: 'patient_public_id', type: sql.UniqueIdentifier, value: patientPublicId }], context(actor, requestId));
+    return result.recordset.map(patientSummary);
+  }
+  async patientRecord(actor: ClinicPrincipal, patientPublicId: string, encounterPublicId: string, requestId: string) {
+    return patientRecord(await executeCommand<Row>('dbo.sp_clinic_get_patient_clinical_record', [actorParam(actor),
+      { name: 'patient_public_id', type: sql.UniqueIdentifier, value: patientPublicId },
+      encounterParam(encounterPublicId)], context(actor, requestId)));
   }
 }
