@@ -407,7 +407,7 @@ Phạm vi đã hoàn thành:
   chỉ có hai ledger movement tương ứng và reconciliation không có sai lệch. Fixture
   domain được dọn sạch; audit được giữ append-only theo thiết kế.
 
-## DONE — Slice 23: Safe Sellable Inventory Reversal
+## DONE — Hoàn thuốc về kho bán an toàn
 
 - Hoàn thuốc về tồn bán bắt buộc dược sĩ xác nhận đã kiểm tra hàng trả; xác nhận
   được lưu cùng reversal append-only. Đường cách ly mặc định không được mang cờ
@@ -420,7 +420,7 @@ Phạm vi đã hoàn thành:
 - Harness SQL thật phủ thiếu xác nhận, lô thu hồi, lô hết hạn, hoàn bán hợp lệ,
   cách ly hợp lệ và hậu kiểm prescription/balance/ledger.
 
-## DONE — Slice 24: Schema-aware FINAL Service Results
+## DONE — Kiểm tra kết quả FINAL theo schema
 
 - Admin quản trị schema object đóng cho từng dịch vụ với tối đa 30 trường scalar,
   required, length/range và enum. API kiểm tra sớm; procedure nội bộ SQL kiểm tra
@@ -475,10 +475,10 @@ Phạm vi đã hoàn thành:
 - Phase 6 còn kết quả nhiều phiên bản, đính kèm tệp và chữ ký số có kiểm chứng
   certificate; lõi bác sĩ hoàn tất/ký/bổ sung/hủy, công bố, lịch sử bệnh nhân,
   xác minh lại dấu SHA-256 và validation FINAL theo schema đã hoàn thành qua
-  Slice 11/16/17/18/24.
+  các chức năng lâm sàng tương ứng.
 - Phase 7 còn quản lý nhà cung cấp, cập nhật/khóa danh mục thuốc và cảnh báo lô sắp
   hết hạn; lõi kê đơn–nhập kho–cấp–đảo–đối soát, tự hết hạn đơn, recheck dị ứng,
-  race hai quầy và hoàn tồn bán an toàn của Slice 12/19/20/22/23 đã hoàn thành.
+  race hai quầy và hoàn tồn bán an toàn đã hoàn thành.
 - Phase 8 còn in/xuất hóa đơn, tích hợp payment gateway/webhook và hồ sơ claim bảo
   hiểm; lõi hóa đơn–thu–hoàn–VOID của Slice 13 đã hoàn thành.
 - Phase 9 còn replay dead-letter thủ công và export CSV/XLSX; lõi báo cáo,
