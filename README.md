@@ -211,8 +211,9 @@ chứng toàn vẹn nội bộ, không được mô tả như chữ ký số đ�
 Bác sĩ chọn **Kê đơn thuốc** trong lượt đang khám để tạo đơn DRAFT, thêm thuốc,
 liều và hướng dẫn rồi phát hành. Màn **Nhà thuốc** cho nhân viên có quyền tạo lô,
 nhập kho, mở phiên cấp, chọn lô FEFO, đảo cấp vào cách ly và đối soát ledger.
-Nhập và cấp thuốc dùng `Idempotency-Key`; dị ứng hoạt chất yêu cầu quyền override
-riêng cùng lý do được audit. Sau phát hành không sửa nội dung đơn. Đơn quá ngày
+Nhập và cấp thuốc dùng `Idempotency-Key`. Thuốc ánh xạ tới catalog dị nguyên chuẩn
+hóa; hệ thống kiểm tra chính xác khi kê và kiểm tra lại khi cấp. Bác sĩ/dược sĩ cần
+quyền override riêng cùng lý do được lưu và audit. Sau phát hành không sửa nội dung đơn. Đơn quá ngày
 hiệu lực theo chi nhánh được worker chuyển `EXPIRED`; nếu dược sĩ mở trước lượt
 quét, command vẫn lưu trạng thái, audit và outbox rồi mới từ chối cấp.
 

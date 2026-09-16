@@ -1102,7 +1102,7 @@ export const openPharmacyDispensation = <ThrowOnError extends boolean = false>(o
 });
 
 /**
- * Dispense from a valid FEFO batch without exceeding prescription or stock
+ * Dispense from a valid FEFO batch after rechecking mapped drug allergies
  */
 export const dispensePharmacyItem = <ThrowOnError extends boolean = false>(options: Options<DispensePharmacyItemData, ThrowOnError>): RequestResult<DispensePharmacyItemResponses, DispensePharmacyItemErrors, ThrowOnError> => (options.client ?? client).post<DispensePharmacyItemResponses, DispensePharmacyItemErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],

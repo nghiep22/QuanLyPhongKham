@@ -132,7 +132,12 @@ BEGIN TRY
     EXEC dbo.sp_clinic_create_medicine @actor_user_id=@admin_id,@code=@medicine_code,
       @generic_name=N'Thuốc dị ứng test',@active_ingredient=N'amoxicillin',
       @strength=N'500 mg',@dosage_form=N'Viên',@route=N'Uống',@base_unit=N'viên',
-      @sale_price=5000,@medicine_public_id=@medicine_public_id OUTPUT;
+      @sale_price=5000,@medicine_public_id=@medicine_public_id OUTPUT,
+      @allergen_names_json=N'["Amoxicillin","Clavulanic acid"]';
+    IF (SELECT COUNT(*) FROM dbo.medicine_allergens ma
+        JOIN dbo.medicines m ON m.medicine_id=ma.medicine_id
+        WHERE m.public_id=@medicine_public_id AND ma.is_active=1)<>2
+      THROW 55940,N'Thuốc chưa lưu đủ mapping dị nguyên chuẩn hóa.',1;
     EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=@doctor_user_id;
     EXEC dbo.sp_clinic_create_prescription @actor_user_id=@doctor_user_id,
       @encounter_public_id=@encounter_public_id,@valid_days=7,
@@ -146,14 +151,61 @@ BEGIN TRY
     IF NOT EXISTS (SELECT 1 FROM dbo.audit_logs WHERE action_code='PRESCRIPTION_ALLERGY_OVERRIDE'
       AND entity_id=CONVERT(varchar(36),@item_public_id))
       THROW 55941,N'Override dị ứng chưa được audit bằng public ID.',1;
-    DECLARE @allergy_error int=0;
+    IF NOT EXISTS (SELECT 1 FROM dbo.prescription_items WHERE public_id=@item_public_id
+      AND allergy_override_reason=N'Đã đánh giá dị ứng và cân nhắc lợi ích nguy cơ'
+      AND allergy_override_by_user_id=@doctor_user_id)
+      THROW 55943,N'Override lúc kê chưa được lưu trên dòng thuốc.',1;
+
+    EXEC dbo.sp_clinic_issue_prescription @actor_user_id=@doctor_user_id,
+      @prescription_public_id=@prescription_public_id;
+    DECLARE @location_public_id uniqueidentifier,@batch_public_id uniqueidentifier,
+      @movement_public_id uniqueidentifier,@dispensation_public_id uniqueidentifier,
+      @dispensation_item_public_id uniqueidentifier,
+      @location_code varchar(30)=CONCAT('PAL',LEFT(@suffix,18)),
+      @batch_number nvarchar(80)=CONCAT(N'LOT-',LEFT(@suffix,20)),
+      @test_expiry date=DATEADD(YEAR,1,@business_date);
+    EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=@admin_id;
+    EXEC dbo.sp_clinic_create_inventory_location @actor_user_id=@admin_id,
+      @branch_public_id=@branch_public_id,@code=@location_code,@name=N'Quầy allergy test',
+      @type='PHARMACY',@is_dispensing=1,@location_public_id=@location_public_id OUTPUT;
+    EXEC dbo.sp_clinic_create_batch @actor_user_id=@admin_id,@branch_public_id=@branch_public_id,
+      @medicine_public_id=@medicine_public_id,@batch_number=@batch_number,
+      @expiry_date=@test_expiry,@purchase_price=3000,@sale_price=5000,
+      @batch_public_id=@batch_public_id OUTPUT;
+    EXEC dbo.sp_clinic_receive_stock @actor_user_id=@admin_id,@location_public_id=@location_public_id,
+      @batch_public_id=@batch_public_id,@quantity=10,@idempotency_key=@request_id,
+      @movement_public_id=@movement_public_id OUTPUT;
+    EXEC dbo.sp_clinic_open_dispensation @actor_user_id=@admin_id,
+      @prescription_public_id=@prescription_public_id,@location_public_id=@location_public_id,
+      @dispensation_public_id=@dispensation_public_id OUTPUT;
+    EXEC dbo.sp_clinic_dispense_item @actor_user_id=@admin_id,
+      @dispensation_public_id=@dispensation_public_id,@prescription_item_public_id=@item_public_id,
+      @batch_public_id=@batch_public_id,@quantity=1,@idempotency_key=@request_id,
+      @allergy_override_reason=N'Đã đối chiếu đơn và xác nhận lại với bác sĩ điều trị',
+      @dispensation_item_public_id=@dispensation_item_public_id OUTPUT;
+    IF NOT EXISTS (SELECT 1 FROM dbo.dispensation_items WHERE public_id=@dispensation_item_public_id
+      AND allergy_override_by_user_id=@admin_id AND allergy_override_reason IS NOT NULL)
+      THROW 55945,N'Override lúc cấp chưa được lưu trên dòng cấp phát.',1;
+    IF NOT EXISTS (SELECT 1 FROM dbo.audit_logs WHERE action_code='DISPENSATION_ALLERGY_OVERRIDE'
+      AND entity_id=CONVERT(varchar(36),@dispensation_item_public_id))
+      THROW 55946,N'Override dị ứng lúc cấp chưa được audit bằng public ID.',1;
+    DECLARE @replayed_item_public_id uniqueidentifier;
+    EXEC dbo.sp_clinic_dispense_item @actor_user_id=@admin_id,
+      @dispensation_public_id=@dispensation_public_id,@prescription_item_public_id=@item_public_id,
+      @batch_public_id=@batch_public_id,@quantity=1,@idempotency_key=@request_id,
+      @allergy_override_reason=N'Đã đối chiếu đơn và xác nhận lại với bác sĩ điều trị',
+      @dispensation_item_public_id=@replayed_item_public_id OUTPUT;
+    IF @replayed_item_public_id<>@dispensation_item_public_id
+      THROW 55947,N'Retry cấp phát dị ứng không trả lại cùng resource.',1;
+
+    DECLARE @allergy_error int=0,@missing_reason_key uniqueidentifier=NEWID();
     BEGIN TRY
-      EXEC dbo.sp_clinic_add_prescription_item @actor_user_id=@doctor_user_id,
-        @prescription_public_id=@prescription_public_id,@medicine_public_id=@medicine_public_id,
-        @prescribed_quantity=1,@dose=N'1 viên',@frequency=N'Ngày một lần',
-        @usage_instruction=N'Uống sau ăn',@item_public_id=@item_public_id OUTPUT;
+      EXEC dbo.sp_clinic_dispense_item @actor_user_id=@admin_id,
+        @dispensation_public_id=@dispensation_public_id,@prescription_item_public_id=@item_public_id,
+        @batch_public_id=@batch_public_id,@quantity=1,@idempotency_key=@missing_reason_key,
+        @dispensation_item_public_id=@dispensation_item_public_id OUTPUT;
     END TRY BEGIN CATCH SET @allergy_error=ERROR_NUMBER(); END CATCH;
-    IF @allergy_error<>53910 THROW 55942,N'Không chặn dị ứng thiếu lý do override.',1;
+    IF @allergy_error<>53923 THROW 55942,N'Không chặn cấp phát dị ứng thiếu lý do xác nhận lại.',1;
     IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
     SELECT 'PASS' AS pharmacy_allergy_test;
 END TRY

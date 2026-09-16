@@ -20,7 +20,7 @@ function detail(): PrescriptionDetail {
   return { publicId: prescriptionId, code: 'DT-1', status: 'DRAFT', encounterPublicId: encounterId,
     patientPublicId: randomUUID(), patientCode: 'BN-1', patientName: 'Nguyễn An', issuedAtUtc: null,
     validUntil: '2026-09-21', itemCount: 0, clinicalNotes: null, generalInstructions: null,
-    items: [], dispensations: [], dispensedItems: [], drugAllergies: [] };
+    items: [], dispensations: [], dispensedItems: [], drugAllergies: [], allergyAlerts: [] };
 }
 function fixture() {
   const rx = detail();
@@ -78,7 +78,7 @@ describe('pharmacy API', () => {
     expect(received.status).toBe(201);
     expect(dispensed.status).toBe(201);
     expect(vi.mocked(repository.receive).mock.calls[0]?.[5]).toBe(key);
-    expect(vi.mocked(repository.dispense).mock.calls[0]?.[5]).toBe(key);
+    expect(vi.mocked(repository.dispense).mock.calls[0]?.[6]).toBe(key);
   });
   it('maps FEFO/stock conflict to a safe 409 response', async () => {
     const { app, repository } = fixture();
@@ -89,5 +89,27 @@ describe('pharmacy API', () => {
     expect(result.status).toBe(409);
     expect(result.body.error.code).toBe('PHARMACY_CONFLICT');
     expect(JSON.stringify(result.body)).not.toContain('internal batch details');
+  });
+  it('returns a specific safe conflict when dispensing needs an allergy acknowledgement', async () => {
+    const { app, repository } = fixture();
+    vi.mocked(repository.dispense).mockRejectedValueOnce({ number: 53923, message: 'amoxicillin' });
+    const result = await request(app).post(`/api/v1/dispensations/${randomUUID()}/items`)
+      .set(authorization).set('Idempotency-Key', randomUUID())
+      .send({ prescriptionItemPublicId: itemId, batchPublicId: batchId, quantity: 1 });
+    expect(result.status).toBe(409);
+    expect(result.body.error.code).toBe('PHARMACY_ALLERGY_CONFLICT');
+    expect(result.body.error.message).toContain('Dược sĩ');
+    expect(JSON.stringify(result.body)).not.toContain('amoxicillin');
+  });
+  it('returns a specific safe conflict when prescribing needs an allergy override', async () => {
+    const { app, repository } = fixture();
+    vi.mocked(repository.addItem).mockRejectedValueOnce({ number: 53910, message: 'amoxicillin' });
+    const result = await request(app).post(`/api/v1/prescriptions/${prescriptionId}/items`).set(authorization)
+      .send({ medicinePublicId: randomUUID(), prescribedQuantity: 1, dose: '1 viên',
+        frequency: 'Ngày một lần', usageInstruction: 'Uống sau ăn' });
+    expect(result.status).toBe(409);
+    expect(result.body.error.code).toBe('PHARMACY_ALLERGY_CONFLICT');
+    expect(result.body.error.message).toContain('Bác sĩ');
+    expect(JSON.stringify(result.body)).not.toContain('amoxicillin');
   });
 });

@@ -4,7 +4,7 @@ export type PharmacyBranch = { publicId: string; code: string; name: string; tim
 export type PharmacyLocation = { publicId: string; code: string; name: string; type: string; isDispensing: boolean };
 export type Medicine = { publicId: string; code: string; genericName: string; brandName: string | null;
   activeIngredient: string; strength: string; dosageForm: string; route: string; baseUnit: string;
-  salePrice: string; isActive: boolean };
+  salePrice: string; isActive: boolean; allergenNames: string[] };
 export type MedicineBatch = { publicId: string; medicinePublicId: string; locationPublicId: string;
   batchNumber: string; expiryDate: string; status: string; salePrice: string;
   quantityOnHand: string; availableQuantity: string };
@@ -19,18 +19,20 @@ export type PrescriptionDetail = PrescriptionSummary & {
   items: Array<{ publicId: string; medicinePublicId: string; medicineName: string; strength: string;
     dosageForm: string; route: string; prescribedQuantity: string; dispensedQuantity: string;
     dose: string; frequency: string; durationDays: number | null; timingInstruction: string | null;
-    usageInstruction: string }>;
+    usageInstruction: string; allergenNames: string[]; allergyOverrideReason: string | null }>;
   dispensations: Array<{ publicId: string; code: string; status: string; locationPublicId: string;
     openedAtUtc: string; completedAtUtc: string | null }>;
   dispensedItems: Array<{ publicId: string; dispensationPublicId: string; prescriptionItemPublicId: string;
     batchPublicId: string; batchNumber: string; quantity: string; unitPrice: string;
-    dispensedAtUtc: string; reversed: boolean }>;
+    dispensedAtUtc: string; reversed: boolean; allergyOverrideReason: string | null }>;
   drugAllergies: Array<{ allergenName: string; severity: string; reaction: string | null }>;
+  allergyAlerts: Array<{ prescriptionItemPublicId: string; medicinePublicId: string; medicineName: string;
+    allergenName: string; severity: string; reaction: string | null; prescribingOverrideReason: string | null }>;
 };
 export type ReconciliationDifference = { locationPublicId: string; batchPublicId: string;
   batchNumber: string; balanceQuantity: string; ledgerQuantity: string };
 export type MedicineInput = { code: string; genericName: string; activeIngredient: string; strength: string;
-  dosageForm: string; route: string; baseUnit: string; salePrice: number };
+  dosageForm: string; route: string; baseUnit: string; salePrice: number; allergenNames: string[] };
 export type BatchInput = { branchPublicId: string; medicinePublicId: string; batchNumber: string;
   expiryDate: string; purchasePrice: number; salePrice: number };
 export type PrescriptionInput = { validDays: number; clinicalNotes?: string | null;
@@ -55,7 +57,8 @@ export interface PharmacyRepository {
     reason: string | null, idempotencyKey: string, requestId: string): Promise<string>;
   openDispensation(actor: ClinicPrincipal, prescriptionId: string, locationId: string, requestId: string): Promise<string>;
   dispense(actor: ClinicPrincipal, dispensationId: string, prescriptionItemId: string,
-    batchId: string, quantity: number, idempotencyKey: string, requestId: string): Promise<string>;
+    batchId: string, quantity: number, allergyOverrideReason: string | null,
+    idempotencyKey: string, requestId: string): Promise<string>;
   completeDispensation(actor: ClinicPrincipal, dispensationId: string, requestId: string): Promise<void>;
   cancelDispensation(actor: ClinicPrincipal, dispensationId: string, reason: string, requestId: string): Promise<void>;
   reverse(actor: ClinicPrincipal, dispensationItemId: string, returnLocationId: string,

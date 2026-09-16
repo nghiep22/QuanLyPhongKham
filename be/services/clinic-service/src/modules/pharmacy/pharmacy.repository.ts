@@ -12,6 +12,13 @@ const utc = (value: unknown) => value == null ? null : value instanceof Date ? v
 const str = (value: unknown) => value == null ? null : String(value);
 const id = (value: unknown) => String(value);
 const rows = (result: Awaited<ReturnType<typeof executeCommand<Row>>>) => result.recordsets as unknown as Row[][];
+const allergenNames = (value: unknown): string[] => {
+  if (typeof value !== 'string') return [];
+  try {
+    const parsed = JSON.parse(value) as Array<{ allergenName?: unknown }>;
+    return Array.isArray(parsed) ? parsed.map((entry) => String(entry.allergenName ?? '')).filter(Boolean) : [];
+  } catch { return []; }
+};
 
 export class SqlPharmacyRepository implements PharmacyRepository {
   async branches(actor: ClinicPrincipal, requestId: string) {
@@ -27,7 +34,7 @@ export class SqlPharmacyRepository implements PharmacyRepository {
       medicines: (sets[1] ?? []).map((r) => ({ publicId: id(r.publicId), code: id(r.code), genericName: id(r.genericName),
         brandName: str(r.brandName), activeIngredient: id(r.activeIngredient), strength: id(r.strength),
         dosageForm: id(r.dosageForm), route: id(r.route), baseUnit: id(r.baseUnit),
-        salePrice: id(r.salePrice), isActive: Boolean(r.isActive) })),
+        salePrice: id(r.salePrice), isActive: Boolean(r.isActive), allergenNames: allergenNames(r.allergensJson) })),
       batches: (sets[2] ?? []).map((r) => ({ publicId: id(r.publicId), medicinePublicId: id(r.medicinePublicId),
         locationPublicId: id(r.locationPublicId), batchNumber: id(r.batchNumber), expiryDate: date(r.expiryDate),
         status: id(r.status), salePrice: id(r.salePrice), quantityOnHand: id(r.quantityOnHand),
@@ -54,15 +61,21 @@ export class SqlPharmacyRepository implements PharmacyRepository {
         medicineName: id(x.medicineName), strength: id(x.strength), dosageForm: id(x.dosageForm), route: id(x.route),
         prescribedQuantity: id(x.prescribedQuantity), dispensedQuantity: id(x.dispensedQuantity),
         dose: id(x.dose), frequency: id(x.frequency), durationDays: x.durationDays == null ? null : Number(x.durationDays),
-        timingInstruction: str(x.timingInstruction), usageInstruction: id(x.usageInstruction) })),
+        timingInstruction: str(x.timingInstruction), usageInstruction: id(x.usageInstruction),
+        allergenNames: allergenNames(x.allergensJson), allergyOverrideReason: str(x.allergyOverrideReason) })),
       dispensations: (sets[2] ?? []).map((x) => ({ publicId: id(x.publicId), code: id(x.code), status: id(x.status),
         locationPublicId: id(x.locationPublicId), openedAtUtc: utc(x.openedAtUtc)!, completedAtUtc: utc(x.completedAtUtc) })),
       dispensedItems: (sets[3] ?? []).map((x) => ({ publicId: id(x.publicId), dispensationPublicId: id(x.dispensationPublicId),
         prescriptionItemPublicId: id(x.prescriptionItemPublicId), batchPublicId: id(x.batchPublicId),
         batchNumber: id(x.batchNumber), quantity: id(x.quantity), unitPrice: id(x.unitPrice),
-        dispensedAtUtc: utc(x.dispensedAtUtc)!, reversed: Boolean(x.reversed) })),
+        dispensedAtUtc: utc(x.dispensedAtUtc)!, reversed: Boolean(x.reversed),
+        allergyOverrideReason: str(x.allergyOverrideReason) })),
       drugAllergies: (sets[4] ?? []).map((x) => ({ allergenName: id(x.allergenName),
         severity: id(x.severity), reaction: str(x.reaction) })),
+      allergyAlerts: (sets[5] ?? []).map((x) => ({ prescriptionItemPublicId: id(x.prescriptionItemPublicId),
+        medicinePublicId: id(x.medicinePublicId), medicineName: id(x.medicineName),
+        allergenName: id(x.allergenName), severity: id(x.severity), reaction: str(x.reaction),
+        prescribingOverrideReason: str(x.prescribingOverrideReason) })),
     };
   }
   private async create(actor: ClinicPrincipal, procedure: string, parameters: Parameters<typeof executeCommand>[1],
@@ -80,6 +93,7 @@ export class SqlPharmacyRepository implements PharmacyRepository {
       { name: 'route', type: sql.NVarChar(100), value: input.route },
       { name: 'base_unit', type: sql.NVarChar(30), value: input.baseUnit },
       { name: 'sale_price', type: sql.Decimal(19, 2), value: input.salePrice },
+      { name: 'allergen_names_json', type: sql.NVarChar(sql.MAX), value: JSON.stringify(input.allergenNames) },
     ], 'medicine_public_id', requestId);
   }
   async createBatch(actor: ClinicPrincipal, input: BatchInput, requestId: string) {
@@ -139,11 +153,13 @@ export class SqlPharmacyRepository implements PharmacyRepository {
       uid('location_public_id', locationId)], 'dispensation_public_id', requestId);
   }
   dispense(actor: ClinicPrincipal, dispensationId: string, prescriptionItemId: string, batchId: string,
-    quantity: number, idempotencyKey: string, requestId: string) {
+    quantity: number, allergyOverrideReason: string | null, idempotencyKey: string, requestId: string) {
     return this.create(actor, 'dbo.sp_clinic_dispense_item', [uid('dispensation_public_id', dispensationId),
       uid('prescription_item_public_id', prescriptionItemId), uid('batch_public_id', batchId),
       { name: 'quantity', type: sql.Decimal(18, 3), value: quantity },
-      uid('idempotency_key', idempotencyKey)], 'dispensation_item_public_id', requestId);
+      uid('idempotency_key', idempotencyKey),
+      { name: 'allergy_override_reason', type: sql.NVarChar(500), value: allergyOverrideReason }],
+    'dispensation_item_public_id', requestId);
   }
   completeDispensation(actor: ClinicPrincipal, dispensationId: string, requestId: string) {
     return this.command(actor, 'dbo.sp_clinic_complete_dispensation', [uid('dispensation_public_id', dispensationId)], requestId);

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Private Clinic API
-  version: 0.13.0
+  version: 0.14.0
   description: Public contract for the private clinic management system.
 servers:
   - url: http://localhost:5000
@@ -2186,7 +2186,7 @@ paths:
   /api/v1/dispensations/{dispensationId}/items:
     post:
       operationId: dispensePharmacyItem
-      summary: Dispense from a valid FEFO batch without exceeding prescription or stock
+      summary: Dispense from a valid FEFO batch after rechecking mapped drug allergies
       security: [{ bearerAuth: [] }]
       parameters:
         - { $ref: '#/components/parameters/DispensationId' }
@@ -5534,7 +5534,7 @@ components:
         isDispensing: { type: boolean }
     PharmacyMedicine:
       type: object
-      required: [publicId, code, genericName, brandName, activeIngredient, strength, dosageForm, route, baseUnit, salePrice, isActive]
+      required: [publicId, code, genericName, brandName, activeIngredient, strength, dosageForm, route, baseUnit, salePrice, isActive, allergenNames]
       properties:
         publicId: { type: string, format: uuid }
         code: { type: string }
@@ -5547,6 +5547,7 @@ components:
         baseUnit: { type: string }
         salePrice: { type: string }
         isActive: { type: boolean }
+        allergenNames: { type: array, items: { type: string } }
     PharmacyBatch:
       type: object
       required: [publicId, medicinePublicId, locationPublicId, batchNumber, expiryDate, status, salePrice, quantityOnHand, availableQuantity]
@@ -5603,7 +5604,7 @@ components:
       allOf:
         - { $ref: '#/components/schemas/PharmacyPrescriptionSummary' }
         - type: object
-          required: [clinicalNotes, generalInstructions, items, dispensations, dispensedItems, drugAllergies]
+          required: [clinicalNotes, generalInstructions, items, dispensations, dispensedItems, drugAllergies, allergyAlerts]
           properties:
             clinicalNotes: { type: [string, 'null'] }
             generalInstructions: { type: [string, 'null'] }
@@ -5611,7 +5612,7 @@ components:
               type: array
               items:
                 type: object
-                required: [publicId, medicinePublicId, medicineName, strength, dosageForm, route, prescribedQuantity, dispensedQuantity, dose, frequency, durationDays, timingInstruction, usageInstruction]
+                required: [publicId, medicinePublicId, medicineName, strength, dosageForm, route, prescribedQuantity, dispensedQuantity, dose, frequency, durationDays, timingInstruction, usageInstruction, allergenNames, allergyOverrideReason]
                 properties:
                   publicId: { type: string, format: uuid }
                   medicinePublicId: { type: string, format: uuid }
@@ -5626,6 +5627,8 @@ components:
                   durationDays: { type: [integer, 'null'] }
                   timingInstruction: { type: [string, 'null'] }
                   usageInstruction: { type: string }
+                  allergenNames: { type: array, items: { type: string } }
+                  allergyOverrideReason: { type: [string, 'null'] }
             dispensations:
               type: array
               items:
@@ -5642,7 +5645,7 @@ components:
               type: array
               items:
                 type: object
-                required: [publicId, dispensationPublicId, prescriptionItemPublicId, batchPublicId, batchNumber, quantity, unitPrice, dispensedAtUtc, reversed]
+                required: [publicId, dispensationPublicId, prescriptionItemPublicId, batchPublicId, batchNumber, quantity, unitPrice, dispensedAtUtc, reversed, allergyOverrideReason]
                 properties:
                   publicId: { type: string, format: uuid }
                   dispensationPublicId: { type: string, format: uuid }
@@ -5653,6 +5656,7 @@ components:
                   unitPrice: { type: string }
                   dispensedAtUtc: { type: string, format: date-time }
                   reversed: { type: boolean }
+                  allergyOverrideReason: { type: [string, 'null'] }
             drugAllergies:
               type: array
               items:
@@ -5662,6 +5666,19 @@ components:
                   allergenName: { type: string }
                   severity: { type: string }
                   reaction: { type: [string, 'null'] }
+            allergyAlerts:
+              type: array
+              items:
+                type: object
+                required: [prescriptionItemPublicId, medicinePublicId, medicineName, allergenName, severity, reaction, prescribingOverrideReason]
+                properties:
+                  prescriptionItemPublicId: { type: string, format: uuid }
+                  medicinePublicId: { type: string, format: uuid }
+                  medicineName: { type: string }
+                  allergenName: { type: string }
+                  severity: { type: string }
+                  reaction: { type: [string, 'null'] }
+                  prescribingOverrideReason: { type: [string, 'null'] }
     PrescriptionDetailResponse:
       type: object
       required: [data, meta, requestId]
@@ -5710,7 +5727,7 @@ components:
         requestId: { $ref: '#/components/schemas/RequestId' }
     CreateMedicineRequest:
       type: object
-      required: [code, genericName, activeIngredient, strength, dosageForm, route, baseUnit, salePrice]
+      required: [code, genericName, activeIngredient, strength, dosageForm, route, baseUnit, salePrice, allergenNames]
       properties:
         code: { type: string, maxLength: 30 }
         genericName: { type: string, maxLength: 250 }
@@ -5720,6 +5737,11 @@ components:
         route: { type: string, maxLength: 100 }
         baseUnit: { type: string, maxLength: 30 }
         salePrice: { type: number, minimum: 0 }
+        allergenNames:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items: { type: string, minLength: 2, maxLength: 200 }
     CreateMedicineBatchRequest:
       type: object
       required: [branchPublicId, medicinePublicId, batchNumber, expiryDate, purchasePrice, salePrice]
@@ -5783,6 +5805,7 @@ components:
         prescriptionItemPublicId: { type: string, format: uuid }
         batchPublicId: { type: string, format: uuid }
         quantity: { type: number, exclusiveMinimum: 0 }
+        allergyOverrideReason: { type: [string, 'null'], maxLength: 500 }
     ReverseDispensationRequest:
       type: object
       required: [returnLocationPublicId, disposition, reason]

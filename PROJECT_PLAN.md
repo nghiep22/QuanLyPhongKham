@@ -25,7 +25,7 @@ Tài liệu này không thay thế đặc tả chi tiết của từng màn hìn
 |---|---|
 | Thư mục `fe/` và `be/` | Đã tạo |
 | SQL Server `quan_ly_phong_kham.sql` | Baseline candidate: đã có luồng lõi, còn gap/defect P0 tại mục 8.12 |
-| Database objects | 71 bảng, 23 view, 165 stored procedure, 31 trigger |
+| Database objects | 73 bảng, 23 view, 165 stored procedure, 31 trigger |
 | Kiểm thử database | Baseline idempotent; 17 regression suite đến reports/outbox-notification đều đạt, cùng harness đồng thời queue và payment; chưa coi production-ready trước khi hoàn tất mọi ca P0 |
 | Gateway | Đã scaffold; live/ready, request ID và route Auth/Clinic hoạt động |
 | Auth Service | Slice 06 hoàn tất: auth/session, workforce/RBAC, OTP và yêu cầu/duyệt/thu hồi patient portal link |
@@ -680,7 +680,7 @@ Trong bảng này, **P0** nghĩa là phải chốt thiết kế trước và ho�
 | P0 | Audit search/enrichment/verify | Khung | `AUDIT_VIEW`, branch scope, pagination; IP/user-agent/request context được ghi và chain verification đạt |
 | P0 | Canonical payload dùng khi ký hồ sơ | **DONE — Slice 18** | Manifest V3 bao phủ snapshot lâm sàng bất biến, loại trạng thái/lượng cấp phát có thể đổi; cùng một procedure dùng cho ký và xác minh, regression recompute sau cấp/reversal đạt |
 | P0 | Tự chuyển prescription hết hạn | **DONE — Slice 19** | Command/worker dùng chung transition idempotent; lưu `EXPIRED`, audit và outbox trước khi từ chối cấp, không còn `UPDATE` rồi `THROW` bị rollback |
-| P0 | Đối chiếu dị ứng hoạt chất khi kê/cấp | Mới | Allergen được chuẩn hóa/mapping với medicine; cảnh báo rõ, override có permission/lý do/audit |
+| P0 | Đối chiếu dị ứng hoạt chất khi kê/cấp | **DONE — Slice 20** | Catalog allergen + mapping medicine; kiểm tra chính xác ở lúc kê và cấp; mỗi override có permission/lý do/audit và lưu append-only |
 | P0 | Start encounter tuân thủ queue | Có defect | Ticket phải `CALLED` đúng lượt trước khi `SERVING`; bypass cần permission/lý do và không phá priority/FIFO |
 | P0 | Validation kết quả FINAL | Có defect | Không chốt khi summary/conclusion/result/value đều rỗng; validate theo result schema của dịch vụ |
 | P0 | Reversal về kho bán an toàn | Có defect | Lô còn ACTIVE, chưa hết hạn/thu hồi/cách ly và hàng trả đạt kiểm tra; nếu không bắt buộc vào quarantine |
@@ -1175,6 +1175,7 @@ Health readiness phải kiểm tra dependency cần thiết nhưng có timeout n
 | Slice 17 — Released Patient Clinical History | **DONE** | 2026-09-16 | CLI-15 và chính sách P0 công bố kết quả: bác sĩ phụ trách chỉ công bố hồ sơ `SIGNED`; trạng thái công bố idempotent, append-only nằm ngoài cây lâm sàng bất biến và phát audit/outbox bằng public UUID. Patient/guardian chỉ xem lịch sử, chẩn đoán, sinh hiệu và kết quả FINAL đã công bố qua liên kết `ACTIVE`; thu hồi link mất quyền ngay. OpenAPI v0.12/client, Clinic Service, Admin Web và tab Kết quả trên Mobile đồng bộ; SQL regression + 122 application test đạt. |
 | Slice 18 — Verifiable Clinical Signature Manifest V3 | **DONE** | 2026-09-16 | CLI-11 và defect P0 canonical payload: thuật toán ký/xác minh dùng chung một procedure có version; V3 dùng public UUID và snapshot lâm sàng bất biến đầy đủ, không đưa `prescription.status` hoặc `dispensed_quantity` có thể đổi vào hash. V2 vẫn được hỗ trợ để xác minh hồ sơ cũ. Doctor/Patient thấy trạng thái `isVerified` trên Web/Mobile; regression chứng minh ký → cấp đủ → đảo cấp vẫn giữ nguyên hash. OpenAPI v0.13/client, 17 SQL regression + 122 application test đạt. |
 | Slice 19 — Durable Prescription Expiration | **DONE** | 2026-09-16 | Defect P0 hết hạn đơn: lệnh mở cấp phát và Scheduler Worker dùng chung transition idempotent theo business date chi nhánh; `EXPIRED`, audit và outbox public UUID được commit trước lỗi từ chối cấp. Job có batch/khóa SQL, quyền riêng `clinic_job_executor`; completion/reversal không thể hồi sinh đơn. Baseline 165 procedure, pharmacy regression và 124 application test đạt. |
+| Slice 20 — Normalized Medication Allergy Safety | **DONE** | 2026-09-16 | RX-03 và defect P0 đối chiếu dị ứng: catalog `allergens` cùng mapping nhiều-nhiều thuốc–dị nguyên thay so khớp chuỗi `LIKE`; dữ liệu cũ được backfill. Kê đơn và cấp phát đều recheck mapping chính xác, tách permission override bác sĩ/dược sĩ, bắt lý do tối thiểu 10 ký tự, lưu trên dòng append-only và audit public UUID. Retry cấp phát giữ nguyên resource; OpenAPI v0.14/client và Admin Web hiển thị mapping/cảnh báo. Baseline 73 bảng, pharmacy regression và 126 application test đạt. |
 
 Phase 1 và Slice 02–07 đã hoàn thành về source code và kiểm thử local. Phase 2
 đã đạt luồng MVP về source code và kiểm thử local. Các
@@ -1195,7 +1196,8 @@ Phase 6 đã có luồng bác sĩ hoàn tất/ký/công bố hồ sơ, hủy lư
 nhân/người giám hộ xem lịch sử đã công bố từ UI đến SQL. Dấu SHA-256 V3 được
 recompute khi đọc và ổn định qua cấp/đảo thuốc; xác minh chữ ký số bằng certificate,
 kết quả nhiều phiên bản và đính kèm tệp còn dành cho các lát cắt P1 tiếp theo.
-Phase 7 đã có luồng từ kê đơn đến nhập kho/cấp phát/đảo cấp và đối soát tồn. Quản lý
+Phase 7 đã có luồng từ kê đơn đến nhập kho/cấp phát/đảo cấp và đối soát tồn; đối
+chiếu dị ứng dùng mapping chuẩn hóa và được kiểm tra lại lúc cấp qua Slice 20. Quản lý
 nhà cung cấp, cập nhật danh mục thuốc, cảnh báo lô sắp hết hạn và kiểm thử hai quầy
 cấp phát đồng thời còn dành cho lát cắt hardening tiếp theo.
 Phase 8 đã có màn Thu ngân từ lượt khám đến hóa đơn, thu nhiều lần, hoàn tiền,

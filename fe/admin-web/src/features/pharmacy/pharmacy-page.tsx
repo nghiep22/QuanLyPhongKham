@@ -8,6 +8,7 @@ import { apiClient } from '../../shared/api/client'
 function message(error: unknown) {
   if (!(error instanceof ApiClientError)) return 'Không thể kết nối hệ thống. Hãy thử lại.'
   if (error.status === 403) return 'Bạn không có quyền thực hiện thao tác này tại chi nhánh.'
+  if (error.status === 409 && error.code === 'PHARMACY_ALLERGY_CONFLICT') return error.message
   if (error.status === 409) return error.code === 'PHARMACY_CONFLICT'
     ? `${error.message} Kiểm tra dị ứng, lô FEFO hoặc lượng tồn trước khi thử lại.` : error.message
   return error.message
@@ -50,10 +51,12 @@ export function PharmacyPage() {
   const [dispenseItemId, setDispenseItemId] = useState('')
   const [dispenseBatchId, setDispenseBatchId] = useState('')
   const [dispenseQuantity, setDispenseQuantity] = useState('')
+  const [dispenseAllergyReason, setDispenseAllergyReason] = useState('')
   const [reason, setReason] = useState('')
   const [medicineCode, setMedicineCode] = useState('')
   const [genericName, setGenericName] = useState('')
   const [activeIngredient, setActiveIngredient] = useState('')
+  const [medicineAllergens, setMedicineAllergens] = useState('')
   const [strength, setStrength] = useState('')
   const [dosageForm, setDosageForm] = useState('')
   const [route, setRoute] = useState('')
@@ -107,8 +110,10 @@ export function PharmacyPage() {
     event.preventDefault()
     if (await run('Tạo danh mục thuốc', () => apiClient.pharmacy.createMedicine({ code: medicineCode.trim(),
       genericName: genericName.trim(), activeIngredient: activeIngredient.trim(), strength: strength.trim(),
-      dosageForm: dosageForm.trim(), route: route.trim(), baseUnit: baseUnit.trim(), salePrice: Number(salePrice) }))) {
-      setMedicineCode(''); setGenericName(''); setActiveIngredient(''); setStrength(''); setDosageForm(''); setRoute('')
+      dosageForm: dosageForm.trim(), route: route.trim(), baseUnit: baseUnit.trim(), salePrice: Number(salePrice),
+      allergenNames: medicineAllergens.split(/[,;\n]/).map((name) => name.trim()).filter(Boolean) }))) {
+      setMedicineCode(''); setGenericName(''); setActiveIngredient(''); setMedicineAllergens('')
+      setStrength(''); setDosageForm(''); setRoute('')
     }
   }
   const addBatch = async (event: FormEvent) => {
@@ -131,7 +136,8 @@ export function PharmacyPage() {
     if (!openSession) return
     if (await run('Cấp thuốc', () => apiClient.pharmacy.dispense(openSession.publicId, {
       prescriptionItemPublicId: dispenseItemId, batchPublicId: dispenseBatchId, quantity: Number(dispenseQuantity),
-    }))) { setDispenseItemId(''); setDispenseBatchId(''); setDispenseQuantity('') }
+      allergyOverrideReason: dispenseAllergyReason.trim() || null,
+    }))) { setDispenseItemId(''); setDispenseBatchId(''); setDispenseQuantity(''); setDispenseAllergyReason('') }
   }
 
   if (branches.isLoading) return <div className="page-state">Đang tải phạm vi nhà thuốc…</div>
@@ -183,9 +189,15 @@ export function PharmacyPage() {
                       <span className="status">{rx.status}</span></div>
                       {!!rx.drugAllergies.length && <div className="notice" role="alert">
                         Dị ứng thuốc: {rx.drugAllergies.map((allergy) => `${allergy.allergenName} (${allergy.severity})`).join(', ')}</div>}
+                      {!!rx.allergyAlerts.length && <div className="form-error" role="alert">
+                        Cảnh báo theo mapping hoạt chất: {rx.allergyAlerts.map((alert) =>
+                          `${alert.medicineName} ↔ ${alert.allergenName} (${alert.severity})`).join('; ')}
+                      </div>}
                       {rx.items.map((item) => <article className="clinical-record" key={item.publicId}>
                         <strong>{item.medicineName} · {item.strength}</strong>
                         <p>{item.dose} · {item.frequency} · {item.usageInstruction}</p>
+                        <small>Dị nguyên chuẩn hóa: {item.allergenNames.join(', ') || 'chưa khai báo'}</small>
+                        {item.allergyOverrideReason && <small>Đã override lúc kê: {item.allergyOverrideReason}</small>}
                         <small>Đã cấp {item.dispensedQuantity}/{item.prescribedQuantity}</small></article>)}
                       {!rx.items.length && <p>Đơn chưa có thuốc.</p>}
                       {canPrescribe && rx.status === 'DRAFT' && <div className="action-row">
@@ -230,6 +242,8 @@ export function PharmacyPage() {
                                 {lot.batchNumber} · hạn {lot.expiryDate} · tồn {lot.availableQuantity}</option>)}</select></label>
                             <label>Số lượng<input required type="number" min="0.001" step="0.001" value={dispenseQuantity}
                               onChange={(event) => setDispenseQuantity(event.target.value)} /></label>
+                            <label>Lý do xác nhận lại dị ứng (nếu cảnh báo)<input minLength={10} maxLength={500}
+                              value={dispenseAllergyReason} onChange={(event) => setDispenseAllergyReason(event.target.value)} /></label>
                             <button type="submit" disabled={Boolean(busy)}>Cấp thuốc</button></form>
                           <div className="action-row"><button type="button" disabled={Boolean(busy)}
                             onClick={() => void run('Hoàn tất cấp phát', () => apiClient.pharmacy.completeDispensation(openSession.publicId))}>Hoàn tất</button>
@@ -241,6 +255,7 @@ export function PharmacyPage() {
                       {rx.dispensedItems.map((line) => <article className="clinical-record" key={line.publicId}>
                         <strong>Lô {line.batchNumber} · {line.quantity} × {amount(line.unitPrice)} ₫</strong>
                         <p>{line.reversed ? 'Đã đảo' : 'Đang hiệu lực'}</p>
+                        {line.allergyOverrideReason && <small>Đã xác nhận dị ứng lúc cấp: {line.allergyOverrideReason}</small>}
                         {canDispense && !line.reversed && quarantineId && <button type="button" className="secondary" disabled={Boolean(busy)}
                           onClick={() => { const why = window.prompt('Lý do đảo cấp phát');
                             if (why) void run('Đảo cấp phát', () => apiClient.pharmacy.reverse(line.publicId,
@@ -288,6 +303,9 @@ export function PharmacyPage() {
               <label>Mã thuốc<input required maxLength={30} value={medicineCode} onChange={(event) => setMedicineCode(event.target.value)} /></label>
               <label>Tên thuốc<input required maxLength={250} value={genericName} onChange={(event) => setGenericName(event.target.value)} /></label>
               <label>Hoạt chất<input required maxLength={500} value={activeIngredient} onChange={(event) => setActiveIngredient(event.target.value)} /></label>
+              <label>Dị nguyên chuẩn hóa<input required maxLength={1000} value={medicineAllergens}
+                onChange={(event) => setMedicineAllergens(event.target.value)}
+                placeholder="Mỗi hoạt chất cách nhau bởi dấu phẩy" /></label>
               <label>Hàm lượng<input required maxLength={100} value={strength} onChange={(event) => setStrength(event.target.value)} /></label>
               <label>Dạng bào chế<input required maxLength={100} value={dosageForm} onChange={(event) => setDosageForm(event.target.value)} /></label>
               <label>Đường dùng<input required maxLength={100} value={route} onChange={(event) => setRoute(event.target.value)} /></label>

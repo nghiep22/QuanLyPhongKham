@@ -960,6 +960,25 @@ BEGIN
 END;
 GO
 
+IF OBJECT_ID(N'dbo.allergens', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.allergens
+    (
+        allergen_id       bigint IDENTITY(1,1) NOT NULL,
+        public_id         uniqueidentifier NOT NULL CONSTRAINT DF_allergens_public_id DEFAULT NEWID(),
+        canonical_name    nvarchar(200) NOT NULL,
+        allergen_type     varchar(20) NOT NULL CONSTRAINT DF_allergens_type DEFAULT ('DRUG'),
+        is_active         bit NOT NULL CONSTRAINT DF_allergens_active DEFAULT (1),
+        created_at_utc    datetime2(3) NOT NULL CONSTRAINT DF_allergens_created DEFAULT SYSUTCDATETIME(),
+        CONSTRAINT PK_allergens PRIMARY KEY CLUSTERED (allergen_id),
+        CONSTRAINT UQ_allergens_public_id UNIQUE (public_id),
+        CONSTRAINT UQ_allergens_name_type UNIQUE (canonical_name,allergen_type),
+        CONSTRAINT CK_allergens_name CHECK (LEN(TRIM(canonical_name)) BETWEEN 2 AND 200),
+        CONSTRAINT CK_allergens_type CHECK (allergen_type IN ('DRUG','FOOD','ENVIRONMENT','OTHER'))
+    );
+END;
+GO
+
 IF OBJECT_ID(N'dbo.patient_allergies', N'U') IS NULL
 BEGIN
     CREATE TABLE dbo.patient_allergies
@@ -981,6 +1000,38 @@ BEGIN
         CONSTRAINT CK_allergies_severity CHECK (severity IN ('MILD','MODERATE','SEVERE','UNKNOWN'))
     );
 END;
+GO
+
+IF COL_LENGTH(N'dbo.patient_allergies',N'allergen_id') IS NULL
+    ALTER TABLE dbo.patient_allergies ADD allergen_id bigint NULL;
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE parent_object_id=OBJECT_ID(N'dbo.patient_allergies')
+    AND name=N'FK_patient_allergies_allergen')
+    ALTER TABLE dbo.patient_allergies ADD CONSTRAINT FK_patient_allergies_allergen
+    FOREIGN KEY(allergen_id) REFERENCES dbo.allergens(allergen_id);
+GO
+
+-- Chuẩn hóa các dị ứng thuốc cũ mà không xóa tên hiển thị gốc trong hồ sơ bệnh nhân.
+INSERT dbo.allergens(canonical_name,allergen_type)
+SELECT source.canonical_name,'DRUG'
+FROM
+(
+    SELECT TRIM(allergen_name) AS canonical_name,
+           ROW_NUMBER() OVER (PARTITION BY TRIM(allergen_name) ORDER BY patient_allergy_id) AS rn
+    FROM dbo.patient_allergies
+    WHERE allergy_type='DRUG' AND LEN(TRIM(allergen_name)) BETWEEN 2 AND 200
+) source
+WHERE source.rn=1
+  AND NOT EXISTS (SELECT 1 FROM dbo.allergens a
+                  WHERE a.allergen_type='DRUG' AND a.canonical_name=source.canonical_name);
+UPDATE pa SET allergen_id=a.allergen_id
+FROM dbo.patient_allergies pa
+JOIN dbo.allergens a ON a.allergen_type='DRUG' AND a.canonical_name=TRIM(pa.allergen_name)
+WHERE pa.allergy_type='DRUG' AND pa.allergen_id IS NULL;
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.patient_allergies')
+    AND name=N'IX_patient_allergies_active_drug')
+    CREATE INDEX IX_patient_allergies_active_drug
+    ON dbo.patient_allergies(patient_id,allergy_type,is_active)
+    INCLUDE(allergen_id,allergen_name,severity,reaction);
 GO
 
 IF OBJECT_ID(N'dbo.patient_conditions', N'U') IS NULL
@@ -2036,6 +2087,44 @@ BEGIN
 END;
 GO
 
+IF OBJECT_ID(N'dbo.medicine_allergens', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.medicine_allergens
+    (
+        medicine_id       bigint NOT NULL,
+        allergen_id       bigint NOT NULL,
+        is_active         bit NOT NULL CONSTRAINT DF_medicine_allergens_active DEFAULT (1),
+        created_by_user_id bigint NULL,
+        created_at_utc    datetime2(3) NOT NULL CONSTRAINT DF_medicine_allergens_created DEFAULT SYSUTCDATETIME(),
+        CONSTRAINT PK_medicine_allergens PRIMARY KEY CLUSTERED (medicine_id,allergen_id),
+        CONSTRAINT FK_medicine_allergens_medicine FOREIGN KEY (medicine_id) REFERENCES dbo.medicines(medicine_id),
+        CONSTRAINT FK_medicine_allergens_allergen FOREIGN KEY (allergen_id) REFERENCES dbo.allergens(allergen_id),
+        CONSTRAINT FK_medicine_allergens_creator FOREIGN KEY (created_by_user_id) REFERENCES dbo.users(user_id)
+    );
+END;
+GO
+
+-- Baseline cũ chỉ có chuỗi hoạt chất. Giữ tương thích bằng một mapping chính xác;
+-- thuốc phối hợp mới phải truyền danh sách dị nguyên tách riêng qua public command.
+INSERT dbo.allergens(canonical_name,allergen_type)
+SELECT source.canonical_name,'DRUG'
+FROM
+(
+    SELECT TRIM(active_ingredient) AS canonical_name,
+           ROW_NUMBER() OVER (PARTITION BY TRIM(active_ingredient) ORDER BY medicine_id) AS rn
+    FROM dbo.medicines
+    WHERE LEN(TRIM(active_ingredient)) BETWEEN 2 AND 200
+) source
+WHERE source.rn=1
+  AND NOT EXISTS (SELECT 1 FROM dbo.allergens a
+                  WHERE a.allergen_type='DRUG' AND a.canonical_name=source.canonical_name);
+INSERT dbo.medicine_allergens(medicine_id,allergen_id)
+SELECT m.medicine_id,a.allergen_id
+FROM dbo.medicines m
+JOIN dbo.allergens a ON a.allergen_type='DRUG' AND a.canonical_name=TRIM(m.active_ingredient)
+WHERE NOT EXISTS (SELECT 1 FROM dbo.medicine_allergens ma WHERE ma.medicine_id=m.medicine_id);
+GO
+
 IF OBJECT_ID(N'dbo.medicine_batches', N'U') IS NULL
 BEGIN
     CREATE TABLE dbo.medicine_batches
@@ -2174,6 +2263,16 @@ BEGIN
 END;
 GO
 
+IF COL_LENGTH(N'dbo.prescription_items',N'allergy_override_reason') IS NULL
+    ALTER TABLE dbo.prescription_items ADD allergy_override_reason nvarchar(500) NULL;
+IF COL_LENGTH(N'dbo.prescription_items',N'allergy_override_by_user_id') IS NULL
+    ALTER TABLE dbo.prescription_items ADD allergy_override_by_user_id bigint NULL;
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE parent_object_id=OBJECT_ID(N'dbo.prescription_items')
+    AND name=N'FK_prescription_items_allergy_override_user')
+    ALTER TABLE dbo.prescription_items ADD CONSTRAINT FK_prescription_items_allergy_override_user
+    FOREIGN KEY(allergy_override_by_user_id) REFERENCES dbo.users(user_id);
+GO
+
 IF OBJECT_ID(N'dbo.dispensations', N'U') IS NULL
 BEGIN
     CREATE TABLE dbo.dispensations
@@ -2235,6 +2334,16 @@ BEGIN
         CONSTRAINT CK_dispensation_items_price CHECK (unit_price_snapshot >= 0)
     );
 END;
+GO
+
+IF COL_LENGTH(N'dbo.dispensation_items',N'allergy_override_reason') IS NULL
+    ALTER TABLE dbo.dispensation_items ADD allergy_override_reason nvarchar(500) NULL;
+IF COL_LENGTH(N'dbo.dispensation_items',N'allergy_override_by_user_id') IS NULL
+    ALTER TABLE dbo.dispensation_items ADD allergy_override_by_user_id bigint NULL;
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE parent_object_id=OBJECT_ID(N'dbo.dispensation_items')
+    AND name=N'FK_dispensation_items_allergy_override_user')
+    ALTER TABLE dbo.dispensation_items ADD CONSTRAINT FK_dispensation_items_allergy_override_user
+    FOREIGN KEY(allergy_override_by_user_id) REFERENCES dbo.users(user_id);
 GO
 
 IF OBJECT_ID(N'dbo.inventory_movements', N'U') IS NULL
@@ -2987,6 +3096,7 @@ FROM (VALUES
     ('PRESCRIPTIONS_WRITE',   N'Kê đơn thuốc',                   'PHARMACY',   N'Tạo và phát hành đơn'),
     ('PRESCRIPTIONS_ALLERGY_OVERRIDE',N'Cho phép kê khi cảnh báo dị ứng', 'PHARMACY', N'Ghi lý do và audit khi override dị ứng hoạt chất'),
     ('PHARMACY_DISPENSE',     N'Cấp phát thuốc',                 'PHARMACY',   N'Cấp thuốc theo đơn và đảo sai sót'),
+    ('PHARMACY_ALLERGY_OVERRIDE',N'Cho phép cấp khi cảnh báo dị ứng', 'PHARMACY', N'Xác nhận lại, ghi lý do và audit khi cấp thuốc có dị ứng'),
     ('INVENTORY_MANAGE',      N'Quản lý tồn kho',                'PHARMACY',   N'Nhập, điều chỉnh và chuyển kho'),
     ('BILLING_MANAGE',        N'Quản lý hóa đơn',                'BILLING',    N'Tạo, đồng bộ, phát hành và hủy hóa đơn'),
     ('PAYMENT_COLLECT',       N'Thu tiền',                       'BILLING',    N'Ghi nhận thanh toán'),
@@ -3028,6 +3138,7 @@ WHERE r.role_code = 'ADMIN'
         ('RECEPTIONIST','APPOINTMENTS_MANAGE'), ('RECEPTIONIST','QUEUE_MANAGE'),
         ('RECEPTIONIST','ENCOUNTERS_CREATE'),
         ('PHARMACIST','PATIENTS_VIEW'), ('PHARMACIST','PHARMACY_DISPENSE'),
+        ('PHARMACIST','PHARMACY_ALLERGY_OVERRIDE'),
         ('PHARMACIST','INVENTORY_MANAGE'), ('PHARMACIST','REPORTS_VIEW'),
         ('CASHIER','PATIENTS_VIEW'), ('CASHIER','BILLING_MANAGE'),
         ('CASHIER','PAYMENT_COLLECT'), ('CASHIER','PAYMENT_REFUND'), ('CASHIER','REPORTS_VIEW'),
@@ -4457,7 +4568,9 @@ BEGIN
                OR i.frequency<>d.frequency
                OR COALESCE(i.duration_days,-1)<>COALESCE(d.duration_days,-1)
                OR COALESCE(i.timing_instruction,N'')<>COALESCE(d.timing_instruction,N'')
-               OR i.usage_instruction<>d.usage_instruction OR i.sort_order<>d.sort_order)
+               OR i.usage_instruction<>d.usage_instruction OR i.sort_order<>d.sort_order
+               OR COALESCE(i.allergy_override_reason,N'')<>COALESCE(d.allergy_override_reason,N'')
+               OR COALESCE(i.allergy_override_by_user_id,-1)<>COALESCE(d.allergy_override_by_user_id,-1))
     )
         THROW 52064, N'Sau phát hành chỉ hệ thống được cập nhật lượng đã cấp; nội dung kê là bất biến.', 1;
 END;
@@ -10644,7 +10757,9 @@ CREATE OR ALTER PROCEDURE dbo.sp_dispense_prescription_item
     @prescription_item_id bigint,
     @medicine_batch_id bigint,
     @quantity decimal(18,3),
-    @dispensation_item_id bigint OUTPUT
+    @dispensation_item_id bigint OUTPUT,
+    @allergy_override_reason nvarchar(500)=NULL,
+    @allergy_override_by_user_id bigint=NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -10702,9 +10817,11 @@ BEGIN
         IF @@ROWCOUNT=0 THROW 53334,N'Tồn kho vừa thay đổi; không đủ để cấp.',1;
 
         INSERT dbo.dispensation_items
-            (dispensation_id,prescription_item_id,medicine_batch_id,quantity,unit_price_snapshot)
+            (dispensation_id,prescription_item_id,medicine_batch_id,quantity,unit_price_snapshot,
+             allergy_override_reason,allergy_override_by_user_id)
         VALUES
-            (@dispensation_id,@prescription_item_id,@medicine_batch_id,@quantity,@unit_price);
+            (@dispensation_id,@prescription_item_id,@medicine_batch_id,@quantity,@unit_price,
+             @allergy_override_reason,@allergy_override_by_user_id);
         SET @dispensation_item_id=SCOPE_IDENTITY();
         DECLARE @balance_after decimal(18,3);
         SELECT @balance_after=quantity_on_hand FROM dbo.inventory_balances
@@ -10976,7 +11093,11 @@ BEGIN
     SELECT TOP(300) CONVERT(varchar(36),m.public_id) AS publicId,m.medicine_code AS code,
            m.generic_name AS genericName,m.brand_name AS brandName,m.active_ingredient AS activeIngredient,
            m.strength,m.dosage_form AS dosageForm,m.route,m.base_unit AS baseUnit,
-           CONVERT(varchar(30),m.current_sale_price) AS salePrice,m.is_active AS isActive
+           CONVERT(varchar(30),m.current_sale_price) AS salePrice,m.is_active AS isActive,
+           JSON_QUERY(COALESCE((SELECT a.canonical_name AS allergenName
+               FROM dbo.medicine_allergens ma JOIN dbo.allergens a ON a.allergen_id=ma.allergen_id
+               WHERE ma.medicine_id=m.medicine_id AND ma.is_active=1 AND a.is_active=1
+               ORDER BY a.canonical_name FOR JSON PATH),N'[]')) AS allergensJson
     FROM dbo.medicines m WHERE m.is_active=1 ORDER BY m.generic_name,m.medicine_id;
     SELECT TOP(500) CONVERT(varchar(36),mb.public_id) AS publicId,
            CONVERT(varchar(36),m.public_id) AS medicinePublicId,
@@ -11052,7 +11173,12 @@ BEGIN
            CONVERT(varchar(30),pi.prescribed_quantity) AS prescribedQuantity,
            CONVERT(varchar(30),pi.dispensed_quantity) AS dispensedQuantity,
            pi.dose,pi.frequency,pi.duration_days AS durationDays,
-           pi.timing_instruction AS timingInstruction,pi.usage_instruction AS usageInstruction
+           pi.timing_instruction AS timingInstruction,pi.usage_instruction AS usageInstruction,
+           pi.allergy_override_reason AS allergyOverrideReason,
+           JSON_QUERY(COALESCE((SELECT a.canonical_name AS allergenName
+               FROM dbo.medicine_allergens ma JOIN dbo.allergens a ON a.allergen_id=ma.allergen_id
+               WHERE ma.medicine_id=pi.medicine_id AND ma.is_active=1 AND a.is_active=1
+               ORDER BY a.canonical_name FOR JSON PATH),N'[]')) AS allergensJson
     FROM dbo.prescription_items pi JOIN dbo.medicines m ON m.medicine_id=pi.medicine_id
     WHERE pi.prescription_id=@prescription_id ORDER BY pi.sort_order,pi.prescription_item_id;
     SELECT CONVERT(varchar(36),d.public_id) AS publicId,d.dispensation_code AS code,d.status,
@@ -11065,7 +11191,8 @@ BEGIN
            CONVERT(varchar(36),mb.public_id) AS batchPublicId,
            mb.batch_number AS batchNumber,CONVERT(varchar(30),di.quantity) AS quantity,
            CONVERT(varchar(30),di.unit_price_snapshot) AS unitPrice,
-           di.dispensed_at_utc AS dispensedAtUtc,CONVERT(bit,CASE WHEN r.dispensation_item_id IS NULL THEN 0 ELSE 1 END) AS reversed
+           di.dispensed_at_utc AS dispensedAtUtc,CONVERT(bit,CASE WHEN r.dispensation_item_id IS NULL THEN 0 ELSE 1 END) AS reversed,
+           di.allergy_override_reason AS allergyOverrideReason
     FROM dbo.dispensation_items di JOIN dbo.dispensations d ON d.dispensation_id=di.dispensation_id
     JOIN dbo.prescription_items pi ON pi.prescription_item_id=di.prescription_item_id
     JOIN dbo.medicine_batches mb ON mb.medicine_batch_id=di.medicine_batch_id
@@ -11074,6 +11201,22 @@ BEGIN
     SELECT a.allergen_name AS allergenName,a.severity,a.reaction
     FROM dbo.patient_allergies a JOIN dbo.prescriptions p ON p.patient_id=a.patient_id
     WHERE p.prescription_id=@prescription_id AND a.is_active=1 AND a.allergy_type='DRUG';
+    SELECT CONVERT(varchar(36),pi.public_id) AS prescriptionItemPublicId,
+           CONVERT(varchar(36),m.public_id) AS medicinePublicId,
+           pi.medicine_name_snapshot AS medicineName,a.canonical_name AS allergenName,
+           pa.severity,pa.reaction,pi.allergy_override_reason AS prescribingOverrideReason
+    FROM dbo.prescriptions p
+    JOIN dbo.prescription_items pi ON pi.prescription_id=p.prescription_id
+    JOIN dbo.medicines m ON m.medicine_id=pi.medicine_id
+    JOIN dbo.medicine_allergens ma ON ma.medicine_id=m.medicine_id AND ma.is_active=1
+    JOIN dbo.allergens a ON a.allergen_id=ma.allergen_id AND a.is_active=1
+    JOIN dbo.patient_allergies pa ON pa.patient_id=p.patient_id AND pa.is_active=1
+      AND pa.allergy_type='DRUG'
+      AND (pa.allergen_id=a.allergen_id OR (pa.allergen_id IS NULL AND TRIM(pa.allergen_name)=a.canonical_name))
+    WHERE p.prescription_id=@prescription_id
+    ORDER BY pi.sort_order,pi.prescription_item_id,
+      CASE pa.severity WHEN 'SEVERE' THEN 0 WHEN 'MODERATE' THEN 1 WHEN 'MILD' THEN 2 ELSE 3 END,
+      a.canonical_name;
 END;
 GO
 
@@ -11081,7 +11224,7 @@ CREATE OR ALTER PROCEDURE dbo.sp_clinic_create_medicine
     @actor_user_id bigint,@code varchar(30),@generic_name nvarchar(250),
     @active_ingredient nvarchar(500),@strength nvarchar(100),@dosage_form nvarchar(100),
     @route nvarchar(100),@base_unit nvarchar(30),@sale_price decimal(19,2),
-    @medicine_public_id uniqueidentifier OUTPUT
+    @medicine_public_id uniqueidentifier OUTPUT,@allergen_names_json nvarchar(max)=NULL
 AS
 BEGIN
     SET NOCOUNT ON; SET XACT_ABORT ON;
@@ -11089,12 +11232,38 @@ BEGIN
     IF NULLIF(TRIM(@code),'') IS NULL OR NULLIF(TRIM(@generic_name),N'') IS NULL
        OR NULLIF(TRIM(@active_ingredient),N'') IS NULL OR @sale_price<0
        THROW 53904,N'Danh mục thuốc không hợp lệ.',1;
+    IF @allergen_names_json IS NOT NULL AND ISJSON(@allergen_names_json)<>1
+       THROW 53904,N'Danh sách dị nguyên của thuốc không hợp lệ.',1;
+    DECLARE @allergen_names table(canonical_name nvarchar(200) NOT NULL PRIMARY KEY);
+    IF @allergen_names_json IS NOT NULL
+    BEGIN
+        IF EXISTS (SELECT 1 FROM OPENJSON(@allergen_names_json)
+                   WHERE [type]<>1 OR LEN(TRIM(CONVERT(nvarchar(4000),[value]))) NOT BETWEEN 2 AND 200)
+           THROW 53904,N'Mỗi dị nguyên phải là chuỗi từ 2 đến 200 ký tự.',1;
+        INSERT @allergen_names(canonical_name)
+        SELECT DISTINCT TRIM(CONVERT(nvarchar(200),[value])) FROM OPENJSON(@allergen_names_json);
+    END;
+    IF NOT EXISTS (SELECT 1 FROM @allergen_names)
+    BEGIN
+        IF LEN(TRIM(@active_ingredient))>200
+           THROW 53904,N'Hoạt chất dài cần danh sách dị nguyên chuẩn hóa riêng.',1;
+        INSERT @allergen_names(canonical_name) VALUES(TRIM(@active_ingredient));
+    END;
     BEGIN TRY
         BEGIN TRANSACTION;
         INSERT dbo.medicines(medicine_code,generic_name,active_ingredient,strength,dosage_form,route,
             base_unit,current_sale_price)
         VALUES(@code,@generic_name,@active_ingredient,@strength,@dosage_form,@route,@base_unit,@sale_price);
-        SELECT @medicine_public_id=public_id FROM dbo.medicines WHERE medicine_id=SCOPE_IDENTITY();
+        DECLARE @medicine_id bigint=SCOPE_IDENTITY();
+        SELECT @medicine_public_id=public_id FROM dbo.medicines WHERE medicine_id=@medicine_id;
+        INSERT dbo.allergens(canonical_name,allergen_type)
+        SELECT names.canonical_name,'DRUG' FROM @allergen_names names
+        WHERE NOT EXISTS (SELECT 1 FROM dbo.allergens a WITH (UPDLOCK,HOLDLOCK)
+                          WHERE a.allergen_type='DRUG' AND a.canonical_name=names.canonical_name);
+        INSERT dbo.medicine_allergens(medicine_id,allergen_id,created_by_user_id)
+        SELECT @medicine_id,a.allergen_id,@actor_user_id
+        FROM @allergen_names names JOIN dbo.allergens a
+          ON a.allergen_type='DRUG' AND a.canonical_name=names.canonical_name;
         EXEC dbo.sp_write_audit @actor_user_id,NULL,'MEDICINE_CREATED','MEDICINE',@medicine_public_id;
         COMMIT TRANSACTION;
     END TRY BEGIN CATCH IF XACT_STATE()<>0 ROLLBACK TRANSACTION; THROW; END CATCH;
@@ -11176,28 +11345,50 @@ AS
 BEGIN
     SET NOCOUNT ON; SET XACT_ABORT ON;
     DECLARE @prescription_id bigint,@medicine_id bigint,@branch_id bigint,@patient_id bigint,
-            @ingredient nvarchar(500),@allergen nvarchar(200),@id bigint;
+            @allergen nvarchar(200),@id bigint;
     SELECT @prescription_id=prescription_id,@branch_id=branch_id,@patient_id=patient_id
     FROM dbo.prescriptions WHERE public_id=@prescription_public_id;
-    SELECT @medicine_id=medicine_id,@ingredient=active_ingredient FROM dbo.medicines WHERE public_id=@medicine_public_id;
+    SELECT @medicine_id=medicine_id FROM dbo.medicines WHERE public_id=@medicine_public_id;
     IF @prescription_id IS NULL OR @medicine_id IS NULL THROW 53908,N'Đơn hoặc thuốc không tồn tại.',1;
     IF @prescribed_quantity<=0 OR NULLIF(TRIM(@dose),N'') IS NULL OR NULLIF(TRIM(@frequency),N'') IS NULL
        OR NULLIF(TRIM(@usage_instruction),N'') IS NULL THROW 53909,N'Dòng kê thuốc không hợp lệ.',1;
-    SELECT TOP(1) @allergen=allergen_name FROM dbo.patient_allergies
-    WHERE patient_id=@patient_id AND is_active=1 AND allergy_type='DRUG'
-      AND LEN(TRIM(allergen_name))>=3 AND @ingredient LIKE N'%'+TRIM(allergen_name)+N'%'
-    ORDER BY CASE severity WHEN 'SEVERE' THEN 0 WHEN 'MODERATE' THEN 1 ELSE 2 END;
+    SELECT TOP(1) @allergen=a.canonical_name
+    FROM dbo.medicine_allergens ma
+    JOIN dbo.allergens a ON a.allergen_id=ma.allergen_id AND a.is_active=1
+    JOIN dbo.patient_allergies pa ON pa.patient_id=@patient_id AND pa.is_active=1
+      AND pa.allergy_type='DRUG'
+      AND (pa.allergen_id=a.allergen_id OR (pa.allergen_id IS NULL AND TRIM(pa.allergen_name)=a.canonical_name))
+    WHERE ma.medicine_id=@medicine_id AND ma.is_active=1
+    ORDER BY CASE pa.severity WHEN 'SEVERE' THEN 0 WHEN 'MODERATE' THEN 1 WHEN 'MILD' THEN 2 ELSE 3 END,
+      a.canonical_name;
     IF @allergen IS NOT NULL AND LEN(TRIM(COALESCE(@allergy_override_reason,N'')))<10
        THROW 53910,N'Cảnh báo dị ứng hoạt chất; cần quyền override và lý do tối thiểu 10 ký tự.',1;
     IF @allergen IS NOT NULL
        EXEC dbo.sp_assert_permission @actor_user_id,'PRESCRIPTIONS_ALLERGY_OVERRIDE',@branch_id;
     BEGIN TRY
         BEGIN TRANSACTION;
+        SET @allergen=NULL;
+        SELECT TOP(1) @allergen=a.canonical_name
+        FROM dbo.medicine_allergens ma
+        JOIN dbo.allergens a ON a.allergen_id=ma.allergen_id AND a.is_active=1
+        JOIN dbo.patient_allergies pa ON pa.patient_id=@patient_id AND pa.is_active=1
+          AND pa.allergy_type='DRUG'
+          AND (pa.allergen_id=a.allergen_id OR (pa.allergen_id IS NULL AND TRIM(pa.allergen_name)=a.canonical_name))
+        WHERE ma.medicine_id=@medicine_id AND ma.is_active=1
+        ORDER BY CASE pa.severity WHEN 'SEVERE' THEN 0 WHEN 'MODERATE' THEN 1 WHEN 'MILD' THEN 2 ELSE 3 END,
+          a.canonical_name;
+        IF @allergen IS NOT NULL AND LEN(TRIM(COALESCE(@allergy_override_reason,N'')))<10
+           THROW 53910,N'Cảnh báo dị ứng hoạt chất; cần quyền override và lý do tối thiểu 10 ký tự.',1;
+        IF @allergen IS NOT NULL
+           EXEC dbo.sp_assert_permission @actor_user_id,'PRESCRIPTIONS_ALLERGY_OVERRIDE',@branch_id;
         EXEC dbo.sp_add_prescription_item @actor_user_id,@prescription_id,@medicine_id,@prescribed_quantity,
              @dose,@frequency,@duration_days,@timing_instruction,@usage_instruction,@sort_order,@id OUTPUT;
         SELECT @item_public_id=public_id FROM dbo.prescription_items WHERE prescription_item_id=@id;
         IF @allergen IS NOT NULL
         BEGIN
+            UPDATE dbo.prescription_items
+            SET allergy_override_reason=TRIM(@allergy_override_reason),allergy_override_by_user_id=@actor_user_id
+            WHERE prescription_item_id=@id;
             DECLARE @audit_json nvarchar(max)=CONCAT(N'{"allergen":"',STRING_ESCAPE(@allergen,'json'),
                 N'","reason":"',STRING_ESCAPE(@allergy_override_reason,'json'),N'"}');
             EXEC dbo.sp_write_audit @actor_user_id,@branch_id,'PRESCRIPTION_ALLERGY_OVERRIDE',
@@ -11314,16 +11505,20 @@ CREATE OR ALTER PROCEDURE dbo.sp_clinic_dispense_item
     @actor_user_id bigint,@dispensation_public_id uniqueidentifier,
     @prescription_item_public_id uniqueidentifier,@batch_public_id uniqueidentifier,
     @quantity decimal(18,3),@idempotency_key uniqueidentifier,
-    @dispensation_item_public_id uniqueidentifier OUTPUT
+    @dispensation_item_public_id uniqueidentifier OUTPUT,@allergy_override_reason nvarchar(500)=NULL
 AS
 BEGIN
     SET NOCOUNT ON; SET XACT_ABORT ON;
-    DECLARE @dispensation_id bigint,@location_id bigint,@branch_id bigint,@prescription_item_id bigint,
-            @medicine_id bigint,@batch_id bigint,@id bigint,@lock_result int,@lock_resource nvarchar(255);
-    SELECT @dispensation_id=dispensation_id,@location_id=inventory_location_id,@branch_id=branch_id
-    FROM dbo.dispensations WHERE public_id=@dispensation_public_id;
+    DECLARE @dispensation_id bigint,@prescription_id bigint,@patient_id bigint,@location_id bigint,@branch_id bigint,
+            @prescription_item_id bigint,@medicine_id bigint,@batch_id bigint,@id bigint,@allergen nvarchar(200),
+            @allergy_override_user_id bigint,@stored_allergy_override_reason nvarchar(500),
+            @lock_result int,@lock_resource nvarchar(255);
+    SELECT @dispensation_id=d.dispensation_id,@prescription_id=d.prescription_id,@patient_id=p.patient_id,
+           @location_id=d.inventory_location_id,@branch_id=d.branch_id
+    FROM dbo.dispensations d JOIN dbo.prescriptions p ON p.prescription_id=d.prescription_id
+    WHERE d.public_id=@dispensation_public_id;
     SELECT @prescription_item_id=prescription_item_id,@medicine_id=medicine_id
-    FROM dbo.prescription_items WHERE public_id=@prescription_item_public_id;
+    FROM dbo.prescription_items WHERE public_id=@prescription_item_public_id AND prescription_id=@prescription_id;
     SELECT @batch_id=medicine_batch_id FROM dbo.medicine_batches WHERE public_id=@batch_public_id;
     IF @dispensation_id IS NULL OR @prescription_item_id IS NULL OR @batch_id IS NULL
        THROW 53914,N'Phiên, dòng kê hoặc lô không tồn tại.',1;
@@ -11331,8 +11526,37 @@ BEGIN
     EXEC dbo.sp_assert_permission @actor_user_id,'PHARMACY_DISPENSE',@branch_id;
     SET @lock_resource=CONCAT(N'pharmacy-stock:',@location_id,N':',@medicine_id);
     DECLARE @request_hash binary(32)=HASHBYTES('SHA2_256',CONCAT(@dispensation_public_id,N'|',
-        @prescription_item_public_id,N'|',@batch_public_id,N'|',CONVERT(varchar(40),@quantity))),
+        @prescription_item_public_id,N'|',@batch_public_id,N'|',CONVERT(varchar(40),@quantity),N'|',
+        COALESCE(TRIM(@allergy_override_reason),N''))),
         @old_hash binary(32),@old_status varchar(20),@old_resource bigint;
+    -- Fast replay phải đứng trước safety recheck: một retry đã hoàn tất không được biến thành
+    -- lỗi chỉ vì dị ứng mới được ghi nhận sau giao dịch gốc.
+    SELECT @old_hash=request_hash,@old_status=status,@old_resource=resource_id
+    FROM dbo.idempotency_requests
+    WHERE actor_user_id=@actor_user_id AND operation_code='DISPENSE_ITEM' AND idempotency_key=@idempotency_key;
+    IF @old_hash IS NOT NULL
+    BEGIN
+        IF @old_hash<>@request_hash THROW 53919,N'Idempotency key đã dùng với dữ liệu khác.',1;
+        IF @old_status='COMPLETED'
+        BEGIN
+            SELECT @dispensation_item_public_id=public_id FROM dbo.dispensation_items
+              WHERE dispensation_item_id=@old_resource;
+            RETURN;
+        END;
+    END;
+    SELECT TOP(1) @allergen=a.canonical_name
+    FROM dbo.medicine_allergens ma
+    JOIN dbo.allergens a ON a.allergen_id=ma.allergen_id AND a.is_active=1
+    JOIN dbo.patient_allergies pa ON pa.patient_id=@patient_id AND pa.is_active=1
+      AND pa.allergy_type='DRUG'
+      AND (pa.allergen_id=a.allergen_id OR (pa.allergen_id IS NULL AND TRIM(pa.allergen_name)=a.canonical_name))
+    WHERE ma.medicine_id=@medicine_id AND ma.is_active=1
+    ORDER BY CASE pa.severity WHEN 'SEVERE' THEN 0 WHEN 'MODERATE' THEN 1 WHEN 'MILD' THEN 2 ELSE 3 END,
+      a.canonical_name;
+    IF @allergen IS NOT NULL AND LEN(TRIM(COALESCE(@allergy_override_reason,N'')))<10
+       THROW 53923,N'Cấp phát trùng dị ứng hoạt chất; cần quyền override và lý do tối thiểu 10 ký tự.',1;
+    IF @allergen IS NOT NULL
+       EXEC dbo.sp_assert_permission @actor_user_id,'PHARMACY_ALLERGY_OVERRIDE',@branch_id;
     BEGIN TRY
         BEGIN TRANSACTION;
         SELECT @old_hash=request_hash,@old_status=status,@old_resource=resource_id
@@ -11348,12 +11572,39 @@ BEGIN
         END;
         INSERT dbo.idempotency_requests(actor_user_id,operation_code,idempotency_key,request_hash,status,expires_at_utc)
         VALUES(@actor_user_id,'DISPENSE_ITEM',@idempotency_key,@request_hash,'PROCESSING',DATEADD(DAY,30,SYSUTCDATETIME()));
+        SET @allergen=NULL;
+        SELECT TOP(1) @allergen=a.canonical_name
+        FROM dbo.medicine_allergens ma
+        JOIN dbo.allergens a ON a.allergen_id=ma.allergen_id AND a.is_active=1
+        JOIN dbo.patient_allergies pa ON pa.patient_id=@patient_id AND pa.is_active=1
+          AND pa.allergy_type='DRUG'
+          AND (pa.allergen_id=a.allergen_id OR (pa.allergen_id IS NULL AND TRIM(pa.allergen_name)=a.canonical_name))
+        WHERE ma.medicine_id=@medicine_id AND ma.is_active=1
+        ORDER BY CASE pa.severity WHEN 'SEVERE' THEN 0 WHEN 'MODERATE' THEN 1 WHEN 'MILD' THEN 2 ELSE 3 END,
+          a.canonical_name;
+        IF @allergen IS NOT NULL AND LEN(TRIM(COALESCE(@allergy_override_reason,N'')))<10
+           THROW 53923,N'Cấp phát trùng dị ứng hoạt chất; cần quyền override và lý do tối thiểu 10 ký tự.',1;
+        IF @allergen IS NOT NULL
+           EXEC dbo.sp_assert_permission @actor_user_id,'PHARMACY_ALLERGY_OVERRIDE',@branch_id;
+        IF @allergen IS NOT NULL
+        BEGIN
+            SET @allergy_override_user_id=@actor_user_id;
+            SET @stored_allergy_override_reason=TRIM(@allergy_override_reason);
+        END;
         EXEC @lock_result=sys.sp_getapplock @Resource=@lock_resource,
             @LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000;
         IF @lock_result<0 THROW 53912,N'Không thể khóa tồn kho.',1;
         EXEC dbo.sp_dispense_prescription_item @actor_user_id,@dispensation_id,@prescription_item_id,
-             @batch_id,@quantity,@id OUTPUT;
+             @batch_id,@quantity,@id OUTPUT,@stored_allergy_override_reason,
+             @allergy_override_by_user_id=@allergy_override_user_id;
         SELECT @dispensation_item_public_id=public_id FROM dbo.dispensation_items WHERE dispensation_item_id=@id;
+        IF @allergen IS NOT NULL
+        BEGIN
+            DECLARE @audit_json nvarchar(max)=CONCAT(N'{"allergen":"',STRING_ESCAPE(@allergen,'json'),
+                N'","reason":"',STRING_ESCAPE(@allergy_override_reason,'json'),N'"}');
+            EXEC dbo.sp_write_audit @actor_user_id,@branch_id,'DISPENSATION_ALLERGY_OVERRIDE',
+                 'DISPENSATION_ITEM',@dispensation_item_public_id,NULL,@audit_json;
+        END;
         UPDATE dbo.idempotency_requests SET status='COMPLETED',resource_type='DISPENSATION_ITEM',
             resource_id=@id,response_json=CONCAT(N'{"publicId":"',@dispensation_item_public_id,N'"}'),
             completed_at_utc=SYSUTCDATETIME()

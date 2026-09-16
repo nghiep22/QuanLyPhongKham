@@ -1550,6 +1550,7 @@ export type PharmacyMedicine = {
     baseUnit: string;
     salePrice: string;
     isActive: boolean;
+    allergenNames: Array<string>;
 };
 
 export type PharmacyBatch = {
@@ -1613,6 +1614,8 @@ export type PrescriptionDetail = PharmacyPrescriptionSummary & {
         durationDays: number | null;
         timingInstruction: string | null;
         usageInstruction: string;
+        allergenNames: Array<string>;
+        allergyOverrideReason: string | null;
     }>;
     dispensations: Array<{
         publicId: string;
@@ -1632,11 +1635,21 @@ export type PrescriptionDetail = PharmacyPrescriptionSummary & {
         unitPrice: string;
         dispensedAtUtc: string;
         reversed: boolean;
+        allergyOverrideReason: string | null;
     }>;
     drugAllergies: Array<{
         allergenName: string;
         severity: string;
         reaction: string | null;
+    }>;
+    allergyAlerts: Array<{
+        prescriptionItemPublicId: string;
+        medicinePublicId: string;
+        medicineName: string;
+        allergenName: string;
+        severity: string;
+        reaction: string | null;
+        prescribingOverrideReason: string | null;
     }>;
 };
 
@@ -1683,6 +1696,7 @@ export type CreateMedicineRequest = {
     route: string;
     baseUnit: string;
     salePrice: number;
+    allergenNames: Array<string>;
 };
 
 export type CreateMedicineBatchRequest = {
@@ -1739,6 +1753,7 @@ export type DispenseItemRequest = {
     prescriptionItemPublicId: string;
     batchPublicId: string;
     quantity: number;
+    allergyOverrideReason?: string | null;
 };
 
 export type ReverseDispensationRequest = {

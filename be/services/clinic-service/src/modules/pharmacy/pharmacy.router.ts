@@ -13,7 +13,8 @@ const branchQuery = z.object({ branchPublicId: uuid }).strict();
 const medicine = z.object({ code: z.string().trim().min(1).max(30), genericName: z.string().trim().min(2).max(250),
   activeIngredient: z.string().trim().min(2).max(500), strength: z.string().trim().min(1).max(100),
   dosageForm: z.string().trim().min(1).max(100), route: z.string().trim().min(1).max(100),
-  baseUnit: z.string().trim().min(1).max(30), salePrice: money }).strict();
+  baseUnit: z.string().trim().min(1).max(30), salePrice: money,
+  allergenNames: z.array(z.string().trim().min(2).max(200)).min(1).max(20) }).strict();
 const batch = z.object({ branchPublicId: uuid, medicinePublicId: uuid, batchNumber: z.string().trim().min(1).max(80),
   expiryDate: z.iso.date(), purchasePrice: money, salePrice: money }).strict();
 const location = z.object({ branchPublicId: uuid, code: z.string().trim().min(1).max(30),
@@ -31,7 +32,8 @@ const item = z.object({ medicinePublicId: uuid, prescribedQuantity: quantity,
 const stock = z.object({ locationPublicId: uuid, batchPublicId: uuid, quantity,
   reason: z.string().trim().max(500).nullable().optional() }).strict();
 const open = z.object({ locationPublicId: uuid }).strict();
-const dispense = z.object({ prescriptionItemPublicId: uuid, batchPublicId: uuid, quantity }).strict();
+const dispense = z.object({ prescriptionItemPublicId: uuid, batchPublicId: uuid, quantity,
+  allergyOverrideReason: z.string().trim().max(500).nullable().optional() }).strict();
 const reverse = z.object({ returnLocationPublicId: uuid, disposition: z.enum(['SELLABLE', 'QUARANTINE']),
   reason }).strict();
 const reasonBody = z.object({ reason }).strict();
@@ -128,7 +130,8 @@ export function createPharmacyRouter(auth: PrincipalAuthenticator, service: Phar
     const input = validate(dispense, req.body); const current = await actor(req, auth);
     const key = validate(uuid, req.header('idempotency-key'));
     const publicId = await service.run(() => db.dispense(current, validate(uuid, req.params.dispensationId),
-      input.prescriptionItemPublicId, input.batchPublicId, input.quantity, key, res.locals.requestId));
+      input.prescriptionItemPublicId, input.batchPublicId, input.quantity,
+      input.allergyOverrideReason ?? null, key, res.locals.requestId));
     success(res, { publicId }, 201);
   }));
   router.post('/dispensations/:dispensationId/complete', route(async (req, res) => {

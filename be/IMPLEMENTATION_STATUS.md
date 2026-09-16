@@ -363,16 +363,32 @@ Phạm vi đã hoàn thành:
 - Worker có cadence/batch cấu hình riêng, chạy khi khởi động và theo giờ. Regression
   xác minh trạng thái, audit/correlation, outbox/dedupe và lần chạy lại bằng 0.
 
+## DONE — Slice 20: Normalized Medication Allergy Safety
+
+- `allergens` là catalog chuẩn hóa và `medicine_allergens` ánh xạ nhiều-nhiều;
+  thuốc phối hợp khai báo từng dị nguyên riêng. Baseline backfill tên dị ứng thuốc
+  và chuỗi hoạt chất cũ nhưng không dùng so khớp `LIKE` dễ báo sai.
+- Lúc thêm dòng kê, database đối chiếu mapping chính xác với dị ứng active. Xung
+  đột chỉ được tiếp tục khi bác sĩ có `PRESCRIPTIONS_ALLERGY_OVERRIDE`, nhập lý do
+  tối thiểu 10 ký tự; người/lý do được lưu trên dòng kê và audit bằng public UUID.
+- Lúc cấp, mapping được kiểm tra lại để bắt dị ứng mới ghi sau khi phát hành đơn.
+  Dược sĩ cần `PHARMACY_ALLERGY_OVERRIDE` và lý do riêng; xác nhận nằm ngay trên
+  dòng cấp append-only cùng audit. Fast replay idempotent trả resource cũ trước
+  safety recheck, còn payload hoặc lý do khác vẫn conflict.
+- Prescription read model trả mapping theo thuốc và danh sách cảnh báo đã match.
+  Admin Web hiển thị dị nguyên chuẩn hóa, cảnh báo theo từng thuốc và hai dấu vết
+  override. OpenAPI 3.1 v0.14/generated types/client đã đồng bộ.
+
 ### Bằng chứng xác minh local toàn bộ
 
 | Kiểm tra | Kết quả |
 |---|---|
-| Baseline SQL chạy lại idempotent | Đạt; 71 bảng, 23 view, 165 procedure, 31 trigger |
+| Baseline SQL chạy lại idempotent | Đạt; 73 bảng, 23 view, 165 procedure, 31 trigger |
 | SQL auth session/staff RBAC/staff safety/password lifecycle/patient registration/patient link/catalog-directory/patient registry/scheduling-appointments/reception-queue/clinical-core/pharmacy-core/pharmacy-FEFO/pharmacy-allergy/billing-core/reports-core/notifications-outbox regression | 17/17 PASS; rollback sạch. Hai harness SQL thật xác minh queue gọi hai ticket khác nhau và payment race chỉ một quầy thu được toàn bộ dư nợ |
 | OpenAPI lint + code generation | Đạt; contract hợp lệ và generated code sinh lặp lại ổn định |
 | npm run lint | Đạt, không cảnh báo |
 | npm run typecheck | Đạt |
-| npm test | 124 test đạt (Admin 5, Auth 34, Mobile 14, Clinic 57, Worker 14), gồm hết hạn đơn theo batch/không overlap, công bố/lịch sử lâm sàng, xác minh manifest V3, hủy lượt an toàn và outbox/delivery worker |
+| npm test | 126 test đạt (Admin 5, Auth 34, Mobile 14, Clinic 59, Worker 14), gồm mapping/recheck dị ứng lúc kê/cấp, hết hạn đơn theo batch/không overlap, công bố/lịch sử lâm sàng, xác minh manifest V3, hủy lượt an toàn và outbox/delivery worker |
 | npm run build | Đạt; .NET 0 warning/0 error |
 | npm run doctor:mobile | 21/21; Expo SDK 57 và các package liên quan khớp patch tương thích (`expo` 57.0.23) |
 | Gateway → Auth → SQL smoke test | Registration thiếu idempotency key trả 400; challenge lạ trả generic OTP 400; ba route patient-access mới đi đúng Auth và trả 401 + request ID + `Cache-Control: no-store` khi thiếu token |
@@ -405,8 +421,8 @@ Phạm vi đã hoàn thành:
   certificate; lõi bác sĩ hoàn tất/ký/bổ sung/hủy, công bố, lịch sử bệnh nhân và
   xác minh lại dấu SHA-256 đã hoàn thành qua Slice 11/16/17/18.
 - Phase 7 còn quản lý nhà cung cấp, cập nhật/khóa danh mục thuốc, cảnh báo lô sắp
-  hết hạn và harness hai quầy cấp đồng thời; lõi kê đơn–nhập kho–cấp–đảo–đối soát
-  và tự hết hạn đơn của Slice 12/19 đã hoàn thành.
+  hết hạn và harness hai quầy cấp đồng thời; lõi kê đơn–nhập kho–cấp–đảo–đối soát,
+  tự hết hạn đơn và recheck dị ứng chuẩn hóa của Slice 12/19/20 đã hoàn thành.
 - Phase 8 còn in/xuất hóa đơn, tích hợp payment gateway/webhook và hồ sơ claim bảo
   hiểm; lõi hóa đơn–thu–hoàn–VOID của Slice 13 đã hoàn thành.
 - Phase 9 còn replay dead-letter thủ công và export CSV/XLSX; lõi báo cáo,

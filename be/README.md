@@ -87,8 +87,10 @@ xóa `request_id`, `actor_user_id`, `branch_id` trong `SESSION_CONTEXT`.
 ## Prescription & pharmacy
 
 - Bác sĩ mở **Khám bệnh → Kê đơn thuốc** để tạo DRAFT cho lượt đang khám, thêm
-  liều/hướng dẫn và phát hành. Dị ứng hoạt chất đã ghi nhận chặn kê nếu không có
-  quyền `PRESCRIPTIONS_ALLERGY_OVERRIDE` cùng lý do tối thiểu 10 ký tự.
+  liều/hướng dẫn và phát hành. Dị ứng được đối chiếu qua mapping chuẩn hóa thay vì
+  chuỗi gần đúng; kê xung đột cần `PRESCRIPTIONS_ALLERGY_OVERRIDE` và lý do tối
+  thiểu 10 ký tự. Khi cấp, dược sĩ phải recheck và dùng quyền
+  `PHARMACY_ALLERGY_OVERRIDE` cùng lý do riêng nếu vẫn tiếp tục.
 - **Nhà thuốc** đọc dữ liệu theo chi nhánh. Admin tạo thuốc cấp tổ chức; quyền
   `INVENTORY_MANAGE` tạo lô/vị trí và nhập kho; quyền `PHARMACY_DISPENSE` mở phiên,
   cấp lô FEFO, hoàn tất hoặc đảo vào khu cách ly. Nhập và cấp cần
