@@ -40,7 +40,7 @@ class MemoryCatalogRepository implements CatalogRepository {
   service: CatalogServiceView = {
     id: 60, publicId: randomUUID(), code: 'CONSULT_GENERAL', name: 'Khám đa khoa',
     type: 'CONSULTATION', category, specialty, durationMinutes: 30, basePrice: '200000.00',
-    requiresDoctor: true, isActive: true, branchPrices: [], rowVersion: 'AAAAAAAAAAE=',
+    requiresDoctor: true, resultSchema: null, isActive: true, branchPrices: [], rowVersion: 'AAAAAAAAAAE=',
   };
   duplicatePrice = false;
 
@@ -97,7 +97,7 @@ class MemoryCatalogRepository implements CatalogRepository {
   createService(_actor: ClinicPrincipal, _categoryId: number, _specialtyId: number | null, input: CreateServiceInput) {
     this.service = { ...this.service, publicId: randomUUID(), code: input.code, name: input.name,
       type: input.type, durationMinutes: input.durationMinutes, basePrice: input.basePrice,
-      requiresDoctor: input.requiresDoctor };
+      requiresDoctor: input.requiresDoctor, resultSchema: input.resultSchema ?? null };
     return Promise.resolve(this.service.publicId);
   }
   updateService(_actor: ClinicPrincipal, _serviceId: number, _categoryId: number, _specialtyId: number | null,
@@ -196,6 +196,21 @@ describe('organization catalog and public directory vertical slice', () => {
     expect(denied.status).toBe(403);
     expect(created.status).toBe(201);
     expect(created.body.data.code).toBe('CONSULT_NEW');
+  });
+
+  it('validates and returns the structured clinical result schema', async () => {
+    const base = { categoryPublicId: category.publicId, code: 'LAB_SCHEMA', name: 'Xét nghiệm schema',
+      type: 'LAB', durationMinutes: 15, basePrice: '100000.00', requiresDoctor: false };
+    const resultSchema = { type: 'object', additionalProperties: false, required: ['value'],
+      properties: { value: { type: 'number', title: 'Giá trị', unit: 'mg/dL', minimum: 0 } } } as const;
+    const invalid = await request(app(repository)).post('/api/v1/admin/catalog/services')
+      .query({ branchPublicId: branchA.publicId }).set(authorization('admin'))
+      .send({ ...base, resultSchema: { ...resultSchema, required: ['missing'] } });
+    const created = await request(app(repository)).post('/api/v1/admin/catalog/services')
+      .query({ branchPublicId: branchA.publicId }).set(authorization('admin')).send({ ...base, resultSchema });
+    expect(invalid.status).toBe(400);
+    expect(created.status).toBe(201);
+    expect(created.body.data.resultSchema.properties.value.unit).toBe('mg/dL');
   });
 
   it('allows branch pricing but rejects a duplicate effective date', async () => {

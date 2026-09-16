@@ -1,4 +1,5 @@
 import type { ClinicPrincipal } from '../identity/index.js';
+import type { ClinicalResultSchema } from '../organization-catalog/catalog.types.js';
 
 export type EncounterStatus = 'WAITING' | 'IN_PROGRESS' | 'COMPLETED' | 'SIGNED' | 'CANCELLED';
 
@@ -63,7 +64,7 @@ export type OrderServiceInput = {
 export type FinalizeResultInput = {
   summary?: string | null;
   conclusion?: string | null;
-  result?: Record<string, unknown> | unknown[] | null;
+  result?: Record<string, unknown> | null;
 };
 
 export type AmendmentInput = { reason: string; content: string };
@@ -84,6 +85,7 @@ export type ClinicalEncounterDetail = ClinicalEncounterSummary & ClinicalNotesIn
     unitPrice: string;
     status: 'ORDERED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
     notes: string | null;
+    resultSchema: ClinicalResultSchema | null;
     result: null | { publicId: string; version: number; status: string; summary: string | null;
       conclusion: string | null; result: unknown; finalizedAtUtc: string };
   }>;

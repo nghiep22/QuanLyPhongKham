@@ -773,6 +773,26 @@ export type CatalogBranchPrice = EffectivePrice & {
     isAvailable: boolean;
 };
 
+export type ClinicalResultFieldSchema = {
+    type: 'string' | 'number' | 'integer' | 'boolean';
+    title: string;
+    unit?: string;
+    minLength?: number;
+    maxLength?: number;
+    minimum?: number;
+    maximum?: number;
+    enum?: Array<string>;
+};
+
+export type ClinicalResultSchema = {
+    type: 'object';
+    additionalProperties: false;
+    required: Array<string>;
+    properties: {
+        [key: string]: ClinicalResultFieldSchema;
+    };
+};
+
 export type CatalogService = {
     publicId: string;
     code: string;
@@ -783,6 +803,7 @@ export type CatalogService = {
     durationMinutes: number;
     basePrice: string;
     requiresDoctor: boolean;
+    resultSchema: ClinicalResultSchema | null;
     isActive: boolean;
     branchPrices: Array<CatalogBranchPrice>;
     rowVersion: string;
@@ -838,6 +859,7 @@ export type CreateCatalogServiceRequest = {
     durationMinutes: number;
     basePrice: string;
     requiresDoctor: boolean;
+    resultSchema?: ClinicalResultSchema | null;
 };
 
 export type UpdateCatalogServiceRequest = {
@@ -848,6 +870,7 @@ export type UpdateCatalogServiceRequest = {
     durationMinutes: number;
     basePrice: string;
     requiresDoctor: boolean;
+    resultSchema?: ClinicalResultSchema | null;
     isActive: boolean;
 };
 
@@ -1335,7 +1358,7 @@ export type ClinicalFinalizeResultRequest = {
     conclusion?: string | null;
     result?: {
         [key: string]: unknown;
-    } | Array<unknown> | null;
+    } | null;
 };
 
 export type ClinicalAmendmentRequest = {
@@ -1382,6 +1405,7 @@ export type ClinicalEncounterDetail = ClinicalEncounterSummary & {
         unitPrice: string;
         status: 'ORDERED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
         notes: string | null;
+        resultSchema: ClinicalResultSchema | null;
         result: {
             publicId: string;
             version: number;

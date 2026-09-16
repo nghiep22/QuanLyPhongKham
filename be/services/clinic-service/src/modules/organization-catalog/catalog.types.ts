@@ -5,6 +5,23 @@ export const serviceTypes = ['CONSULTATION', 'LAB', 'IMAGING', 'PROCEDURE', 'VAC
 export type RoomType = typeof roomTypes[number];
 export type ServiceType = typeof serviceTypes[number];
 
+export type ClinicalResultFieldSchema = {
+  type: 'string' | 'number' | 'integer' | 'boolean';
+  title: string;
+  unit?: string;
+  minLength?: number;
+  maxLength?: number;
+  minimum?: number;
+  maximum?: number;
+  enum?: string[];
+};
+export type ClinicalResultSchema = {
+  type: 'object';
+  additionalProperties: false;
+  required: string[];
+  properties: Record<string, ClinicalResultFieldSchema>;
+};
+
 export type BranchReference = { id: number; publicId: string; code: string; name: string };
 export type CategoryReference = { id: number; publicId: string; code: string; name: string };
 export type SpecialtyReference = { id: number; publicId: string; code: string; name: string };
@@ -81,6 +98,7 @@ export type CatalogService = {
   durationMinutes: number;
   basePrice: string;
   requiresDoctor: boolean;
+  resultSchema: ClinicalResultSchema | null;
   isActive: boolean;
   branchPrices: BranchPrice[];
   rowVersion: string;
@@ -105,6 +123,7 @@ export type CreateServiceInput = {
   durationMinutes: number;
   basePrice: string;
   requiresDoctor: boolean;
+  resultSchema?: ClinicalResultSchema | null;
 };
 export type UpdateServiceInput = Omit<CreateServiceInput, 'code'> & { isActive: boolean };
 export type SetBranchPriceInput = {

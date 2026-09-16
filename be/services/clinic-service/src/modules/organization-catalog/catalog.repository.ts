@@ -50,7 +50,7 @@ function mapDoctors(rows: IRecordSet<DoctorRow>): PublicDoctor[] {
 type ServiceRow = {
   serviceId: number; publicId: string; serviceCode: string; serviceName: string;
   serviceType: CatalogService['type']; defaultDurationMin: number; currentPrice: string;
-  requiresDoctor: boolean; isActive: boolean; rowVersion: string;
+  requiresDoctor: boolean; resultSchemaJson: string | null; isActive: boolean; rowVersion: string;
   serviceCategoryId: number; categoryPublicId: string; categoryCode: string; categoryName: string;
   specialtyId: number | null; specialtyPublicId: string | null; specialtyCode: string | null;
   specialtyName: string | null;
@@ -83,7 +83,9 @@ function mapCatalogServices(serviceRows: IRecordSet<ServiceRow>, priceRows: IRec
       code: row.specialtyCode!, name: row.specialtyName!,
     },
     durationMinutes: Number(row.defaultDurationMin), basePrice: row.currentPrice,
-    requiresDoctor: Boolean(row.requiresDoctor), isActive: Boolean(row.isActive),
+    requiresDoctor: Boolean(row.requiresDoctor),
+    resultSchema: row.resultSchemaJson == null ? null : JSON.parse(row.resultSchemaJson) as CatalogService['resultSchema'],
+    isActive: Boolean(row.isActive),
     branchPrices: prices.get(Number(row.serviceId)) ?? [], rowVersion: rowVersion(row.rowVersion),
   }));
 }
@@ -93,7 +95,8 @@ const serviceColumns = `
   service_code AS serviceCode,service_name AS serviceName,service_type AS serviceType,
   default_duration_min AS defaultDurationMin,
   CONVERT(varchar(30),current_price) AS currentPrice,
-  requires_doctor AS requiresDoctor,is_active AS isActive,row_version AS rowVersion,
+  requires_doctor AS requiresDoctor,result_schema_json AS resultSchemaJson,
+  is_active AS isActive,row_version AS rowVersion,
   service_category_id AS serviceCategoryId,
   CONVERT(varchar(36),category_public_id) AS categoryPublicId,
   category_code AS categoryCode,category_name AS categoryName,
@@ -331,6 +334,8 @@ export class SqlCatalogRepository implements CatalogRepository {
       { name: 'current_price', type: sql.Decimal(19, 2), value: input.basePrice },
       { name: 'requires_doctor', type: sql.Bit, value: input.requiresDoctor },
       { name: 'service_id', type: sql.BigInt, value: null, direction: 'output' },
+      { name: 'result_schema_json', type: sql.NVarChar(sql.MAX),
+        value: input.resultSchema == null ? null : JSON.stringify(input.resultSchema) },
     ], { requestId, actorUserId: actor.userId });
     const lookup = await (await getSqlPool()).request().input('id', sql.BigInt, result.output.service_id)
       .query<{ publicId: string }>('SELECT CONVERT(varchar(36),public_id) AS publicId FROM dbo.v_catalog_services_v1 WHERE service_id=@id;');
@@ -350,6 +355,8 @@ export class SqlCatalogRepository implements CatalogRepository {
       { name: 'requires_doctor', type: sql.Bit, value: input.requiresDoctor },
       { name: 'is_active', type: sql.Bit, value: input.isActive },
       { name: 'expected_row_ver', type: sql.VarBinary(8), value: Buffer.from(expectedVersion, 'base64') },
+      { name: 'result_schema_json', type: sql.NVarChar(sql.MAX),
+        value: input.resultSchema == null ? null : JSON.stringify(input.resultSchema) },
     ], { requestId, actorUserId: actor.userId }).then(() => undefined);
   }
 

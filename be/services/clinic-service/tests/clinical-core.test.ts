@@ -34,7 +34,7 @@ function encounter(): ClinicalEncounterDetail {
     treatmentPlan: null, followUpInstructions: null, followUpDate: null,
     vitalSigns: [], diagnoses: [], services: [{ publicId: serviceId, catalogPublicId: randomUUID(),
       code: 'CONSULT', name: 'Khám', type: 'CONSULTATION', quantity: '1.000', unitPrice: '200000.00',
-      status: 'ORDERED', notes: null, result: null }], amendments: [], availableServices: [],
+      status: 'ORDERED', notes: null, resultSchema: null, result: null }], amendments: [], availableServices: [],
   };
 }
 
@@ -42,6 +42,7 @@ class MemoryClinical implements ClinicalRepository {
   item = encounter();
   denied = false; linked = true;
   startError: number | null = null;
+  finalizeError: number | null = null;
   lastQueueBypassReason: string | null = null;
   branches() { return Promise.resolve([{ publicId: branchId, code: 'MAIN', name: 'Chi nhánh chính',
     timezoneName: 'SE Asia Standard Time' }]); }
@@ -76,6 +77,7 @@ class MemoryClinical implements ClinicalRepository {
     return Promise.resolve({ publicId: randomUUID() });
   }
   finalizeResult(_actor: ClinicPrincipal, _id: string, _input: FinalizeResultInput) {
+    if (this.finalizeError != null) return Promise.reject({ number: this.finalizeError });
     return Promise.resolve({ publicId: randomUUID() });
   }
   complete() {
@@ -199,10 +201,18 @@ describe('clinical core API', () => {
     const invalidVitals = await request(server).post(`${base}/vital-signs`).set(auth)
       .send({ systolicBpMmhg: 80, diastolicBpMmhg: 100 });
     const emptyResult = await request(server).post(`/api/v1/clinical/services/${serviceId}/results/finalize`).set(auth)
-      .send({ summary: ' ', result: {} });
+      .send({ summary: ' ', result: { values: [null, ' '] } });
     const valid = await request(server).post(`${base}/vital-signs`).set(auth).send({ pulseBpm: 82 });
     expect(invalidVitals.status).toBe(400); expect(emptyResult.status).toBe(400);
     expect(valid.status).toBe(201); expect(repository.item.vitalSigns[0]?.pulseBpm).toBe(82);
+  });
+
+  it('maps authoritative SQL result-schema rejection to a stable validation error', async () => {
+    repository.finalizeError = 53267;
+    const response = await request(app(repository)).post(`/api/v1/clinical/services/${serviceId}/results/finalize`)
+      .set(auth).send({ result: { value: 'not-a-number' } });
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('CLINICAL_RESULT_SCHEMA_MISMATCH');
   });
 
   it('rejects updates after signing and allows an append-only amendment', async () => {

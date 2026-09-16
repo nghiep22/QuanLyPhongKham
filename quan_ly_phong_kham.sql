@@ -1767,6 +1767,9 @@ BEGIN
         service_code_snapshot varchar(30) NOT NULL,
         service_name_snapshot nvarchar(200) NOT NULL,
         service_type_snapshot varchar(30) NOT NULL,
+        result_schema_snapshot_json nvarchar(max) NULL,
+        result_schema_snapshot_captured bit NOT NULL
+            CONSTRAINT DF_encounter_services_result_schema_captured DEFAULT (0),
         quantity             decimal(12,3) NOT NULL CONSTRAINT DF_encounter_services_quantity DEFAULT (1),
         unit_price_snapshot  decimal(19,2) NOT NULL,
         discount_amount      decimal(19,2) NOT NULL CONSTRAINT DF_encounter_services_discount DEFAULT (0),
@@ -1793,6 +1796,11 @@ BEGIN
         CONSTRAINT CK_encounter_services_discount CHECK
             (discount_amount >= 0 AND discount_amount <= quantity * unit_price_snapshot),
         CONSTRAINT CK_encounter_services_status CHECK (status IN ('ORDERED','IN_PROGRESS','COMPLETED','CANCELLED')),
+        CONSTRAINT CK_encounter_services_result_schema CHECK
+            (result_schema_snapshot_json IS NULL OR ISJSON(result_schema_snapshot_json) = 1),
+        CONSTRAINT CK_encounter_services_result_schema_captured CHECK
+            ((result_schema_snapshot_captured=0 AND result_schema_snapshot_json IS NULL)
+             OR result_schema_snapshot_captured=1),
         CONSTRAINT CK_encounter_services_performed CHECK
             ((status = 'COMPLETED' AND performed_by_user_id IS NOT NULL AND performed_at_utc IS NOT NULL)
              OR status <> 'COMPLETED'),
@@ -1802,6 +1810,36 @@ BEGIN
              OR status <> 'CANCELLED')
     );
 END;
+GO
+
+IF COL_LENGTH(N'dbo.encounter_services',N'result_schema_snapshot_json') IS NULL
+    ALTER TABLE dbo.encounter_services ADD result_schema_snapshot_json nvarchar(max) NULL;
+GO
+IF COL_LENGTH(N'dbo.encounter_services',N'result_schema_snapshot_captured') IS NULL
+    ALTER TABLE dbo.encounter_services ADD result_schema_snapshot_captured bit NOT NULL
+        CONSTRAINT DF_encounter_services_result_schema_captured DEFAULT (0);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints
+               WHERE parent_object_id=OBJECT_ID(N'dbo.encounter_services')
+                 AND name=N'CK_encounter_services_result_schema')
+    ALTER TABLE dbo.encounter_services ADD CONSTRAINT CK_encounter_services_result_schema
+        CHECK (result_schema_snapshot_json IS NULL OR ISJSON(result_schema_snapshot_json)=1);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints
+               WHERE parent_object_id=OBJECT_ID(N'dbo.encounter_services')
+                 AND name=N'CK_encounter_services_result_schema_captured')
+    ALTER TABLE dbo.encounter_services ADD CONSTRAINT CK_encounter_services_result_schema_captured
+        CHECK ((result_schema_snapshot_captured=0 AND result_schema_snapshot_json IS NULL)
+            OR result_schema_snapshot_captured=1);
+GO
+UPDATE es
+   SET result_schema_snapshot_json=s.result_schema_json,
+       result_schema_snapshot_captured=1
+FROM dbo.encounter_services es
+JOIN dbo.services s ON s.service_id=es.service_id
+JOIN dbo.encounters e ON e.encounter_id=es.encounter_id
+WHERE es.result_schema_snapshot_captured=0 AND es.status IN ('ORDERED','IN_PROGRESS')
+  AND e.status IN ('WAITING','IN_PROGRESS');
 GO
 
 IF COL_LENGTH(N'dbo.encounter_services', N'public_id') IS NULL
@@ -3649,7 +3687,7 @@ CREATE OR ALTER VIEW dbo.v_catalog_services_v1
 AS
 SELECT
     s.service_id, s.public_id, s.service_code, s.service_name, s.service_type,
-    s.default_duration_min, s.current_price, s.requires_doctor, s.is_active,
+    s.default_duration_min, s.current_price, s.requires_doctor, s.result_schema_json, s.is_active,
     CONVERT(varchar(16), s.row_ver, 2) AS row_version,
     sc.service_category_id, sc.public_id AS category_public_id,
     sc.category_code, sc.category_name,
@@ -4866,6 +4904,145 @@ BEGIN
 END;
 GO
 
+CREATE OR ALTER PROCEDURE dbo.sp_assert_service_result_schema
+    @schema_json nvarchar(max),
+    @result_json nvarchar(max)=NULL,
+    @validate_result bit=0
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF @schema_json IS NULL RETURN;
+    IF ISJSON(@schema_json)<>1 OR LEFT(LTRIM(@schema_json),1)<>N'{'
+        THROW 53612,N'Schema kết quả phải là JSON object hợp lệ.',1;
+    IF (SELECT COUNT(*) FROM OPENJSON(@schema_json)
+        WHERE [key]='type' AND [type]=1 AND value='object')<>1
+       OR (SELECT COUNT(*) FROM OPENJSON(@schema_json)
+        WHERE [key]='additionalProperties' AND [type]=3 AND value='false')<>1
+       OR (SELECT COUNT(*) FROM OPENJSON(@schema_json) WHERE [key]='required' AND [type]=4)<>1
+       OR (SELECT COUNT(*) FROM OPENJSON(@schema_json) WHERE [key]='properties' AND [type]=5)<>1
+       OR EXISTS (SELECT 1 FROM OPENJSON(@schema_json)
+                  WHERE [key] NOT IN ('type','additionalProperties','required','properties'))
+       OR EXISTS (SELECT 1 FROM OPENJSON(@schema_json)
+                  GROUP BY [key] COLLATE Latin1_General_100_BIN2 HAVING COUNT(*)>1)
+        THROW 53612,N'Schema kết quả chỉ hỗ trợ object đóng với required và properties.',1;
+
+    DECLARE @properties nvarchar(max)=JSON_QUERY(@schema_json,'$.properties'),
+            @required nvarchar(max)=JSON_QUERY(@schema_json,'$.required');
+    IF (SELECT COUNT(*) FROM OPENJSON(@properties)) NOT BETWEEN 1 AND 30
+        THROW 53612,N'Schema kết quả phải có từ 1 đến 30 trường.',1;
+    IF EXISTS (SELECT 1 FROM OPENJSON(@properties) p
+               WHERE LEN(p.[key]) NOT BETWEEN 1 AND 64
+                  OR p.[key] COLLATE Latin1_General_100_BIN2 NOT LIKE '[A-Za-z]%'
+                  OR p.[key] COLLATE Latin1_General_100_BIN2 LIKE '%[^A-Za-z0-9_]%'
+                  OR p.[type]<>5)
+       OR EXISTS (SELECT 1 FROM OPENJSON(@properties) p
+                  GROUP BY p.[key] COLLATE Latin1_General_100_BIN2 HAVING COUNT(*)>1)
+        THROW 53612,N'Tên hoặc định nghĩa trường kết quả không hợp lệ.',1;
+    IF EXISTS
+    (
+        SELECT 1 FROM OPENJSON(@properties) p
+        WHERE (SELECT COUNT(*) FROM OPENJSON(p.value) d
+               WHERE d.[key]='type' AND d.[type]=1
+                 AND d.value IN ('string','number','integer','boolean'))<>1
+           OR (SELECT COUNT(*) FROM OPENJSON(p.value) d
+               WHERE d.[key]='title' AND d.[type]=1)<>1
+           OR NULLIF(LTRIM(RTRIM(JSON_VALUE(p.value,'$.title'))),N'') IS NULL
+           OR LEN(JSON_VALUE(p.value,'$.title'))>100
+           OR EXISTS (SELECT 1 FROM OPENJSON(p.value) d
+                      WHERE d.[key] NOT IN ('type','title','unit','minLength','maxLength','minimum','maximum','enum'))
+           OR EXISTS (SELECT 1 FROM OPENJSON(p.value) d
+                      GROUP BY d.[key] COLLATE Latin1_General_100_BIN2 HAVING COUNT(*)>1)
+           OR EXISTS (SELECT 1 FROM OPENJSON(p.value) d
+                      WHERE d.[key]='unit' AND (d.[type]<>1 OR LEN(d.value)>40 OR NULLIF(LTRIM(RTRIM(d.value)),N'') IS NULL))
+           OR (JSON_VALUE(p.value,'$.type')='string' AND
+              (EXISTS (SELECT 1 FROM OPENJSON(p.value) d WHERE d.[key] IN ('minimum','maximum'))
+               OR EXISTS (SELECT 1 FROM OPENJSON(p.value) d WHERE d.[key] IN ('minLength','maxLength')
+                  AND (d.[type]<>2 OR TRY_CONVERT(int,d.value) IS NULL
+                       OR TRY_CONVERT(decimal(38,10),d.value)<>TRY_CONVERT(int,d.value)
+                       OR TRY_CONVERT(int,d.value) NOT BETWEEN 0 AND 10000))
+               OR (JSON_VALUE(p.value,'$.minLength') IS NOT NULL AND JSON_VALUE(p.value,'$.maxLength') IS NOT NULL
+                   AND TRY_CONVERT(int,JSON_VALUE(p.value,'$.minLength'))>TRY_CONVERT(int,JSON_VALUE(p.value,'$.maxLength')))))
+           OR (JSON_VALUE(p.value,'$.type') IN ('number','integer') AND
+              (EXISTS (SELECT 1 FROM OPENJSON(p.value) d WHERE d.[key] IN ('minLength','maxLength','enum'))
+               OR EXISTS (SELECT 1 FROM OPENJSON(p.value) d WHERE d.[key] IN ('minimum','maximum')
+                  AND (d.[type]<>2 OR TRY_CONVERT(decimal(38,10),d.value) IS NULL))
+               OR (JSON_VALUE(p.value,'$.minimum') IS NOT NULL AND JSON_VALUE(p.value,'$.maximum') IS NOT NULL
+                   AND TRY_CONVERT(decimal(38,10),JSON_VALUE(p.value,'$.minimum'))
+                       >TRY_CONVERT(decimal(38,10),JSON_VALUE(p.value,'$.maximum')))))
+           OR (JSON_VALUE(p.value,'$.type')='boolean' AND
+               EXISTS (SELECT 1 FROM OPENJSON(p.value) d
+                       WHERE d.[key] IN ('unit','minLength','maxLength','minimum','maximum','enum')))
+           OR EXISTS (SELECT 1 FROM OPENJSON(p.value) d WHERE d.[key]='enum' AND d.[type]<>4)
+    )
+        THROW 53612,N'Ràng buộc trường trong schema kết quả không hợp lệ.',1;
+    IF EXISTS
+    (
+        SELECT 1 FROM OPENJSON(@properties) p
+        WHERE JSON_QUERY(p.value,'$.enum') IS NOT NULL
+          AND ((SELECT COUNT(*) FROM OPENJSON(JSON_QUERY(p.value,'$.enum'))) NOT BETWEEN 1 AND 50
+            OR EXISTS (SELECT 1 FROM OPENJSON(JSON_QUERY(p.value,'$.enum')) e
+                       WHERE e.[type]<>1 OR NULLIF(LTRIM(RTRIM(e.value)),N'') IS NULL OR LEN(e.value)>200)
+            OR EXISTS (SELECT 1 FROM OPENJSON(JSON_QUERY(p.value,'$.enum')) e
+                       GROUP BY e.value COLLATE Latin1_General_100_BIN2 HAVING COUNT(*)>1))
+    )
+        THROW 53612,N'Danh sách enum trong schema kết quả không hợp lệ.',1;
+    IF (SELECT COUNT(*) FROM OPENJSON(@required))>30
+       OR EXISTS (SELECT 1 FROM OPENJSON(@required) r WHERE r.[type]<>1)
+       OR EXISTS (SELECT 1 FROM OPENJSON(@required) r
+                  GROUP BY r.value COLLATE Latin1_General_100_BIN2 HAVING COUNT(*)>1)
+       OR EXISTS (SELECT 1 FROM OPENJSON(@required) r WHERE NOT EXISTS
+                  (SELECT 1 FROM OPENJSON(@properties) p
+                   WHERE p.[key] COLLATE Latin1_General_100_BIN2=r.value COLLATE Latin1_General_100_BIN2))
+        THROW 53612,N'Danh sách required của schema kết quả không hợp lệ.',1;
+
+    IF @validate_result=0 RETURN;
+    IF @result_json IS NULL OR ISJSON(@result_json)<>1 OR LEFT(LTRIM(@result_json),1)<>N'{'
+        THROW 53267,N'Kết quả phải là JSON object theo schema dịch vụ.',1;
+    IF EXISTS (SELECT 1 FROM OPENJSON(@result_json) v WHERE NOT EXISTS
+               (SELECT 1 FROM OPENJSON(@properties) p
+                WHERE p.[key] COLLATE Latin1_General_100_BIN2=v.[key] COLLATE Latin1_General_100_BIN2))
+       OR EXISTS (SELECT 1 FROM OPENJSON(@result_json) v
+                  GROUP BY v.[key] COLLATE Latin1_General_100_BIN2 HAVING COUNT(*)>1)
+       OR EXISTS (SELECT 1 FROM OPENJSON(@required) r WHERE NOT EXISTS
+                  (SELECT 1 FROM OPENJSON(@result_json) v
+                   WHERE v.[key] COLLATE Latin1_General_100_BIN2=r.value COLLATE Latin1_General_100_BIN2
+                     AND v.[type]<>0))
+        THROW 53267,N'Kết quả thiếu trường bắt buộc hoặc có trường ngoài schema.',1;
+    IF EXISTS
+    (
+        SELECT 1
+        FROM OPENJSON(@result_json) v
+        JOIN OPENJSON(@properties) p
+          ON p.[key] COLLATE Latin1_General_100_BIN2=v.[key] COLLATE Latin1_General_100_BIN2
+        WHERE v.[type]=0
+           OR (JSON_VALUE(p.value,'$.type')='string' AND
+              (v.[type]<>1
+               OR (JSON_VALUE(p.value,'$.minLength') IS NOT NULL
+                   AND LEN(v.value)<TRY_CONVERT(int,JSON_VALUE(p.value,'$.minLength')))
+               OR (JSON_VALUE(p.value,'$.maxLength') IS NOT NULL
+                   AND LEN(v.value)>TRY_CONVERT(int,JSON_VALUE(p.value,'$.maxLength')))
+               OR (JSON_QUERY(p.value,'$.enum') IS NOT NULL AND NOT EXISTS
+                   (SELECT 1 FROM OPENJSON(JSON_QUERY(p.value,'$.enum')) e
+                    WHERE e.value COLLATE Latin1_General_100_BIN2=v.value COLLATE Latin1_General_100_BIN2))))
+           OR (JSON_VALUE(p.value,'$.type')='number' AND
+              (v.[type]<>2 OR TRY_CONVERT(decimal(38,10),v.value) IS NULL
+               OR (JSON_VALUE(p.value,'$.minimum') IS NOT NULL
+                   AND TRY_CONVERT(decimal(38,10),v.value)<TRY_CONVERT(decimal(38,10),JSON_VALUE(p.value,'$.minimum')))
+               OR (JSON_VALUE(p.value,'$.maximum') IS NOT NULL
+                   AND TRY_CONVERT(decimal(38,10),v.value)>TRY_CONVERT(decimal(38,10),JSON_VALUE(p.value,'$.maximum')))))
+           OR (JSON_VALUE(p.value,'$.type')='integer' AND
+              (v.[type]<>2 OR TRY_CONVERT(decimal(38,10),v.value) IS NULL
+               OR TRY_CONVERT(decimal(38,10),v.value)<>FLOOR(TRY_CONVERT(decimal(38,10),v.value))
+               OR (JSON_VALUE(p.value,'$.minimum') IS NOT NULL
+                   AND TRY_CONVERT(decimal(38,10),v.value)<TRY_CONVERT(decimal(38,10),JSON_VALUE(p.value,'$.minimum')))
+               OR (JSON_VALUE(p.value,'$.maximum') IS NOT NULL
+                   AND TRY_CONVERT(decimal(38,10),v.value)>TRY_CONVERT(decimal(38,10),JSON_VALUE(p.value,'$.maximum')))))
+           OR (JSON_VALUE(p.value,'$.type')='boolean' AND v.[type]<>3)
+    )
+        THROW 53267,N'Kiểu hoặc giá trị kết quả không khớp schema dịch vụ.',1;
+END;
+GO
+
 CREATE OR ALTER PROCEDURE dbo.sp_create_service
     @actor_user_id bigint,
     @branch_id bigint,
@@ -4877,13 +5054,15 @@ CREATE OR ALTER PROCEDURE dbo.sp_create_service
     @default_duration_min smallint,
     @current_price decimal(19,2),
     @requires_doctor bit = 1,
-    @service_id bigint OUTPUT
+    @service_id bigint OUTPUT,
+    @result_schema_json nvarchar(max)=NULL
 AS
 BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
     -- Dịch vụ là danh mục cấp tổ chức; chỉ assignment toàn cục mới được sửa.
     EXEC dbo.sp_assert_permission @actor_user_id,'MASTER_DATA_MANAGE',NULL;
+    EXEC dbo.sp_assert_service_result_schema @schema_json=@result_schema_json;
     BEGIN TRY
         BEGIN TRANSACTION;
         IF NOT EXISTS (SELECT 1 FROM dbo.service_categories WHERE service_category_id=@service_category_id AND is_active=1)
@@ -4893,10 +5072,10 @@ BEGIN
             THROW 53603,N'Chuyên khoa không tồn tại hoặc đã ngừng.',1;
         INSERT dbo.services
             (service_category_id,specialty_id,service_code,service_name,service_type,
-             default_duration_min,current_price,requires_doctor,is_active)
+             default_duration_min,current_price,requires_doctor,result_schema_json,is_active)
         VALUES
             (@service_category_id,@specialty_id,@service_code,@service_name,@service_type,
-             @default_duration_min,@current_price,@requires_doctor,1);
+             @default_duration_min,@current_price,@requires_doctor,@result_schema_json,1);
         SET @service_id=SCOPE_IDENTITY();
         DECLARE @entity_id varchar(100)=CONVERT(varchar(100),@service_id);
         EXEC dbo.sp_write_audit @actor_user_id,NULL,'SERVICE_CREATED','SERVICE',@entity_id;
@@ -4920,12 +5099,14 @@ CREATE OR ALTER PROCEDURE dbo.sp_update_service
     @current_price decimal(19,2),
     @requires_doctor bit,
     @is_active bit,
-    @expected_row_ver varbinary(8)
+    @expected_row_ver varbinary(8),
+    @result_schema_json nvarchar(max)=NULL
 AS
 BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
     EXEC dbo.sp_assert_permission @actor_user_id,'MASTER_DATA_MANAGE',NULL;
+    EXEC dbo.sp_assert_service_result_schema @schema_json=@result_schema_json;
     BEGIN TRY
         BEGIN TRANSACTION;
         IF NOT EXISTS (SELECT 1 FROM dbo.service_categories WHERE service_category_id=@service_category_id AND is_active=1)
@@ -4937,7 +5118,8 @@ BEGIN
            SET service_category_id=@service_category_id, specialty_id=@specialty_id,
                service_name=@service_name, service_type=@service_type,
                default_duration_min=@default_duration_min, current_price=@current_price,
-               requires_doctor=@requires_doctor, is_active=@is_active,
+               requires_doctor=@requires_doctor, result_schema_json=@result_schema_json,
+               is_active=@is_active,
                updated_at_utc=SYSUTCDATETIME()
          WHERE service_id=@service_id AND row_ver=@expected_row_ver;
         IF @@ROWCOUNT=0
@@ -8543,9 +8725,10 @@ BEGIN
 
         INSERT dbo.encounter_services
             (encounter_id,service_id,service_code_snapshot,service_name_snapshot,
-             service_type_snapshot,quantity,unit_price_snapshot,status,ordered_by_user_id)
+             service_type_snapshot,result_schema_snapshot_json,result_schema_snapshot_captured,
+             quantity,unit_price_snapshot,status,ordered_by_user_id)
         SELECT @encounter_id,s.service_id,s.service_code,s.service_name,s.service_type,
-               1,@unit_price,'ORDERED',@actor_user_id
+               s.result_schema_json,1,1,@unit_price,'ORDERED',@actor_user_id
         FROM dbo.services s WHERE s.service_id=@service_id;
 
         UPDATE dbo.appointments
@@ -8674,9 +8857,10 @@ BEGIN
 
         INSERT dbo.encounter_services
             (encounter_id,service_id,service_code_snapshot,service_name_snapshot,
-             service_type_snapshot,quantity,unit_price_snapshot,status,ordered_by_user_id)
+             service_type_snapshot,result_schema_snapshot_json,result_schema_snapshot_captured,
+             quantity,unit_price_snapshot,status,ordered_by_user_id)
         SELECT @encounter_id,s.service_id,s.service_code,s.service_name,s.service_type,
-               1,@unit_price,'ORDERED',@actor_user_id
+               s.result_schema_json,1,1,@unit_price,'ORDERED',@actor_user_id
         FROM dbo.services s WHERE s.service_id=@service_id AND s.is_active=1;
         IF @@ROWCOUNT=0 THROW 53218,N'Dịch vụ không tồn tại hoặc đã ngừng.',1;
 
@@ -9264,10 +9448,12 @@ BEGIN
         EXEC dbo.sp_get_branch_business_date @branch_id,NULL,@business_date OUTPUT;
         INSERT dbo.encounter_services
             (encounter_id,service_id,service_code_snapshot,service_name_snapshot,
-             service_type_snapshot,quantity,unit_price_snapshot,discount_amount,
+             service_type_snapshot,result_schema_snapshot_json,result_schema_snapshot_captured,
+             quantity,unit_price_snapshot,discount_amount,
              status,ordered_by_user_id,notes)
         SELECT @encounter_id,s.service_id,s.service_code,s.service_name,s.service_type,
-               @quantity,bp.price_amount,@discount_amount,'ORDERED',@actor_user_id,@notes
+               s.result_schema_json,1,@quantity,bp.price_amount,@discount_amount,
+               'ORDERED',@actor_user_id,@notes
         FROM dbo.services s CROSS APPLY (SELECT TOP(1) p.price_amount
             FROM dbo.service_branch_prices p WHERE p.service_id=s.service_id AND p.branch_id=@branch_id
               AND p.is_available=1 AND p.effective_from<=@business_date
@@ -9304,7 +9490,17 @@ BEGIN
         THROW 53233,N'result_json không hợp lệ.',1;
     IF NULLIF(LTRIM(RTRIM(COALESCE(@summary,N''))),N'') IS NULL
        AND NULLIF(LTRIM(RTRIM(COALESCE(@conclusion,N''))),N'') IS NULL
-       AND (@result_json IS NULL OR NOT EXISTS (SELECT 1 FROM OPENJSON(@result_json)))
+       AND (@result_json IS NULL OR NOT EXISTS
+       (
+           SELECT 1 FROM OPENJSON(@result_json) value
+           WHERE value.[type] IN (2,3)
+              OR (value.[type]=1 AND NULLIF(LTRIM(RTRIM(value.value)),N'') IS NOT NULL)
+              OR (value.[type] IN (4,5) AND EXISTS
+                  (SELECT 1 FROM OPENJSON(value.value) nested
+                   WHERE nested.[type] IN (2,3)
+                      OR (nested.[type]=1 AND NULLIF(LTRIM(RTRIM(nested.value)),N'') IS NOT NULL)
+                      OR nested.[type] IN (4,5)))
+       ))
         THROW 53258,N'Kết quả FINAL không được để trống.',1;
     DECLARE @branch_id bigint,@doctor_user_id bigint,@service_type varchar(30);
     SELECT @branch_id=e.branch_id,@doctor_user_id=emp.user_id,@service_type=es.service_type_snapshot
@@ -9322,8 +9518,10 @@ BEGIN
 
     BEGIN TRY
         BEGIN TRANSACTION;
-        DECLARE @encounter_id bigint,@service_status varchar(20),@encounter_status varchar(20);
-        SELECT @encounter_id=es.encounter_id,@service_status=es.status,@encounter_status=e.status
+        DECLARE @encounter_id bigint,@service_status varchar(20),@encounter_status varchar(20),
+                @result_schema_json nvarchar(max);
+        SELECT @encounter_id=es.encounter_id,@service_status=es.status,@encounter_status=e.status,
+               @result_schema_json=es.result_schema_snapshot_json
         FROM dbo.encounter_services es WITH (UPDLOCK,HOLDLOCK)
         JOIN dbo.encounters e WITH (UPDLOCK,HOLDLOCK) ON e.encounter_id=es.encounter_id
         WHERE es.encounter_service_id=@encounter_service_id;
@@ -9331,6 +9529,8 @@ BEGIN
             THROW 53234,N'Lượt khám hoặc dịch vụ không cho phép chốt kết quả.',1;
         IF EXISTS (SELECT 1 FROM dbo.service_results WHERE encounter_service_id=@encounter_service_id)
             THROW 53235,N'Dịch vụ đã có phiên bản kết quả.',1;
+        EXEC dbo.sp_assert_service_result_schema @schema_json=@result_schema_json,
+             @result_json=@result_json,@validate_result=1;
 
         INSERT dbo.service_results
             (encounter_service_id,result_version,status,summary,conclusion,result_json,
@@ -9890,7 +10090,8 @@ BEGIN
     SELECT CONVERT(varchar(36),es.public_id) AS publicId,CONVERT(varchar(36),svc.public_id) AS catalogPublicId,
            es.service_code_snapshot AS code,es.service_name_snapshot AS name,es.service_type_snapshot AS type,
            CONVERT(varchar(30),es.quantity) AS quantity,CONVERT(varchar(30),es.unit_price_snapshot) AS unitPrice,
-           es.status,es.notes,CONVERT(varchar(36),sr.public_id) AS resultPublicId,
+           es.status,es.notes,es.result_schema_snapshot_json AS resultSchemaJson,
+           CONVERT(varchar(36),sr.public_id) AS resultPublicId,
            sr.result_version AS resultVersion,sr.status AS resultStatus,sr.summary AS resultSummary,
            sr.conclusion AS resultConclusion,sr.result_json AS resultJson,sr.verified_at_utc AS resultFinalizedAtUtc
     FROM dbo.encounter_services es JOIN dbo.services svc ON svc.service_id=es.service_id
@@ -10010,9 +10211,14 @@ CREATE OR ALTER PROCEDURE dbo.sp_clinic_finalize_service_result
 AS
 BEGIN
     SET NOCOUNT ON;
-    DECLARE @encounter_service_id bigint=(SELECT encounter_service_id FROM dbo.encounter_services
-            WHERE public_id=@encounter_service_public_id),@service_result_id bigint;
+    DECLARE @encounter_service_id bigint,@result_schema_json nvarchar(max),@service_result_id bigint;
+    SELECT @encounter_service_id=encounter_service_id,
+           @result_schema_json=result_schema_snapshot_json
+    FROM dbo.encounter_services WHERE public_id=@encounter_service_public_id;
     IF @encounter_service_id IS NULL THROW 53803,N'Chỉ định không tồn tại.',1;
+    /* Fast feedback only; the internal command repeats this check under the row lock. */
+    EXEC dbo.sp_assert_service_result_schema @schema_json=@result_schema_json,
+         @result_json=@result_json,@validate_result=1;
     EXEC dbo.sp_finalize_service_result @actor_user_id=@actor_user_id,@encounter_service_id=@encounter_service_id,
         @summary=@summary,@conclusion=@conclusion,@result_json=@result_json,@service_result_id=@service_result_id OUTPUT;
     SELECT @service_result_public_id=public_id FROM dbo.service_results WHERE service_result_id=@service_result_id;
@@ -13244,6 +13450,7 @@ REVOKE EXECUTE ON OBJECT::dbo.sp_add_vital_signs FROM clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_add_encounter_diagnosis FROM clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_order_encounter_service FROM clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_finalize_service_result FROM clinic_api_executor;
+REVOKE EXECUTE ON OBJECT::dbo.sp_assert_service_result_schema FROM clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_complete_encounter FROM clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_sign_encounter FROM clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_compute_encounter_signature_hash FROM clinic_api_executor;

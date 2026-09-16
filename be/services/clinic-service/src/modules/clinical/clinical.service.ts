@@ -22,6 +22,9 @@ function mapError(error: unknown): never {
   if (code === 53266) {
     throw new HttpError(409, 'CLINICAL_QUEUE_ORDER_CONFLICT', 'Còn lượt ưu tiên hoặc FIFO đứng trước trong hàng đợi.');
   }
+  if (code === 53267) {
+    throw new HttpError(400, 'CLINICAL_RESULT_SCHEMA_MISMATCH', 'Kết quả không khớp schema của dịch vụ khi được chỉ định.');
+  }
   if (code === 51002 || [53219, 53222, 53224, 53226, 53230, 53236, 53241, 53249,
     53259, 53260, 53261, 53264].includes(code ?? 0)) {
     throw new HttpError(403, 'CLINICAL_FORBIDDEN', 'Bạn không có quyền thực hiện thao tác lâm sàng này.');

@@ -81,7 +81,7 @@ xóa `request_id`, `actor_user_id`, `branch_id` trong `SESSION_CONTEXT`.
   không được vượt priority/FIFO và phát audit/outbox bằng public UUID. Sinh hiệu
   có thể ghi nhiều lần khi lượt còn mở; bác sĩ ghi
   nội dung khám, chẩn đoán chính, chỉ định dịch vụ theo giá chi nhánh và kết quả
-  FINAL không rỗng.
+  FINAL không rỗng, đúng schema snapshot của dịch vụ (required/type/range/enum).
 - Hoàn tất đòi một chẩn đoán chính và không còn dịch vụ/đơn thuốc bắt buộc ở trạng
   thái mở. Ký tạo SHA-256 trên bản ghi chuẩn hóa; dữ liệu lõi sau ký là bất biến,
   phụ lục chỉ thêm mới và nối hash trước. Các command lâm sàng dùng public UUID;

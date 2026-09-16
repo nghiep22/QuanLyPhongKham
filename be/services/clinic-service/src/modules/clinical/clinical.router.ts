@@ -34,9 +34,16 @@ const diagnosis = z.object({ code: z.string().trim().min(1).max(30), name: z.str
   notes: nullableText(1000) }).strict();
 const orderService = z.object({ servicePublicId: uuid, quantity: z.number().positive().max(1000).default(1),
   notes: nullableText(1000) }).strict();
+function hasMeaningfulResult(value: unknown): boolean {
+  if (typeof value === 'number' || typeof value === 'boolean') return true;
+  if (typeof value === 'string') return value.trim().length > 0;
+  if (Array.isArray(value)) return value.some(hasMeaningfulResult);
+  if (value && typeof value === 'object') return Object.values(value).some(hasMeaningfulResult);
+  return false;
+}
 const finalize = z.object({ summary: nullableText(10_000), conclusion: nullableText(10_000),
-  result: z.union([z.record(z.string(), z.unknown()), z.array(z.unknown())]).nullable().optional() }).strict()
-  .refine((value) => Boolean(value.summary || value.conclusion || (value.result && Object.keys(value.result).length)),
+  result: z.record(z.string(), z.unknown()).nullable().optional() }).strict()
+  .refine((value) => Boolean(value.summary || value.conclusion || hasMeaningfulResult(value.result)),
     'Kết quả FINAL không được để trống.');
 const amendment = z.object({ reason: z.string().trim().min(10).max(1000), content: z.string().trim().min(1).max(20_000) }).strict();
 

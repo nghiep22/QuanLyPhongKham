@@ -256,21 +256,54 @@ function ServiceRow({ service, open, busy, run }: {
   service: ClinicalEncounterDetail['services'][number]; open: boolean; busy: string; run: Action
 }) {
   const [summary, setSummary] = useState(''); const [conclusion, setConclusion] = useState('')
+  const [structuredValues, setStructuredValues] = useState<Record<string, string | boolean>>({})
   const finalize = async (event: FormEvent) => {
     event.preventDefault()
+    const result: Record<string, unknown> = {}
+    if (service.resultSchema) for (const [name, field] of Object.entries(service.resultSchema.properties)) {
+      const raw = structuredValues[name]
+      if (field.type === 'boolean') {
+        if (service.resultSchema.required.includes(name) || raw !== undefined) result[name] = Boolean(raw)
+      } else if (typeof raw === 'string' && raw.trim()) {
+        result[name] = field.type === 'number' || field.type === 'integer' ? Number(raw) : raw.trim()
+      }
+    }
     if (await run('Chốt kết quả', () => apiClient.clinical.finalizeResult(service.publicId, {
       summary: summary.trim() || null, conclusion: conclusion.trim() || null,
-    }))) { setSummary(''); setConclusion('') }
+      ...(Object.keys(result).length ? { result } : {}),
+    }))) { setSummary(''); setConclusion(''); setStructuredValues({}) }
   }
   return <article className="clinical-service"><div className="detail-heading"><div><strong>{service.name}</strong>
     <p>{service.code} · {service.quantity} × {Number(service.unitPrice).toLocaleString('vi-VN')} ₫</p></div>
     <span className="status">{service.status}</span></div>
-    {service.result && <p className="clinical-record">Kết quả FINAL v{service.result.version}: {service.result.summary || service.result.conclusion}</p>}
+    {service.result && <div className="clinical-record">Kết quả FINAL v{service.result.version}: {' '}
+      {service.result.summary || service.result.conclusion || JSON.stringify(service.result.result)}</div>}
     {open && service.type !== 'CONSULTATION' && !service.result && service.status !== 'CANCELLED' &&
       <form className="clinical-notes" onSubmit={(event) => void finalize(event)}>
         <label>Tóm tắt kết quả<textarea maxLength={10000} rows={2} value={summary} onChange={(event) => setSummary(event.target.value)} /></label>
         <label>Kết luận<textarea maxLength={10000} rows={2} value={conclusion} onChange={(event) => setConclusion(event.target.value)} /></label>
-        <button type="submit" disabled={Boolean(busy) || !summary.trim() && !conclusion.trim()}>Chốt FINAL</button>
+        {service.resultSchema && <fieldset><legend>Kết quả có cấu trúc</legend>
+          {Object.entries(service.resultSchema.properties).map(([name, field]) => {
+            const required = service.resultSchema?.required.includes(name) ?? false
+            const label = `${field.title}${field.unit ? ` (${field.unit})` : ''}${required ? ' *' : ''}`
+            if (field.type === 'boolean') return <label className="checkbox" key={name}>
+              <input type="checkbox" checked={Boolean(structuredValues[name])}
+                onChange={(event) => setStructuredValues((current) => ({ ...current, [name]: event.target.checked }))} />
+              {label}</label>
+            if (field.enum) return <label key={name}>{label}<select required={required}
+              value={String(structuredValues[name] ?? '')}
+              onChange={(event) => setStructuredValues((current) => ({ ...current, [name]: event.target.value }))}>
+              <option value="">Chọn giá trị</option>{field.enum.map((option) => <option key={option} value={option}>{option}</option>)}
+            </select></label>
+            return <label key={name}>{label}<input required={required}
+              type={field.type === 'string' ? 'text' : 'number'}
+              step={field.type === 'integer' ? 1 : field.type === 'number' ? 'any' : undefined}
+              min={field.minimum} max={field.maximum} minLength={field.minLength} maxLength={field.maxLength}
+              value={String(structuredValues[name] ?? '')}
+              onChange={(event) => setStructuredValues((current) => ({ ...current, [name]: event.target.value }))} /></label>
+          })}</fieldset>}
+        <button type="submit" disabled={Boolean(busy)
+          || !service.resultSchema && !summary.trim() && !conclusion.trim()}>Chốt FINAL</button>
       </form>}
   </article>
 }

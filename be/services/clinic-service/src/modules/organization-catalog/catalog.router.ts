@@ -26,11 +26,58 @@ const createRoomSchema = z.object({
   capacity: z.number().int().min(1).max(500).default(1),
 }).strict();
 const updateRoomSchema = createRoomSchema.omit({ branchPublicId: true, code: true }).extend({ isActive: z.boolean() }).strict();
+const resultFieldName = z.string().regex(/^[A-Za-z][A-Za-z0-9_]{0,63}$/);
+const resultFieldSchema = z.object({
+  type: z.enum(['string', 'number', 'integer', 'boolean']),
+  title: z.string().trim().min(1).max(100),
+  unit: z.string().trim().min(1).max(40).optional(),
+  minLength: z.number().int().min(0).max(10_000).optional(),
+  maxLength: z.number().int().min(0).max(10_000).optional(),
+  minimum: z.number().finite().optional(), maximum: z.number().finite().optional(),
+  enum: z.array(z.string().trim().min(1).max(200)).min(1).max(50).optional(),
+}).strict().superRefine((field, context) => {
+  if (field.type === 'string') {
+    if (field.minimum !== undefined || field.maximum !== undefined) {
+      context.addIssue({ code: 'custom', message: 'Trường chuỗi không dùng minimum/maximum.' });
+    }
+    if (field.minLength !== undefined && field.maxLength !== undefined && field.minLength > field.maxLength) {
+      context.addIssue({ code: 'custom', message: 'minLength không được lớn hơn maxLength.' });
+    }
+    if (field.enum && new Set(field.enum).size !== field.enum.length) {
+      context.addIssue({ code: 'custom', path: ['enum'], message: 'Giá trị enum không được trùng.' });
+    }
+  } else if (field.type === 'number' || field.type === 'integer') {
+    if (field.minLength !== undefined || field.maxLength !== undefined || field.enum !== undefined) {
+      context.addIssue({ code: 'custom', message: 'Trường số không dùng ràng buộc chuỗi hoặc enum.' });
+    }
+    if (field.minimum !== undefined && field.maximum !== undefined && field.minimum > field.maximum) {
+      context.addIssue({ code: 'custom', message: 'minimum không được lớn hơn maximum.' });
+    }
+  } else if (field.unit !== undefined || field.minLength !== undefined || field.maxLength !== undefined
+    || field.minimum !== undefined || field.maximum !== undefined || field.enum !== undefined) {
+    context.addIssue({ code: 'custom', message: 'Trường boolean không nhận ràng buộc bổ sung.' });
+  }
+});
+const resultSchemaSchema = z.object({
+  type: z.literal('object'), additionalProperties: z.literal(false),
+  required: z.array(resultFieldName).max(30),
+  properties: z.record(resultFieldName, resultFieldSchema).refine((value) => {
+    const count = Object.keys(value).length; return count >= 1 && count <= 30;
+  }, 'Schema phải có từ 1 đến 30 trường.'),
+}).strict().superRefine((schema, context) => {
+  if (new Set(schema.required).size !== schema.required.length) {
+    context.addIssue({ code: 'custom', path: ['required'], message: 'Trường bắt buộc không được trùng.' });
+  }
+  for (const name of schema.required) if (!(name in schema.properties)) {
+    context.addIssue({ code: 'custom', path: ['required'], message: `Không có định nghĩa cho trường ${name}.` });
+  }
+});
 const createServiceSchema = z.object({
   categoryPublicId: uuid, specialtyPublicId: uuid.optional(),
   code: z.string().trim().min(1).max(30), name: z.string().trim().min(2).max(200),
   type: z.enum(serviceTypes), durationMinutes: z.number().int().min(5).max(480),
   basePrice: money, requiresDoctor: z.boolean().default(true),
+  resultSchema: resultSchemaSchema.nullable().optional().default(null),
 }).strict();
 const updateServiceSchema = createServiceSchema.omit({ code: true }).extend({ isActive: z.boolean() }).strict();
 const setPriceSchema = z.object({

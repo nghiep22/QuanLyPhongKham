@@ -54,7 +54,10 @@ function detail(result: Awaited<ReturnType<typeof executeCommand<Row>>>): Clinic
     services: (sets[3] ?? []).map((row) => ({ publicId: String(row.publicId), catalogPublicId: String(row.catalogPublicId),
       code: String(row.code), name: String(row.name), type: String(row.type), quantity: String(row.quantity),
       unitPrice: String(row.unitPrice), status: row.status as ClinicalEncounterDetail['services'][number]['status'],
-      notes: nullable(row.notes), result: row.resultPublicId == null ? null : { publicId: String(row.resultPublicId),
+      notes: nullable(row.notes),
+      resultSchema: row.resultSchemaJson == null ? null
+        : JSON.parse(String(row.resultSchemaJson)) as ClinicalEncounterDetail['services'][number]['resultSchema'],
+      result: row.resultPublicId == null ? null : { publicId: String(row.resultPublicId),
         version: Number(row.resultVersion), status: String(row.resultStatus), summary: nullable(row.resultSummary),
         conclusion: nullable(row.resultConclusion), result: row.resultJson == null ? null : JSON.parse(String(row.resultJson)) as unknown,
         finalizedAtUtc: utc(row.resultFinalizedAtUtc) } })),

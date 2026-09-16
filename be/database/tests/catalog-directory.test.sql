@@ -65,14 +65,26 @@ BEGIN TRY
 
     DECLARE @service_id bigint;
     DECLARE @service_code varchar(30)=CONCAT('CS',LEFT(@suffix,20));
+    DECLARE @result_schema_json nvarchar(max)=N'{"type":"object","additionalProperties":false,"required":["note"],"properties":{"note":{"type":"string","title":"Ghi chú","minLength":1,"maxLength":500}}}';
     EXEC dbo.sp_create_service @actor_user_id=@admin_id,@branch_id=NULL,
         @service_category_id=@category_id,@specialty_id=@specialty_id,
         @service_code=@service_code,@service_name=N'Dịch vụ catalog test',
         @service_type='CONSULTATION',@default_duration_min=30,@current_price=300000,
-        @requires_doctor=1,@service_id=@service_id OUTPUT;
+        @requires_doctor=1,@service_id=@service_id OUTPUT,@result_schema_json=@result_schema_json;
     IF @service_id IS NULL OR NOT EXISTS
-       (SELECT 1 FROM dbo.v_catalog_services_v1 WHERE service_id=@service_id AND public_id IS NOT NULL)
+       (SELECT 1 FROM dbo.v_catalog_services_v1 WHERE service_id=@service_id AND public_id IS NOT NULL
+          AND JSON_VALUE(result_schema_json,'$.properties.note.type')='string')
         THROW 55603,N'Không tạo hoặc không đọc được dịch vụ qua contract view.',1;
+    DECLARE @service_version binary(8)=(SELECT row_ver FROM dbo.services WHERE service_id=@service_id);
+    SET @result_schema_json=N'{"type":"object","additionalProperties":false,"required":["note"],"properties":{"note":{"type":"string","title":"Ghi chú","minLength":2,"maxLength":500}}}';
+    EXEC dbo.sp_update_service @actor_user_id=@admin_id,@service_id=@service_id,
+        @service_category_id=@category_id,@specialty_id=@specialty_id,
+        @service_name=N'Dịch vụ catalog test',@service_type='CONSULTATION',
+        @default_duration_min=30,@current_price=300000,@requires_doctor=1,@is_active=1,
+        @expected_row_ver=@service_version,@result_schema_json=@result_schema_json;
+    IF NOT EXISTS (SELECT 1 FROM dbo.services WHERE service_id=@service_id
+        AND JSON_VALUE(result_schema_json,'$.properties.note.minLength')='2')
+        THROW 55612,N'Cập nhật schema kết quả dịch vụ thất bại.',1;
 
     DECLARE @business_date date;
     EXEC dbo.sp_get_branch_business_date @branch_id,NULL,@business_date OUTPUT;

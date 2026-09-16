@@ -195,7 +195,7 @@ Người có `ENCOUNTERS_QUEUE_BYPASS` thấy hành động ngoại lệ cho tic
 `WAITING`; lý do tối thiểu 10 ký tự là bắt buộc và SQL chỉ cho phép lượt đang
 đứng đầu theo ưu tiên/FIFO, đồng thời ghi audit và outbox metadata-only. Sau đó
 bác sĩ ghi sinh hiệu, bệnh sử, khám thực thể, chẩn đoán và chỉ định. Kết quả FINAL cần
-có nội dung trước khi hoàn tất; hệ thống yêu cầu một chẩn đoán chính và không
+có nội dung và khớp schema đã chụp khi chỉ định; hệ thống yêu cầu một chẩn đoán chính và không
 còn dịch vụ bắt buộc đang mở. Sau khi ký, hồ sơ được khóa; nội dung bổ sung được
 ghi bằng phụ lục nối hash. Bác sĩ phụ trách dùng **Công bố cho bệnh nhân** sau
 khi ký; thao tác idempotent tạo trạng thái append-only, audit và outbox mà không

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Private Clinic API
-  version: 0.16.0
+  version: 0.17.0
   description: Public contract for the private clinic management system.
 servers:
   - url: http://localhost:5000
@@ -4329,6 +4329,43 @@ components:
               format: date
             isAvailable:
               type: boolean
+    ClinicalResultFieldSchema:
+      type: object
+      additionalProperties: false
+      required: [type, title]
+      properties:
+        type: { type: string, enum: [string, number, integer, boolean] }
+        title: { type: string, minLength: 1, maxLength: 100 }
+        unit: { type: string, minLength: 1, maxLength: 40 }
+        minLength: { type: integer, minimum: 0, maximum: 10000 }
+        maxLength: { type: integer, minimum: 0, maximum: 10000 }
+        minimum: { type: number }
+        maximum: { type: number }
+        enum:
+          type: array
+          minItems: 1
+          maxItems: 50
+          uniqueItems: true
+          items: { type: string, minLength: 1, maxLength: 200 }
+    ClinicalResultSchema:
+      type: object
+      additionalProperties: false
+      required: [type, additionalProperties, required, properties]
+      properties:
+        type: { type: string, const: object }
+        additionalProperties: { type: boolean, const: false }
+        required:
+          type: array
+          maxItems: 30
+          uniqueItems: true
+          items: { type: string, pattern: '^[A-Za-z][A-Za-z0-9_]{0,63}$' }
+        properties:
+          type: object
+          minProperties: 1
+          maxProperties: 30
+          propertyNames: { pattern: '^[A-Za-z][A-Za-z0-9_]{0,63}$' }
+          additionalProperties:
+            $ref: '#/components/schemas/ClinicalResultFieldSchema'
     CatalogService:
       type: object
       additionalProperties: false
@@ -4342,6 +4379,7 @@ components:
         - durationMinutes
         - basePrice
         - requiresDoctor
+        - resultSchema
         - isActive
         - branchPrices
         - rowVersion
@@ -4370,6 +4408,10 @@ components:
           pattern: '^(0|[1-9][0-9]{0,16})(\.[0-9]{1,2})?$'
         requiresDoctor:
           type: boolean
+        resultSchema:
+          oneOf:
+            - $ref: '#/components/schemas/ClinicalResultSchema'
+            - type: 'null'
         isActive:
           type: boolean
         branchPrices:
@@ -4504,6 +4546,10 @@ components:
           pattern: '^(0|[1-9][0-9]{0,16})(\.[0-9]{1,2})?$'
         requiresDoctor:
           type: boolean
+        resultSchema:
+          oneOf:
+            - $ref: '#/components/schemas/ClinicalResultSchema'
+            - type: 'null'
     UpdateCatalogServiceRequest:
       type: object
       additionalProperties: false
@@ -4530,6 +4576,10 @@ components:
           pattern: '^(0|[1-9][0-9]{0,16})(\.[0-9]{1,2})?$'
         requiresDoctor:
           type: boolean
+        resultSchema:
+          oneOf:
+            - $ref: '#/components/schemas/ClinicalResultSchema'
+            - type: 'null'
         isActive:
           type: boolean
     SetCatalogBranchPriceRequest:
@@ -5223,8 +5273,6 @@ components:
           oneOf:
             - type: object
               additionalProperties: true
-            - type: array
-              items: {}
             - type: 'null'
     ClinicalAmendmentRequest:
       type: object
@@ -5292,7 +5340,7 @@ components:
               type: array
               items:
                 type: object
-                required: [publicId, catalogPublicId, code, name, type, quantity, unitPrice, status, notes, result]
+                required: [publicId, catalogPublicId, code, name, type, quantity, unitPrice, status, notes, resultSchema, result]
                 properties:
                   publicId: { type: string, format: uuid }
                   catalogPublicId: { type: string, format: uuid }
@@ -5303,6 +5351,10 @@ components:
                   unitPrice: { type: string }
                   status: { type: string, enum: [ORDERED, IN_PROGRESS, COMPLETED, CANCELLED] }
                   notes: { type: [string, 'null'] }
+                  resultSchema:
+                    oneOf:
+                      - $ref: '#/components/schemas/ClinicalResultSchema'
+                      - type: 'null'
                   result:
                     oneOf:
                       - type: object

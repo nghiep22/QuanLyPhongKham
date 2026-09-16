@@ -29,6 +29,9 @@ function mapDatabaseError(error: unknown): never {
   if ([53602, 53603, 53606, 53607].includes(number ?? 0)) {
     throw new HttpError(400, 'VALIDATION_ERROR', 'Dữ liệu danh mục không còn hợp lệ tại thời điểm xử lý.');
   }
+  if (number === 53612) {
+    throw new HttpError(400, 'CATALOG_RESULT_SCHEMA_INVALID', 'Schema kết quả dịch vụ không hợp lệ.');
+  }
   if (number === 51002) {
     throw new HttpError(403, 'FORBIDDEN', 'Bạn không có quyền quản lý danh mục trong phạm vi này.');
   }

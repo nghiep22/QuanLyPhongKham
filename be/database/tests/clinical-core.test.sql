@@ -13,7 +13,8 @@ BEGIN TRY
         (N'sp_start_encounter'),(N'sp_update_encounter_clinical_notes'),(N'sp_add_vital_signs'),
         (N'sp_add_encounter_diagnosis'),(N'sp_order_encounter_service'),(N'sp_finalize_service_result'),
         (N'sp_complete_encounter'),(N'sp_sign_encounter'),(N'sp_add_encounter_amendment'),
-        (N'sp_cancel_encounter'),(N'sp_compute_encounter_signature_hash')
+        (N'sp_cancel_encounter'),(N'sp_compute_encounter_signature_hash'),
+        (N'sp_assert_service_result_schema')
     ) forbidden(name) JOIN sys.database_permissions dp ON dp.major_id=OBJECT_ID(N'dbo.'+forbidden.name)
       WHERE dp.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'clinic_api_executor')
         AND dp.permission_name='EXECUTE' AND dp.state IN('G','W'))
@@ -31,6 +32,21 @@ BEGIN TRY
         AND dp.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'clinic_api_executor')
         AND dp.permission_name='EXECUTE' AND dp.state IN('G','W')))
       THROW 55901,N'Clinic API thiếu quyền clinical public procedure.',1;
+
+    DECLARE @lab_result_schema nvarchar(max)=N'{"type":"object","additionalProperties":false,"required":["value","interpretation"],"properties":{"value":{"type":"number","title":"Giá trị","unit":"mg/dL","minimum":0,"maximum":500},"interpretation":{"type":"string","title":"Nhận định","minLength":1,"enum":["NORMAL","ABNORMAL"]}}}',
+            @schema_error int=NULL;
+    EXEC dbo.sp_assert_service_result_schema @schema_json=@lab_result_schema;
+    BEGIN TRY
+      EXEC dbo.sp_assert_service_result_schema @schema_json=@lab_result_schema,
+        @result_json=N'{"value":"không phải số","interpretation":"NORMAL"}',@validate_result=1;
+    END TRY BEGIN CATCH SET @schema_error=ERROR_NUMBER(); END CATCH;
+    IF @schema_error<>53267 THROW 55921,N'Kết quả sai kiểu không bị schema SQL từ chối.',1;
+    SET @schema_error=NULL;
+    BEGIN TRY
+      EXEC dbo.sp_assert_service_result_schema
+        @schema_json=N'{"type":"object","additionalProperties":true,"required":[],"properties":{"value":{"type":"number","title":"Giá trị"}}}';
+    END TRY BEGIN CATCH SET @schema_error=ERROR_NUMBER(); END CATCH;
+    IF @schema_error<>53612 THROW 55922,N'Schema danh mục không an toàn vẫn được chấp nhận.',1;
 
     BEGIN TRANSACTION;
     DECLARE @suffix varchar(36)=CONVERT(varchar(36),NEWID()),@request_id uniqueidentifier=NEWID(),
@@ -76,7 +92,7 @@ BEGIN TRY
       @service_category_id=@lab_category,@specialty_id=@specialty_id,
       @service_code=@lab_code,@service_name=N'Xét nghiệm clinical test',
       @service_type='LAB',@default_duration_min=30,@current_price=1000,
-      @requires_doctor=0,@service_id=@lab_id OUTPUT;
+      @requires_doctor=0,@service_id=@lab_id OUTPUT,@result_schema_json=@lab_result_schema;
     SELECT @lab_public_id=public_id FROM dbo.services WHERE service_id=@lab_id;
     EXEC dbo.sp_set_branch_service_price @actor_user_id=@admin_id,@branch_id=@branch_id,
       @service_id=@consult_id,@price_amount=200000,@effective_from=@business_date,
@@ -152,10 +168,37 @@ BEGIN TRY
       @encounter_service_public_id=@ordered_public_id OUTPUT;
     IF NOT EXISTS (SELECT 1 FROM dbo.encounter_services WHERE public_id=@ordered_public_id AND unit_price_snapshot=321000)
       THROW 55904,N'Chỉ định không chụp đúng giá chi nhánh.',1;
+    DECLARE @lab_version binary(8)=(SELECT row_ver FROM dbo.services WHERE service_id=@lab_id),
+            @changed_schema nvarchar(max)=N'{"type":"object","additionalProperties":false,"required":["value"],"properties":{"value":{"type":"string","title":"Giá trị mới","minLength":1}}}';
+    EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=@admin_id;
+    EXEC dbo.sp_update_service @actor_user_id=@admin_id,@service_id=@lab_id,
+      @service_category_id=@lab_category,@specialty_id=@specialty_id,
+      @service_name=N'Xét nghiệm clinical test',@service_type='LAB',@default_duration_min=30,
+      @current_price=1000,@requires_doctor=0,@is_active=1,@expected_row_ver=@lab_version,
+      @result_schema_json=@changed_schema;
+    EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=@doctor_user_id;
+    IF JSON_VALUE((SELECT result_schema_json FROM dbo.services WHERE service_id=@lab_id),'$.properties.value.type')<>'string'
+      OR JSON_VALUE((SELECT result_schema_snapshot_json FROM dbo.encounter_services WHERE public_id=@ordered_public_id),'$.properties.value.type')<>'number'
+      THROW 55924,N'Thay đổi catalog đã làm đổi schema snapshot của chỉ định cũ.',1;
+    SET @schema_error=NULL;
+    SET XACT_ABORT OFF;
+    BEGIN TRY
+      EXEC dbo.sp_clinic_finalize_service_result @actor_user_id=@doctor_user_id,
+        @encounter_service_public_id=@ordered_public_id,
+        @result_json=N'{"value":"không phải số","interpretation":"NORMAL"}',
+        @service_result_public_id=@result_public_id OUTPUT;
+    END TRY BEGIN CATCH SET @schema_error=ERROR_NUMBER(); END CATCH;
+    SET XACT_ABORT ON;
+    IF @schema_error<>53267 OR XACT_STATE()<>1
+      THROW 55923,N'Public finalize không từ chối schema mismatch an toàn.',1;
     EXEC dbo.sp_clinic_finalize_service_result @actor_user_id=@doctor_user_id,
       @encounter_service_public_id=@ordered_public_id,@summary=N'Kết quả bình thường',
+      @result_json=N'{"value":13.5,"interpretation":"NORMAL"}',
       @service_result_public_id=@result_public_id OUTPUT;
-    IF NOT EXISTS (SELECT 1 FROM dbo.service_results WHERE public_id=@result_public_id AND status='FINAL')
+    IF NOT EXISTS (SELECT 1 FROM dbo.service_results WHERE public_id=@result_public_id AND status='FINAL'
+        AND TRY_CONVERT(decimal(10,2),JSON_VALUE(result_json,'$.value'))=13.5)
+      OR NOT EXISTS (SELECT 1 FROM dbo.encounter_services WHERE public_id=@ordered_public_id
+        AND JSON_VALUE(result_schema_snapshot_json,'$.properties.value.type')='number')
       THROW 55905,N'Kết quả FINAL không được lưu.',1;
     EXEC dbo.sp_clinic_list_encounters @actor_user_id=@doctor_user_id,
       @branch_public_id=@branch_public_id,@statuses='IN_PROGRESS';

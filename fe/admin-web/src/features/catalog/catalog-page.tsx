@@ -1,6 +1,6 @@
 import { ApiClientError } from '@clinic/generated-api-client'
 import type {
-  CatalogReferenceData, CatalogRoom, CatalogRoomType, CatalogService, CatalogServiceType,
+  CatalogReferenceData, CatalogRoom, CatalogRoomType, CatalogService, CatalogServiceType, ClinicalResultSchema,
 } from '@clinic/generated-api-types'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
@@ -74,20 +74,28 @@ function ServiceForm({ references, branchPublicId }: { references: CatalogRefere
   const [specialtyPublicId, setSpecialtyPublicId] = useState('')
   const [durationMinutes, setDurationMinutes] = useState('30')
   const [basePrice, setBasePrice] = useState('0')
+  const [resultSchemaText, setResultSchemaText] = useState('')
+  const [schemaError, setSchemaError] = useState('')
   const mutation = useMutation({
-    mutationFn: () => apiClient.catalog.createService(branchPublicId, {
+    mutationFn: (resultSchema: ClinicalResultSchema | null) => apiClient.catalog.createService(branchPublicId, {
       categoryPublicId, ...(specialtyPublicId ? { specialtyPublicId } : {}),
       code: code.trim().toUpperCase(), name: name.trim(), type,
       durationMinutes: Number(durationMinutes), basePrice, requiresDoctor: type === 'CONSULTATION',
+      resultSchema,
     }),
     onSuccess: () => {
-      setCode(''); setName(''); setBasePrice('0')
+      setCode(''); setName(''); setBasePrice('0'); setResultSchemaText(''); setSchemaError('')
       void client.invalidateQueries({ queryKey: ['catalog-services', branchPublicId] })
     },
   })
   return <form className="catalog-form panel" onSubmit={(event) => {
     event.preventDefault()
-    if (categoryPublicId && code.trim() && name.trim()) mutation.mutate()
+    if (!categoryPublicId || !code.trim() || !name.trim()) return
+    try {
+      const resultSchema = resultSchemaText.trim()
+        ? JSON.parse(resultSchemaText) as ClinicalResultSchema : null
+      setSchemaError(''); mutation.mutate(resultSchema)
+    } catch { setSchemaError('Schema kết quả phải là JSON hợp lệ.') }
   }}>
     <h2>Thêm dịch vụ toàn hệ thống</h2>
     <p>Định nghĩa dịch vụ dùng chung; giá và khả dụng được thiết lập riêng cho từng chi nhánh.</p>
@@ -107,8 +115,45 @@ function ServiceForm({ references, branchPublicId }: { references: CatalogRefere
       <label>Thời lượng (phút)<input type="number" min={5} max={480} value={durationMinutes} onChange={(event) => setDurationMinutes(event.target.value)} /></label>
       <label>Giá cơ sở (VND)<input inputMode="decimal" pattern="[0-9]+([.][0-9]{1,2})?" value={basePrice} onChange={(event) => setBasePrice(event.target.value)} /></label>
     </div>
+    <label>Schema kết quả (JSON, không bắt buộc)<textarea rows={6} value={resultSchemaText}
+      placeholder={'{"type":"object","additionalProperties":false,"required":["value"],"properties":{"value":{"type":"number","title":"Giá trị"}}}'}
+      onChange={(event) => setResultSchemaText(event.target.value)} /></label>
+    {schemaError && <div className="form-error" role="alert">{schemaError}</div>}
     {mutation.error && <div className="form-error" role="alert">{message(mutation.error)}</div>}
     <button disabled={mutation.isPending} type="submit">{mutation.isPending ? 'Đang tạo…' : 'Tạo dịch vụ'}</button>
+  </form>
+}
+
+function ResultSchemaForm({ service, branchPublicId }: { service: CatalogService; branchPublicId: string }) {
+  const client = useQueryClient()
+  const [value, setValue] = useState(service.resultSchema ? JSON.stringify(service.resultSchema, null, 2) : '')
+  const [schemaError, setSchemaError] = useState('')
+  const mutation = useMutation({
+    mutationFn: (resultSchema: ClinicalResultSchema | null) => apiClient.catalog.updateService(
+      service.publicId, branchPublicId, {
+        categoryPublicId: service.category.publicId,
+        ...(service.specialty ? { specialtyPublicId: service.specialty.publicId } : {}),
+        name: service.name, type: service.type, durationMinutes: service.durationMinutes,
+        basePrice: service.basePrice, requiresDoctor: service.requiresDoctor,
+        resultSchema, isActive: service.isActive,
+      }, service.rowVersion,
+    ),
+    onSuccess: () => {
+      setSchemaError('')
+      void client.invalidateQueries({ queryKey: ['catalog-services', branchPublicId] })
+    },
+  })
+  return <form className="price-form" onSubmit={(event) => {
+    event.preventDefault()
+    try {
+      const resultSchema = value.trim() ? JSON.parse(value) as ClinicalResultSchema : null
+      setSchemaError(''); mutation.mutate(resultSchema)
+    } catch { setSchemaError('Schema kết quả phải là JSON hợp lệ.') }
+  }}>
+    <label>Schema kết quả<textarea rows={5} value={value} onChange={(event) => setValue(event.target.value)} /></label>
+    <button className="secondary" disabled={mutation.isPending} type="submit">Lưu schema</button>
+    {(schemaError || mutation.error) && <div className="form-error" role="alert">
+      {schemaError || message(mutation.error)}</div>}
   </form>
 }
 
@@ -152,7 +197,8 @@ export function CatalogPage() {
         categoryPublicId: service.category.publicId,
         ...(service.specialty ? { specialtyPublicId: service.specialty.publicId } : {}),
         name: service.name, type: service.type, durationMinutes: service.durationMinutes,
-        basePrice: service.basePrice, requiresDoctor: service.requiresDoctor, isActive: !service.isActive,
+        basePrice: service.basePrice, requiresDoctor: service.requiresDoctor,
+        resultSchema: service.resultSchema, isActive: !service.isActive,
       }, service.rowVersion,
     ),
     onSettled: () => void client.invalidateQueries({ queryKey: ['catalog-services', branchPublicId] }),
@@ -196,6 +242,8 @@ export function CatalogPage() {
                 onClick={() => serviceStatus.mutate(service)}>{service.isActive ? 'Tạm ngừng' : 'Kích hoạt'}</button>}</div>
             <PriceForm key={`${service.publicId}:${branchPublicId}:${service.branchPrices[0]?.publicId ?? 'new'}`}
               service={service} branchPublicId={branchPublicId} />
+            {references.data.canManageOrganizationServices && <ResultSchemaForm
+              key={`${service.publicId}:${service.rowVersion}:schema`} service={service} branchPublicId={branchPublicId} />}
           </article>)}</div>
       </section>
     </div>

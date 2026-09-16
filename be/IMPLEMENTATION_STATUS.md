@@ -420,16 +420,30 @@ Phạm vi đã hoàn thành:
 - Harness SQL thật phủ thiếu xác nhận, lô thu hồi, lô hết hạn, hoàn bán hợp lệ,
   cách ly hợp lệ và hậu kiểm prescription/balance/ledger.
 
+## DONE — Slice 24: Schema-aware FINAL Service Results
+
+- Admin quản trị schema object đóng cho từng dịch vụ với tối đa 30 trường scalar,
+  required, length/range và enum. API kiểm tra sớm; procedure nội bộ SQL kiểm tra
+  độc lập nên không thể ghi schema tùy ý bằng cách bỏ qua Web/API validation.
+- Khi bác sĩ chỉ định, schema (kể cả trạng thái không có schema) được snapshot vào
+  dòng chỉ định. Thay đổi danh mục sau đó không làm thay đổi hợp đồng của chỉ định
+  đang xử lý.
+- Màn Khám bệnh dựng trường chuỗi/số/integer/boolean/enum từ snapshot. SQL khóa
+  chỉ định rồi kiểm tra required, trường lạ, kiểu và giới hạn trước khi ghi FINAL;
+  payload chỉ chứa chuỗi/null/cấu trúc rỗng vẫn bị từ chối.
+- OpenAPI 3.1 v0.17/generated types/client đồng bộ. Regression catalog và clinical
+  phủ schema sai, result sai kiểu, snapshot, update danh mục và FINAL hợp lệ.
+
 ### Bằng chứng xác minh local toàn bộ
 
 | Kiểm tra | Kết quả |
 |---|---|
-| Baseline SQL chạy lại idempotent | Đạt; 73 bảng, 23 view, 165 procedure, 31 trigger |
+| Baseline SQL chạy lại idempotent | Đạt; 73 bảng, 23 view, 166 procedure, 31 trigger |
 | SQL auth session/staff RBAC/staff safety/password lifecycle/patient registration/patient link/catalog-directory/patient registry/scheduling-appointments/reception-queue/clinical-core/pharmacy-core/pharmacy-FEFO/pharmacy-allergy/billing-core/reports-core/notifications-outbox regression | 17/17 PASS; rollback sạch. Ba harness SQL thật xác minh queue không gọi trùng, payment không thu vượt và pharmacy giữ FEFO/idempotency/giới hạn đơn–tồn khi hai quầy race, đồng thời chặn hoàn bán thiếu kiểm tra hoặc lô không an toàn |
 | OpenAPI lint + code generation | Đạt; contract hợp lệ và generated code sinh lặp lại ổn định |
 | npm run lint | Đạt, không cảnh báo |
 | npm run typecheck | Đạt |
-| npm test | 129 test đạt (Admin 5, Auth 34, Mobile 14, Clinic 62, Worker 14), gồm queue bypass validation/order conflict, mapping/recheck dị ứng lúc kê/cấp, hoàn tồn bán an toàn, hết hạn đơn theo batch/không overlap, công bố/lịch sử lâm sàng, xác minh manifest V3, hủy lượt an toàn và outbox/delivery worker |
+| npm test | 131 test đạt (Admin 5, Auth 34, Mobile 14, Clinic 64, Worker 14), gồm schema kết quả FINAL, queue bypass validation/order conflict, mapping/recheck dị ứng lúc kê/cấp, hoàn tồn bán an toàn, hết hạn đơn theo batch/không overlap, công bố/lịch sử lâm sàng, xác minh manifest V3, hủy lượt an toàn và outbox/delivery worker |
 | npm run build | Đạt; .NET 0 warning/0 error |
 | npm run doctor:mobile | 21/21; Expo SDK 57 và các package liên quan khớp patch tương thích (`expo` 57.0.23) |
 | Gateway → Auth → SQL smoke test | Registration thiếu idempotency key trả 400; challenge lạ trả generic OTP 400; ba route patient-access mới đi đúng Auth và trả 401 + request ID + `Cache-Control: no-store` khi thiếu token |
@@ -459,8 +473,9 @@ Phạm vi đã hoàn thành:
 - Phase 5 còn recall/skip/cancel/transfer ticket có lý do, đóng phiên, bảng hiển
   thị công khai và ước lượng thời gian chờ; lõi Reception & Queue của Slice 10 đã hoàn thành.
 - Phase 6 còn kết quả nhiều phiên bản, đính kèm tệp và chữ ký số có kiểm chứng
-  certificate; lõi bác sĩ hoàn tất/ký/bổ sung/hủy, công bố, lịch sử bệnh nhân và
-  xác minh lại dấu SHA-256 đã hoàn thành qua Slice 11/16/17/18.
+  certificate; lõi bác sĩ hoàn tất/ký/bổ sung/hủy, công bố, lịch sử bệnh nhân,
+  xác minh lại dấu SHA-256 và validation FINAL theo schema đã hoàn thành qua
+  Slice 11/16/17/18/24.
 - Phase 7 còn quản lý nhà cung cấp, cập nhật/khóa danh mục thuốc và cảnh báo lô sắp
   hết hạn; lõi kê đơn–nhập kho–cấp–đảo–đối soát, tự hết hạn đơn, recheck dị ứng,
   race hai quầy và hoàn tồn bán an toàn của Slice 12/19/20/22/23 đã hoàn thành.
