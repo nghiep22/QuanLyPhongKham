@@ -9,6 +9,23 @@ SET ARITHABORT ON;
 SET NUMERIC_ROUNDABORT OFF;
 
 BEGIN TRY
+    IF OBJECTPROPERTYEX(OBJECT_ID(N'dbo.trg_payments_no_delete'),N'ExecIsUpdateTrigger')<>1
+       OR OBJECTPROPERTYEX(OBJECT_ID(N'dbo.trg_payments_no_delete'),N'ExecIsDeleteTrigger')<>1
+       OR OBJECTPROPERTYEX(OBJECT_ID(N'dbo.trg_refunds_no_delete'),N'ExecIsUpdateTrigger')<>1
+       OR OBJECTPROPERTYEX(OBJECT_ID(N'dbo.trg_refunds_no_delete'),N'ExecIsDeleteTrigger')<>1
+      THROW 55948,N'Payment/refund ledger chưa được bảo vệ UPDATE và DELETE.',1;
+    IF EXISTS
+    (
+      SELECT permission_name FROM (VALUES ('INSERT'),('UPDATE'),('DELETE')) expected(permission_name)
+      WHERE NOT EXISTS
+      (
+        SELECT 1 FROM sys.database_permissions dp
+        WHERE dp.class_desc='SCHEMA' AND dp.major_id=SCHEMA_ID(N'dbo')
+          AND dp.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'clinic_api_executor')
+          AND dp.permission_name=expected.permission_name AND dp.state='D'
+      )
+    )
+      THROW 55949,N'Clinic API chưa bị DENY DML trực tiếp trên schema dbo.',1;
     IF EXISTS (SELECT 1 FROM (VALUES (N'sp_create_invoice'),(N'sp_sync_invoice_items'),
       (N'sp_add_manual_invoice_item'),(N'sp_set_invoice_insurance_amount'),(N'sp_issue_invoice'),
       (N'sp_record_invoice_payment'),(N'sp_refund_payment_allocation'),(N'sp_void_invoice')) forbidden(name)

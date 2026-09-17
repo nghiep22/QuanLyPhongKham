@@ -4812,21 +4812,21 @@ GO
 
 CREATE OR ALTER TRIGGER dbo.trg_payments_no_delete
 ON dbo.payments
-AFTER DELETE
+AFTER UPDATE, DELETE
 AS
 BEGIN
     SET NOCOUNT ON;
-    THROW 52059, N'Không được xóa thanh toán.', 1;
+    THROW 52059, N'Thanh toán là append-only; không được sửa hoặc xóa.', 1;
 END;
 GO
 
 CREATE OR ALTER TRIGGER dbo.trg_refunds_no_delete
 ON dbo.payment_refunds
-AFTER DELETE
+AFTER UPDATE, DELETE
 AS
 BEGIN
     SET NOCOUNT ON;
-    THROW 52060, N'Không được xóa hoàn tiền.', 1;
+    THROW 52060, N'Hoàn tiền là append-only; không được sửa hoặc xóa.', 1;
 END;
 GO
 

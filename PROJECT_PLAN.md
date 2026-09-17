@@ -25,7 +25,7 @@ Tài liệu này không thay thế đặc tả chi tiết của từng màn hìn
 |---|---|
 | Thư mục `fe/` và `be/` | Đã tạo |
 | SQL Server `quan_ly_phong_kham.sql` | Baseline candidate: đã có luồng lõi, còn gap/defect P0 tại mục 8.12 |
-| Database objects | 73 bảng, 23 view, 166 stored procedure, 31 trigger |
+| Database objects | 73 bảng, 23 view, 166 stored procedure, 32 trigger |
 | Kiểm thử database | Baseline idempotent; 17 regression suite đến reports/outbox-notification đều đạt, cùng harness đồng thời queue, payment và pharmacy dispensing; chưa coi production-ready trước khi hoàn tất mọi ca P0 |
 | Gateway | Đã scaffold; live/ready, request ID và route Auth/Clinic hoạt động |
 | Auth Service | Slice 06 hoàn tất: auth/session, workforce/RBAC, OTP và yêu cầu/duyệt/thu hồi patient portal link |
@@ -682,10 +682,10 @@ Trong bảng này, **P0** nghĩa là phải chốt thiết kế trước và ho�
 | P0 | Tự chuyển prescription hết hạn | **DONE — Slice 19** | Command/worker dùng chung transition idempotent; lưu `EXPIRED`, audit và outbox trước khi từ chối cấp, không còn `UPDATE` rồi `THROW` bị rollback |
 | P0 | Đối chiếu dị ứng hoạt chất khi kê/cấp | **DONE — Slice 20** | Catalog allergen + mapping medicine; kiểm tra chính xác ở lúc kê và cấp; mỗi override có permission/lý do/audit và lưu append-only |
 | P0 | Start encounter tuân thủ queue | **DONE — Slice 21** | Luồng thường bắt buộc `CALLED`; bypass chỉ cho ticket `WAITING` đứng đầu, cần permission/lý do, khóa theo priority/FIFO và có audit/outbox |
-| P0 | Validation kết quả FINAL | **DONE — Kiểm tra kết quả FINAL theo schema** | Không chốt khi mọi giá trị đều rỗng; schema object đóng được kiểm tra khi quản trị, snapshot lúc chỉ định và SQL validate required/type/range/enum trong transaction FINAL |
-| P0 | Reversal về kho bán an toàn | **DONE — Hoàn thuốc về kho bán an toàn** | Chỉ hoàn về tồn bán khi lô `AVAILABLE`, chưa hết hạn theo business date và dược sĩ xác nhận kiểm tra hàng trả; mọi trường hợp khác đi vào cách ly, bằng chứng được lưu append-only |
-| P0 | Completeness gate khi phát hành hóa đơn | Có defect | Khóa encounter/billable sources, đồng bộ trong transaction, không còn service/dispensation dở hoặc dòng chưa tính |
-| P0 | Ledger thanh toán/refund append-only thật sự | Có defect | Chặn UPDATE/DELETE field tài chính đã chốt; thay đổi bằng reversal/refund record, trigger + least-privilege test |
+| P0 | Validation kết quả FINAL | **DONE — Slice 24** | Không chốt khi mọi giá trị đều rỗng; schema object đóng được kiểm tra khi quản trị, snapshot lúc chỉ định và SQL validate required/type/range/enum trong transaction FINAL |
+| P0 | Reversal về kho bán an toàn | **DONE — Slice 23** | Chỉ hoàn về tồn bán khi lô `AVAILABLE`, chưa hết hạn theo business date và dược sĩ xác nhận kiểm tra hàng trả; mọi trường hợp khác đi vào cách ly, bằng chứng được lưu append-only |
+| P0 | Completeness gate khi phát hành hóa đơn | **DONE — Slice 25** | Khóa chung theo encounter cho phát hành và mọi mutation cấp thuốc; đồng bộ rồi hậu kiểm đủ dịch vụ/thuốc trong cùng transaction; trigger chặn nguồn thuốc mới sau phát hành; race harness đạt |
+| P0 | Ledger thanh toán/refund append-only thật sự | **DONE — Slice 26** | Payment/refund và allocation đều chặn UPDATE/DELETE; sửa sai chỉ bằng refund record; regression kiểm tra trigger, `DENY` DML và dữ liệu không đổi sau mutation bị từ chối |
 | P0 | Read procedure cho báo cáo và ma trận quyền | Có defect | `REPORTS_VIEW` được kiểm tra; Manager/Cashier/Pharmacist chỉ xem đúng báo cáo và branch scope |
 | P1 | Queue recall/skip/cancel/transfer và đóng phiên | Khung | Transition hợp lệ, lý do bắt buộc và chống gọi trùng |
 | P1 | Service cancel/transition; result DRAFT/PRELIMINARY/version/amend | Khung | Không ghi đè kết quả FINAL; đầy đủ audit/version |
@@ -1178,8 +1178,10 @@ Health readiness phải kiểm tra dependency cần thiết nhưng có timeout n
 | Slice 20 — Normalized Medication Allergy Safety | **DONE** | 2026-09-16 | RX-03 và defect P0 đối chiếu dị ứng: catalog `allergens` cùng mapping nhiều-nhiều thuốc–dị nguyên thay so khớp chuỗi `LIKE`; dữ liệu cũ được backfill. Kê đơn và cấp phát đều recheck mapping chính xác, tách permission override bác sĩ/dược sĩ, bắt lý do tối thiểu 10 ký tự, lưu trên dòng append-only và audit public UUID. Retry cấp phát giữ nguyên resource; OpenAPI v0.14/client và Admin Web hiển thị mapping/cảnh báo. Baseline 73 bảng, pharmacy regression và 126 application test đạt. |
 | Slice 21 — Queue-safe Encounter Start | **DONE** | 2026-09-16 | CLI-01 và defect P0 start encounter: đường thường chỉ chuyển ticket `CALLED` sang `SERVING`; ngoại lệ tách permission `ENCOUNTERS_QUEUE_BYPASS`, bắt lý do tối thiểu 10 ký tự và chỉ áp dụng cho ticket `WAITING` đang đứng đầu theo priority/FIFO dưới khóa transaction. Bypass ghi audit có lý do, outbox metadata-only bằng public UUID; OpenAPI v0.15/client và Admin Web có hành động riêng theo capability. Clinical SQL regression cùng 128 application test đạt. |
 | Slice 22 — Concurrent Pharmacy Dispensing Safety | **DONE** | 2026-09-16 | Hardening cấp phát: harness hai session SQL thật kiểm tra race mở phiên, retry đồng thời cùng idempotency key và race lô FEFO cũ/mới. Đúng một phiên DRAFT được mở; retry trả cùng resource; lô cũ luôn thắng, lượng cấp không vượt số kê, tồn không âm và balance khớp ledger. Fixture domain được dọn sạch, audit append-only được giữ. |
-| Hoàn thuốc về kho bán an toàn | **DONE** | 2026-09-16 | Defect P0 hoàn thuốc về kho bán: `SELLABLE` bắt buộc xác nhận kiểm tra chất lượng; procedure nội bộ khóa và kiểm tra lô vẫn `AVAILABLE`, chưa hết hạn theo business date trước khi cộng tồn. Bằng chứng kiểm tra được lưu trên reversal append-only; Admin Web tách rõ hoàn về kho bán sau kiểm tra và đưa vào cách ly. Harness SQL thật phủ thiếu xác nhận, lô thu hồi, lô hết hạn, hai đường hợp lệ và đối soát ledger; OpenAPI v0.16/client cùng 129 application test đồng bộ. |
-| Kiểm tra kết quả FINAL theo schema | **DONE** | 2026-09-16 | CLI-08 và defect P0 validation FINAL: Admin định nghĩa schema object đóng cho dịch vụ với required, kiểu scalar, range/length và enum; schema được validate ở API + SQL và snapshot vào chỉ định để thay đổi danh mục không hồi tố. Màn Khám bệnh dựng trường nhập động; SQL khóa chỉ định rồi kiểm tra lại schema trước khi lưu FINAL, đồng thời chặn payload chỉ chứa giá trị rỗng. OpenAPI v0.17/client, catalog/clinical SQL regression và 131 application test đồng bộ. |
+| Slice 23 — Hoàn thuốc về kho bán an toàn | **DONE** | 2026-09-16 | Defect P0 hoàn thuốc về kho bán: `SELLABLE` bắt buộc xác nhận kiểm tra chất lượng; procedure nội bộ khóa và kiểm tra lô vẫn `AVAILABLE`, chưa hết hạn theo business date trước khi cộng tồn. Bằng chứng kiểm tra được lưu trên reversal append-only; Admin Web tách rõ hoàn về kho bán sau kiểm tra và đưa vào cách ly. Harness SQL thật phủ thiếu xác nhận, lô thu hồi, lô hết hạn, hai đường hợp lệ và đối soát ledger; OpenAPI v0.16/client cùng 129 application test đồng bộ. |
+| Slice 24 — Kiểm tra kết quả FINAL theo schema | **DONE** | 2026-09-16 | CLI-08 và defect P0 validation FINAL: Admin định nghĩa schema object đóng cho dịch vụ với required, kiểu scalar, range/length và enum; schema được validate ở API + SQL và snapshot vào chỉ định để thay đổi danh mục không hồi tố. Màn Khám bệnh dựng trường nhập động; SQL khóa chỉ định rồi kiểm tra lại schema trước khi lưu FINAL, đồng thời chặn payload chỉ chứa giá trị rỗng. OpenAPI v0.17/client, catalog/clinical SQL regression và 131 application test đồng bộ. |
+| Slice 25 — Atomic Invoice Completeness Gate | **DONE** | 2026-09-17 | BIL-05 và defect P0 completeness gate: phát hành hóa đơn dùng khóa ứng dụng chung theo encounter với mở/cấp/hoàn tất/hủy/đảo cấp thuốc; khóa encounter và nguồn billable, từ chối dịch vụ/đơn/dispensation dở, đồng bộ lại rồi hậu kiểm từng nguồn đã có dòng. Trigger chặn mở phiên/dòng thuốc mới sau phát hành. Harness hai session chứng minh hoàn tất cấp thuốc đồng thời được tính đủ trước khi hóa đơn `ISSUED`; thao tác thuốc đến muộn nhận conflict an toàn. |
+| Slice 26 — Immutable Payment & Refund Ledger | **DONE** | 2026-09-17 | BIL-15 và defect P0 ledger: `payments`, `payment_refunds`, payment allocation và refund allocation đều append-only ở database; payment/refund chặn cả `UPDATE` lẫn `DELETE`, sửa sai chỉ bằng refund record mới. Regression kiểm tra trigger bảo vệ hai mutation, role API bị `DENY` DML schema và không có object grant; payment race harness xác minh dữ liệu tài chính không đổi sau bốn mutation bị từ chối. Clinic Service ánh xạ conflict an toàn; 132 application test đạt. |
 
 Phase 1 và Slice 02–07 đã hoàn thành về source code và kiểm thử local. Phase 2
 đã đạt luồng MVP về source code và kiểm thử local. Các
@@ -1209,8 +1211,9 @@ ledger; chức năng hoàn thuốc an toàn khóa đường hoàn về tồn bá
 tra hàng trả. Quản lý nhà cung cấp, cập nhật danh mục thuốc và cảnh báo lô sắp hết
 hạn còn dành cho lát cắt tiếp theo.
 Phase 8 đã có màn Thu ngân từ lượt khám đến hóa đơn, thu nhiều lần, hoàn tiền,
-VOID và hóa đơn thay thế. In/xuất hóa đơn, tích hợp payment gateway/webhook và
-claim bảo hiểm còn dành cho P1/P2.
+VOID và hóa đơn thay thế. Slice 25 khóa completeness gate trước race nguồn thuốc;
+Slice 26 làm payment/refund ledger bất biến và xác minh least privilege. In/xuất
+hóa đơn, tích hợp payment gateway/webhook và claim bảo hiểm còn dành cho P1/P2.
 Phase 9 đã có lõi báo cáo vận hành/doanh thu/sử dụng-tồn kho từ Admin Web đến
 pool SQL read-only riêng, đúng capability và branch scope; outbox publisher,
 reminder đa kênh, retry tự động và dead-letter cũng đã hoàn thành. Replay thủ

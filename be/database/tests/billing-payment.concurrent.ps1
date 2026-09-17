@@ -72,10 +72,24 @@ SET ARITHABORT ON; SET NUMERIC_ROUNDABORT OFF;
 BEGIN TRANSACTION;
 DECLARE @payment_ids TABLE(payment_id bigint PRIMARY KEY);
 INSERT @payment_ids SELECT payment_id FROM dbo.payment_allocations WHERE invoice_id=$invoiceId;
+DECLARE @refund_ids TABLE(payment_refund_id bigint PRIMARY KEY);
+INSERT @refund_ids
+SELECT DISTINCT ra.payment_refund_id FROM dbo.refund_allocations ra
+JOIN dbo.payment_allocations pa ON pa.payment_allocation_id=ra.payment_allocation_id
+WHERE pa.invoice_id=$invoiceId;
 DELETE dbo.outbox_events WHERE aggregate_id='$invoicePublicId' OR aggregate_id IN
-  (SELECT CONVERT(varchar(36),public_id) FROM dbo.payments WHERE payment_id IN (SELECT payment_id FROM @payment_ids));
-DELETE dbo.idempotency_requests WHERE operation_code IN ('ISSUE_INVOICE','RECORD_PAYMENT')
-  AND (resource_id=$invoiceId OR resource_id IN (SELECT payment_id FROM @payment_ids));
+  (SELECT CONVERT(varchar(36),public_id) FROM dbo.payments WHERE payment_id IN (SELECT payment_id FROM @payment_ids))
+  OR aggregate_id IN
+  (SELECT CONVERT(varchar(36),public_id) FROM dbo.payment_refunds WHERE payment_refund_id IN (SELECT payment_refund_id FROM @refund_ids));
+DELETE dbo.idempotency_requests WHERE operation_code IN ('ISSUE_INVOICE','RECORD_PAYMENT','REFUND_PAYMENT')
+  AND (resource_id=$invoiceId OR resource_id IN (SELECT payment_id FROM @payment_ids)
+       OR resource_id IN (SELECT payment_refund_id FROM @refund_ids));
+DISABLE TRIGGER dbo.trg_refund_allocations_append_only ON dbo.refund_allocations;
+DELETE dbo.refund_allocations WHERE payment_refund_id IN (SELECT payment_refund_id FROM @refund_ids);
+ENABLE TRIGGER dbo.trg_refund_allocations_append_only ON dbo.refund_allocations;
+DISABLE TRIGGER dbo.trg_refunds_no_delete ON dbo.payment_refunds;
+DELETE dbo.payment_refunds WHERE payment_refund_id IN (SELECT payment_refund_id FROM @refund_ids);
+ENABLE TRIGGER dbo.trg_refunds_no_delete ON dbo.payment_refunds;
 DISABLE TRIGGER dbo.trg_financial_allocations_append_only ON dbo.payment_allocations;
 DELETE dbo.payment_allocations WHERE invoice_id=$invoiceId;
 ENABLE TRIGGER dbo.trg_financial_allocations_append_only ON dbo.payment_allocations;
@@ -113,7 +127,58 @@ try {
   }
   $balance = Invoke-SqlText "SET NOCOUNT ON; SELECT CONCAT(status,'|',paid_amount,'|',balance_due) FROM dbo.v_invoice_balances WHERE invoice_id=$invoiceId;"
   if ($balance -ne "PAID|$payable|0.00") { throw "Số dư sau race không đúng: $balance" }
-  [pscustomobject]@{ result='PASS'; winner=$successes[0]; rejected=$conflicts[0]; paid=$payable }
+
+  $paymentPublicId = $successes[0].Split('|')[1]
+  $refundFixture = Invoke-SqlText @"
+SET NOCOUNT ON; SET XACT_ABORT ON;
+DECLARE @allocation uniqueidentifier=(SELECT pa.public_id FROM dbo.payment_allocations pa
+  JOIN dbo.payments p ON p.payment_id=pa.payment_id WHERE p.public_id='$paymentPublicId'),
+  @refund uniqueidentifier,@refund_key uniqueidentifier=NEWID();
+EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=$actorId;
+EXEC dbo.sp_clinic_refund_payment @actor_user_id=$actorId,@payment_allocation_public_id=@allocation,
+  @amount=$payable,@refund_method='CASH',@idempotency_key=@refund_key,
+  @reason=N'Kiểm thử sổ cái append-only',@refund_public_id=@refund OUTPUT;
+SELECT CONCAT(CONVERT(varchar(36),@refund),'|',CONVERT(varchar(36),@allocation));
+"@
+  $refundParts = $refundFixture.Split('|')
+  if ($refundParts.Count -ne 2) { throw "Không tạo được fixture hoàn tiền: $refundFixture" }
+  $refundPublicId = $refundParts[0]
+
+  $permissionState = Invoke-SqlText @"
+SET NOCOUNT ON;
+SELECT CONCAT(
+  (SELECT COUNT(*) FROM sys.database_permissions dp WHERE dp.class_desc='SCHEMA'
+    AND dp.major_id=SCHEMA_ID(N'dbo')
+    AND dp.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'clinic_api_executor')
+    AND dp.permission_name IN ('INSERT','UPDATE','DELETE') AND dp.state='D'),'|',
+  (SELECT COUNT(*) FROM sys.database_permissions dp
+    WHERE dp.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'clinic_api_executor')
+      AND dp.major_id IN (OBJECT_ID(N'dbo.payments'),OBJECT_ID(N'dbo.payment_refunds'))
+      AND dp.permission_name IN ('INSERT','UPDATE','DELETE') AND dp.state IN ('G','W')));
+"@
+  if ($permissionState -ne '3|0') { throw "Least-privilege ledger không đúng: $permissionState" }
+
+  $mutationCases = @(
+    @{ Name='update payment'; Expected=@('ERR|52059'); Sql="UPDATE dbo.payments SET amount=amount+1 WHERE public_id='$paymentPublicId';" },
+    @{ Name='delete payment'; Expected=@('ERR|52059','ERR|547'); Sql="DELETE dbo.payments WHERE public_id='$paymentPublicId';" },
+    @{ Name='update refund'; Expected=@('ERR|52060'); Sql="UPDATE dbo.payment_refunds SET amount=amount+1 WHERE public_id='$refundPublicId';" },
+    @{ Name='delete refund'; Expected=@('ERR|52060','ERR|547'); Sql="DELETE dbo.payment_refunds WHERE public_id='$refundPublicId';" }
+  )
+  foreach ($case in $mutationCases) {
+    $result = Invoke-SqlText "SET NOCOUNT ON; SET ANSI_NULLS ON; SET QUOTED_IDENTIFIER ON; SET ANSI_PADDING ON; SET ANSI_WARNINGS ON; SET CONCAT_NULL_YIELDS_NULL ON; SET ARITHABORT ON; SET NUMERIC_ROUNDABORT OFF; BEGIN TRY $($case.Sql) SELECT 'OK'; END TRY BEGIN CATCH SELECT CONCAT('ERR|',ERROR_NUMBER()); END CATCH;"
+    if ($case.Expected -notcontains $result) { throw "Ledger cho phép $($case.Name): $result" }
+  }
+  $ledgerState = Invoke-SqlText @"
+SET NOCOUNT ON;
+SELECT CONCAT(CONVERT(varchar(40),p.amount),'|',p.status,'|',CONVERT(varchar(40),r.amount),'|',r.status)
+FROM dbo.payments p CROSS JOIN dbo.payment_refunds r
+WHERE p.public_id='$paymentPublicId' AND r.public_id='$refundPublicId';
+"@
+  if ($ledgerState -ne "$payable|SUCCEEDED|$payable|SUCCEEDED") {
+    throw "Ledger thay đổi sau thao tác bị chặn: $ledgerState"
+  }
+  [pscustomobject]@{ result='PASS'; winner=$successes[0]; rejected=$conflicts[0]; paid=$payable;
+    ledger='append-only'; leastPrivilege='PASS' }
 }
 finally {
   if ($jobs) { $jobs | Remove-Job -Force -ErrorAction SilentlyContinue }

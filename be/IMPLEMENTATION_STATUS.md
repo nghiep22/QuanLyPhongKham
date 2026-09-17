@@ -407,7 +407,7 @@ Phạm vi đã hoàn thành:
   chỉ có hai ledger movement tương ứng và reconciliation không có sai lệch. Fixture
   domain được dọn sạch; audit được giữ append-only theo thiết kế.
 
-## DONE — Hoàn thuốc về kho bán an toàn
+## DONE — Slice 23: Hoàn thuốc về kho bán an toàn
 
 - Hoàn thuốc về tồn bán bắt buộc dược sĩ xác nhận đã kiểm tra hàng trả; xác nhận
   được lưu cùng reversal append-only. Đường cách ly mặc định không được mang cờ
@@ -420,7 +420,7 @@ Phạm vi đã hoàn thành:
 - Harness SQL thật phủ thiếu xác nhận, lô thu hồi, lô hết hạn, hoàn bán hợp lệ,
   cách ly hợp lệ và hậu kiểm prescription/balance/ledger.
 
-## DONE — Kiểm tra kết quả FINAL theo schema
+## DONE — Slice 24: Kiểm tra kết quả FINAL theo schema
 
 - Admin quản trị schema object đóng cho từng dịch vụ với tối đa 30 trường scalar,
   required, length/range và enum. API kiểm tra sớm; procedure nội bộ SQL kiểm tra
@@ -434,16 +434,44 @@ Phạm vi đã hoàn thành:
 - OpenAPI 3.1 v0.17/generated types/client đồng bộ. Regression catalog và clinical
   phủ schema sai, result sai kiểu, snapshot, update danh mục và FINAL hợp lệ.
 
+## DONE — Slice 25: Atomic Invoice Completeness Gate
+
+- Phát hành hóa đơn và mọi mutation có thể đổi nguồn thuốc dùng chung khóa
+  `encounter-billing:{encounterId}`. Lock được lấy trước khóa invoice,
+  dispensation/item và tồn kho, nên hoàn tất/hủy/đảo/cấp thuốc không thể chen giữa
+  bước kiểm tra và bước khóa hóa đơn.
+- Procedure phát hành khóa encounter và nguồn billable, từ chối dịch vụ, đơn hoặc
+  phiên cấp phát chưa terminal, tự đồng bộ dịch vụ hoàn tất và thuốc chưa reversal,
+  rồi hậu kiểm từng nguồn đã có đúng dòng trước khi chuyển sang `ISSUED`.
+- Trigger database chặn mở/thay đổi dispensation hoặc thêm dispensation item sau
+  khi active invoice đã phát hành. Clinic Service ánh xạ các lỗi race mới thành
+  `BILLING_CONFLICT`/`PHARMACY_CONFLICT` không lộ chi tiết nội bộ.
+- Harness hai session giữ giao dịch hoàn tất cấp thuốc trong lúc phát hành: hóa đơn
+  chỉ hoàn tất sau khi source commit và chứa đủ một dòng dịch vụ, một dòng thuốc;
+  mở phiên hoặc chèn dòng thuốc đến muộn đều bị chặn.
+
+## DONE — Slice 26: Immutable Payment & Refund Ledger
+
+- `payments` và `payment_refunds` chặn cả `UPDATE` lẫn `DELETE`; hai bảng allocation
+  tiếp tục append-only. Sai sót thanh toán chỉ được biểu diễn bằng refund record mới,
+  không sửa lịch sử thu/hoàn đã chốt.
+- Regression kiểm tra bốn trigger event UPDATE/DELETE, `DENY INSERT/UPDATE/DELETE`
+  trên schema `dbo` cho `clinic_api_executor` và không có object-level DML grant trên
+  payment/refund.
+- Payment race harness tạo thu và hoàn thật, thử sửa/xóa cả hai ledger rồi xác minh
+  số tiền/trạng thái vẫn nguyên vẹn. Fixture domain được dọn sạch; audit append-only
+  được giữ theo thiết kế.
+
 ### Bằng chứng xác minh local toàn bộ
 
 | Kiểm tra | Kết quả |
 |---|---|
-| Baseline SQL chạy lại idempotent | Đạt; 73 bảng, 23 view, 166 procedure, 31 trigger |
-| SQL auth session/staff RBAC/staff safety/password lifecycle/patient registration/patient link/catalog-directory/patient registry/scheduling-appointments/reception-queue/clinical-core/pharmacy-core/pharmacy-FEFO/pharmacy-allergy/billing-core/reports-core/notifications-outbox regression | 17/17 PASS; rollback sạch. Ba harness SQL thật xác minh queue không gọi trùng, payment không thu vượt và pharmacy giữ FEFO/idempotency/giới hạn đơn–tồn khi hai quầy race, đồng thời chặn hoàn bán thiếu kiểm tra hoặc lô không an toàn |
+| Baseline SQL chạy lại idempotent | Đạt; 73 bảng, 23 view, 166 procedure, 32 trigger |
+| SQL auth session/staff RBAC/staff safety/password lifecycle/patient registration/patient link/catalog-directory/patient registry/scheduling-appointments/reception-queue/clinical-core/pharmacy-core/pharmacy-FEFO/pharmacy-allergy/billing-core/reports-core/notifications-outbox regression | 17/17 PASS; rollback sạch. Bốn harness SQL thật xác minh queue không gọi trùng, invoice không bỏ sót charge khi race cấp thuốc, payment không thu vượt và ledger bất biến/least-privilege, pharmacy giữ FEFO/idempotency/giới hạn đơn–tồn khi hai quầy race, đồng thời chặn hoàn bán thiếu kiểm tra hoặc lô không an toàn |
 | OpenAPI lint + code generation | Đạt; contract hợp lệ và generated code sinh lặp lại ổn định |
 | npm run lint | Đạt, không cảnh báo |
 | npm run typecheck | Đạt |
-| npm test | 131 test đạt (Admin 5, Auth 34, Mobile 14, Clinic 64, Worker 14), gồm schema kết quả FINAL, queue bypass validation/order conflict, mapping/recheck dị ứng lúc kê/cấp, hoàn tồn bán an toàn, hết hạn đơn theo batch/không overlap, công bố/lịch sử lâm sàng, xác minh manifest V3, hủy lượt an toàn và outbox/delivery worker |
+| npm test | 132 test đạt (Admin 5, Auth 34, Mobile 14, Clinic 65, Worker 14), gồm invoice/pharmacy race conflict an toàn, schema kết quả FINAL, queue bypass validation/order conflict, mapping/recheck dị ứng lúc kê/cấp, hoàn tồn bán an toàn, hết hạn đơn theo batch/không overlap, công bố/lịch sử lâm sàng, xác minh manifest V3, hủy lượt an toàn và outbox/delivery worker |
 | npm run build | Đạt; .NET 0 warning/0 error |
 | npm run doctor:mobile | 21/21; Expo SDK 57 và các package liên quan khớp patch tương thích (`expo` 57.0.23) |
 | Gateway → Auth → SQL smoke test | Registration thiếu idempotency key trả 400; challenge lạ trả generic OTP 400; ba route patient-access mới đi đúng Auth và trả 401 + request ID + `Cache-Control: no-store` khi thiếu token |
@@ -480,6 +508,7 @@ Phạm vi đã hoàn thành:
   hết hạn; lõi kê đơn–nhập kho–cấp–đảo–đối soát, tự hết hạn đơn, recheck dị ứng,
   race hai quầy và hoàn tồn bán an toàn đã hoàn thành.
 - Phase 8 còn in/xuất hóa đơn, tích hợp payment gateway/webhook và hồ sơ claim bảo
-  hiểm; lõi hóa đơn–thu–hoàn–VOID của Slice 13 đã hoàn thành.
+  hiểm; lõi hóa đơn–thu–hoàn–VOID của Slice 13, completeness gate của Slice 25 và
+  ledger bất biến của Slice 26 đã hoàn thành.
 - Phase 9 còn replay dead-letter thủ công và export CSV/XLSX; lõi báo cáo,
   outbox publisher, reminder, retry tự động và dead-letter đã hoàn thành.
