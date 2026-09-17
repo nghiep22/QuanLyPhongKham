@@ -72,7 +72,7 @@ describe('billing API', () => {
   });
   it('maps completeness and overpayment races to a safe conflict', async () => {
     const { app, repository } = fixture();
-    vi.mocked(repository.issue).mockRejectedValueOnce({ number: 53425, message: 'internal charge details' });
+    vi.mocked(repository.issue).mockRejectedValueOnce({ number: 53429, message: 'internal charge details' });
     const result = await request(app).post(`/api/v1/invoices/${invoiceId}/issue`).set(authorization)
       .set('Idempotency-Key', randomUUID()).send({});
     expect(result.status).toBe(409); expect(result.body.error.code).toBe('BILLING_CONFLICT');

@@ -275,6 +275,7 @@ sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\b
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\reports-core.test.sql
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\notifications-outbox.test.sql
 .\be\database\tests\reception-queue.concurrent.ps1
+.\be\database\tests\billing-issuance.concurrent.ps1
 .\be\database\tests\billing-payment.concurrent.ps1
 .\be\database\tests\pharmacy-dispense.concurrent.ps1
 ```

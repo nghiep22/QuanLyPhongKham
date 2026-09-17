@@ -4640,13 +4640,45 @@ BEGIN
 END;
 GO
 
-CREATE OR ALTER TRIGGER dbo.trg_dispensation_items_append_only
-ON dbo.dispensation_items
-AFTER UPDATE, DELETE
+CREATE OR ALTER TRIGGER dbo.trg_dispensations_billing_guard
+ON dbo.dispensations
+AFTER INSERT, UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;
-    THROW 52049, N'Dòng cấp thuốc là append-only; hãy dùng nghiệp vụ đảo cấp phát.', 1;
+    IF EXISTS
+    (
+        SELECT 1
+        FROM inserted x
+        JOIN dbo.prescriptions p ON p.prescription_id=x.prescription_id
+        JOIN dbo.invoices i WITH (UPDLOCK,HOLDLOCK)
+          ON i.encounter_id=p.encounter_id AND i.is_active_invoice=1
+        WHERE i.status<>'DRAFT'
+    )
+        THROW 52065, N'Không được mở hoặc thay đổi phiên cấp thuốc sau khi hóa đơn đã phát hành.', 1;
+END;
+GO
+
+CREATE OR ALTER TRIGGER dbo.trg_dispensation_items_append_only
+ON dbo.dispensation_items
+AFTER INSERT, UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF EXISTS
+    (
+        SELECT 1
+        FROM inserted x
+        JOIN dbo.dispensations d ON d.dispensation_id=x.dispensation_id
+        JOIN dbo.prescriptions p ON p.prescription_id=d.prescription_id
+        JOIN dbo.invoices i WITH (UPDLOCK,HOLDLOCK)
+          ON i.encounter_id=p.encounter_id AND i.is_active_invoice=1
+        WHERE i.status<>'DRAFT'
+    )
+        THROW 52066, N'Không được thêm dòng cấp thuốc sau khi hóa đơn đã phát hành.', 1;
+
+    IF EXISTS (SELECT 1 FROM deleted)
+        THROW 52049, N'Dòng cấp thuốc là append-only; hãy dùng nghiệp vụ đảo cấp phát.', 1;
 END;
 GO
 
@@ -10985,12 +11017,22 @@ AS
 BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
-    DECLARE @branch_id bigint;
-    SELECT @branch_id=branch_id FROM dbo.prescriptions WHERE prescription_id=@prescription_id;
+    DECLARE @branch_id bigint,@billing_encounter_id bigint;
+    SELECT @branch_id=branch_id,@billing_encounter_id=encounter_id
+    FROM dbo.prescriptions WHERE prescription_id=@prescription_id;
     EXEC dbo.sp_assert_permission @actor_user_id,'PHARMACY_DISPENSE',@branch_id;
 
     BEGIN TRY
         BEGIN TRANSACTION;
+        DECLARE @billing_lock_result int,
+                @billing_lock_resource nvarchar(255)=CONCAT(N'encounter-billing:',@billing_encounter_id);
+        EXEC @billing_lock_result=sys.sp_getapplock @Resource=@billing_lock_resource,
+             @LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000;
+        IF @billing_lock_result<0 THROW 53355,N'Không thể khóa nguồn tính tiền của lượt khám.',1;
+        IF EXISTS (SELECT 1 FROM dbo.invoices WITH (UPDLOCK,HOLDLOCK)
+                   WHERE encounter_id=@billing_encounter_id AND is_active_invoice=1 AND status<>'DRAFT')
+            THROW 53354,N'Hóa đơn đã phát hành; không thể mở thêm phiên cấp thuốc.',1;
+
         DECLARE @status varchar(30),@valid_until date,@business_date date;
         SELECT @status=status,@valid_until=valid_until
         FROM dbo.prescriptions WITH (UPDLOCK,HOLDLOCK) WHERE prescription_id=@prescription_id;
@@ -11038,12 +11080,24 @@ BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
     IF @quantity<=0 THROW 53324,N'Số lượng cấp phải lớn hơn 0.',1;
-    DECLARE @branch_id bigint;
-    SELECT @branch_id=branch_id FROM dbo.dispensations WHERE dispensation_id=@dispensation_id;
+    DECLARE @branch_id bigint,@billing_encounter_id bigint;
+    SELECT @branch_id=d.branch_id,@billing_encounter_id=p.encounter_id
+    FROM dbo.dispensations d
+    JOIN dbo.prescriptions p ON p.prescription_id=d.prescription_id
+    WHERE d.dispensation_id=@dispensation_id;
     EXEC dbo.sp_assert_permission @actor_user_id,'PHARMACY_DISPENSE',@branch_id;
 
     BEGIN TRY
         BEGIN TRANSACTION;
+        DECLARE @billing_lock_result int,
+                @billing_lock_resource nvarchar(255)=CONCAT(N'encounter-billing:',@billing_encounter_id);
+        EXEC @billing_lock_result=sys.sp_getapplock @Resource=@billing_lock_resource,
+             @LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000;
+        IF @billing_lock_result<0 THROW 53355,N'Không thể khóa nguồn tính tiền của lượt khám.',1;
+        IF EXISTS (SELECT 1 FROM dbo.invoices WITH (UPDLOCK,HOLDLOCK)
+                   WHERE encounter_id=@billing_encounter_id AND is_active_invoice=1 AND status<>'DRAFT')
+            THROW 53354,N'Hóa đơn đã phát hành; không thể cấp thêm thuốc.',1;
+
         DECLARE @prescription_id bigint,@location_id bigint,@disp_status varchar(20),
                 @rx_status varchar(30),@valid_until date,@business_date date,
                 @medicine_id bigint,@prescribed decimal(18,3),@dispensed decimal(18,3),
@@ -11131,12 +11185,21 @@ AS
 BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
-    DECLARE @branch_id bigint;
-    SELECT @branch_id=branch_id FROM dbo.dispensations WHERE dispensation_id=@dispensation_id;
+    DECLARE @branch_id bigint,@billing_encounter_id bigint;
+    SELECT @branch_id=d.branch_id,@billing_encounter_id=p.encounter_id
+    FROM dbo.dispensations d
+    JOIN dbo.prescriptions p ON p.prescription_id=d.prescription_id
+    WHERE d.dispensation_id=@dispensation_id;
     EXEC dbo.sp_assert_permission @actor_user_id,'PHARMACY_DISPENSE',@branch_id;
 
     BEGIN TRY
         BEGIN TRANSACTION;
+        DECLARE @billing_lock_result int,
+                @billing_lock_resource nvarchar(255)=CONCAT(N'encounter-billing:',@billing_encounter_id);
+        EXEC @billing_lock_result=sys.sp_getapplock @Resource=@billing_lock_resource,
+             @LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000;
+        IF @billing_lock_result<0 THROW 53355,N'Không thể khóa nguồn tính tiền của lượt khám.',1;
+
         DECLARE @prescription_id bigint,@status varchar(20),@prescription_status varchar(30);
         SELECT @prescription_id=prescription_id,@status=status
         FROM dbo.dispensations WITH (UPDLOCK,HOLDLOCK) WHERE dispensation_id=@dispensation_id;
@@ -11195,14 +11258,22 @@ BEGIN
     IF @disposition<>'SELLABLE' AND COALESCE(@sellable_inspection_confirmed,0)<>0
         THROW 53352,N'Xác nhận kiểm tra kho bán chỉ hợp lệ với phân loại SELLABLE.',1;
 
-    DECLARE @branch_id bigint;
-    SELECT @branch_id=d.branch_id
-    FROM dbo.dispensation_items di JOIN dbo.dispensations d ON d.dispensation_id=di.dispensation_id
+    DECLARE @branch_id bigint,@billing_encounter_id bigint;
+    SELECT @branch_id=d.branch_id,@billing_encounter_id=p.encounter_id
+    FROM dbo.dispensation_items di
+    JOIN dbo.dispensations d ON d.dispensation_id=di.dispensation_id
+    JOIN dbo.prescriptions p ON p.prescription_id=d.prescription_id
     WHERE di.dispensation_item_id=@dispensation_item_id;
     EXEC dbo.sp_assert_permission @actor_user_id,'PHARMACY_DISPENSE',@branch_id;
 
     BEGIN TRY
         BEGIN TRANSACTION;
+        DECLARE @billing_lock_result int,
+                @billing_lock_resource nvarchar(255)=CONCAT(N'encounter-billing:',@billing_encounter_id);
+        EXEC @billing_lock_result=sys.sp_getapplock @Resource=@billing_lock_resource,
+             @LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000;
+        IF @billing_lock_result<0 THROW 53355,N'Không thể khóa nguồn tính tiền của lượt khám.',1;
+
         DECLARE @dispensation_id bigint,@prescription_item_id bigint,@batch_id bigint,
                 @quantity decimal(18,3),@prescription_id bigint,@source_movement_id bigint,
                 @batch_status varchar(20),@batch_expiry date,@business_date date;
@@ -11304,12 +11375,21 @@ BEGIN
     SET XACT_ABORT ON;
     IF NULLIF(LTRIM(RTRIM(@reason)),N'') IS NULL
         THROW 53346,N'Bắt buộc nhập lý do hủy phiên cấp phát.',1;
-    DECLARE @branch_id bigint;
-    SELECT @branch_id=branch_id FROM dbo.dispensations WHERE dispensation_id=@dispensation_id;
+    DECLARE @branch_id bigint,@billing_encounter_id bigint;
+    SELECT @branch_id=d.branch_id,@billing_encounter_id=p.encounter_id
+    FROM dbo.dispensations d
+    JOIN dbo.prescriptions p ON p.prescription_id=d.prescription_id
+    WHERE d.dispensation_id=@dispensation_id;
     EXEC dbo.sp_assert_permission @actor_user_id,'PHARMACY_DISPENSE',@branch_id;
 
     BEGIN TRY
         BEGIN TRANSACTION;
+        DECLARE @billing_lock_result int,
+                @billing_lock_resource nvarchar(255)=CONCAT(N'encounter-billing:',@billing_encounter_id);
+        EXEC @billing_lock_result=sys.sp_getapplock @Resource=@billing_lock_resource,
+             @LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000;
+        IF @billing_lock_result<0 THROW 53355,N'Không thể khóa nguồn tính tiền của lượt khám.',1;
+
         IF EXISTS
         (
             SELECT 1 FROM dbo.dispensation_items di
@@ -12179,12 +12259,19 @@ AS
 BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
-    DECLARE @branch_id bigint;
-    SELECT @branch_id=branch_id FROM dbo.invoices WHERE invoice_id=@invoice_id;
+    DECLARE @branch_id bigint,@encounter_id bigint;
+    SELECT @branch_id=branch_id,@encounter_id=encounter_id
+    FROM dbo.invoices WHERE invoice_id=@invoice_id;
     EXEC dbo.sp_assert_permission @actor_user_id,'BILLING_MANAGE',@branch_id;
     BEGIN TRY
         BEGIN TRANSACTION;
-        DECLARE @status varchar(20),@payable decimal(19,2),@encounter_id bigint,
+        DECLARE @billing_lock_result int,
+                @billing_lock_resource nvarchar(255)=CONCAT(N'encounter-billing:',@encounter_id);
+        EXEC @billing_lock_result=sys.sp_getapplock @Resource=@billing_lock_resource,
+             @LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000;
+        IF @billing_lock_result<0 THROW 53428,N'Không thể khóa nguồn tính tiền của lượt khám.',1;
+
+        DECLARE @status varchar(20),@payable decimal(19,2),
                 @encounter_status varchar(20),@invoice_public_id uniqueidentifier;
         SELECT @status=i.status,@payable=i.patient_payable_amount,@encounter_id=i.encounter_id,
                @encounter_status=e.status,@invoice_public_id=i.public_id
@@ -12228,6 +12315,37 @@ BEGIN
         WHERE p.encounter_id=@encounter_id
           AND NOT EXISTS (SELECT 1 FROM dbo.dispensation_item_reversals r WITH (HOLDLOCK)
                           WHERE r.dispensation_item_id=di.dispensation_item_id);
+        IF EXISTS
+        (
+            SELECT 1
+            FROM dbo.encounter_services es WITH (UPDLOCK,HOLDLOCK)
+            WHERE es.encounter_id=@encounter_id AND es.status='COMPLETED'
+              AND NOT EXISTS
+              (
+                  SELECT 1 FROM dbo.invoice_items ii WITH (UPDLOCK,HOLDLOCK)
+                  WHERE ii.invoice_id=@invoice_id
+                    AND ii.encounter_service_id=es.encounter_service_id
+              )
+        ) OR EXISTS
+        (
+            SELECT 1
+            FROM dbo.dispensation_items di WITH (UPDLOCK,HOLDLOCK)
+            JOIN dbo.prescription_items pi ON pi.prescription_item_id=di.prescription_item_id
+            JOIN dbo.prescriptions p ON p.prescription_id=pi.prescription_id
+            WHERE p.encounter_id=@encounter_id
+              AND NOT EXISTS
+              (
+                  SELECT 1 FROM dbo.dispensation_item_reversals r WITH (UPDLOCK,HOLDLOCK)
+                  WHERE r.dispensation_item_id=di.dispensation_item_id
+              )
+              AND NOT EXISTS
+              (
+                  SELECT 1 FROM dbo.invoice_items ii WITH (UPDLOCK,HOLDLOCK)
+                  WHERE ii.invoice_id=@invoice_id
+                    AND ii.dispensation_item_id=di.dispensation_item_id
+              )
+        )
+            THROW 53429,N'Nguồn tính tiền vừa thay đổi; chưa thể phát hành hóa đơn.',1;
         IF NOT EXISTS (SELECT 1 FROM dbo.invoice_items WITH (UPDLOCK,HOLDLOCK) WHERE invoice_id=@invoice_id)
             THROW 53406,N'Không thể phát hành hóa đơn rỗng.',1;
         SELECT @payable=patient_payable_amount FROM dbo.invoices WHERE invoice_id=@invoice_id;

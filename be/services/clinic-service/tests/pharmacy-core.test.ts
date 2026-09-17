@@ -32,6 +32,7 @@ function fixture() {
     createPrescription: vi.fn().mockResolvedValue(prescriptionId),
     addItem: vi.fn().mockImplementation(async () => { rx.itemCount += 1; return itemId; }),
     issue: vi.fn().mockImplementation(async () => { rx.status = 'ISSUED'; }),
+    openDispensation: vi.fn().mockResolvedValue(randomUUID()),
     receive: vi.fn().mockResolvedValue(randomUUID()),
     dispense: vi.fn().mockResolvedValue(randomUUID()),
     reverse: vi.fn().mockResolvedValue(randomUUID()),
@@ -90,6 +91,15 @@ describe('pharmacy API', () => {
     expect(result.status).toBe(409);
     expect(result.body.error.code).toBe('PHARMACY_CONFLICT');
     expect(JSON.stringify(result.body)).not.toContain('internal batch details');
+  });
+  it('maps post-invoice dispensing to a safe conflict', async () => {
+    const { app, repository } = fixture();
+    vi.mocked(repository.openDispensation).mockRejectedValueOnce({ number: 53354, message: 'invoice details' });
+    const result = await request(app).post(`/api/v1/prescriptions/${prescriptionId}/dispensations`)
+      .set(authorization).send({ locationPublicId: locationId });
+    expect(result.status).toBe(409);
+    expect(result.body.error.code).toBe('PHARMACY_CONFLICT');
+    expect(JSON.stringify(result.body)).not.toContain('invoice details');
   });
   it('returns a specific safe conflict when dispensing needs an allergy acknowledgement', async () => {
     const { app, repository } = fixture();

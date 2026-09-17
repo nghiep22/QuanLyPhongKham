@@ -28,6 +28,7 @@ sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\tests\billing-core.
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\tests\reports-core.test.sql
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\tests\notifications-outbox.test.sql
 .\tests\reception-queue.concurrent.ps1
+.\tests\billing-issuance.concurrent.ps1
 .\tests\billing-payment.concurrent.ps1
 .\tests\pharmacy-dispense.concurrent.ps1
 ```
