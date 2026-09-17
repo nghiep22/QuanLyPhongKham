@@ -238,7 +238,9 @@ chi nhánh và giới hạn tối đa 366 ngày. Cashier chỉ có nhóm doanh t
 chỉ có nhóm sử dụng/tồn kho; Manager/Admin xem đủ ba nhóm trong đúng branch scope.
 Clinic Service dùng pool báo cáo riêng; production phải cấu hình
 `SQL_REPORT_USER`/`SQL_REPORT_PASSWORD` cho login chỉ thuộc role
-`clinic_report_reader`, không dùng tài khoản mutation.
+`clinic_report_reader`, không dùng tài khoản mutation. Role này chỉ được gọi bốn
+read procedure công khai và bị từ chối `SELECT` trực tiếp trên schema `dbo`, nên
+mọi truy vấn đều đi qua kiểm tra actor, capability và phạm vi chi nhánh.
 
 Nếu SQL Server local chưa bật TCP/IP và bạn dùng Windows Authentication, đặt
 `SQL_SERVER=np:\\.\pipe\sql\query` trong `.env`. Xem thêm [be/README.md](./be/README.md).

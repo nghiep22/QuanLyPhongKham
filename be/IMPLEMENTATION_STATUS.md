@@ -462,12 +462,25 @@ Phạm vi đã hoàn thành:
   số tiền/trạng thái vẫn nguyên vẹn. Fixture domain được dọn sạch; audit append-only
   được giữ theo thiết kế.
 
+## DONE — Slice 27: Procedure-only Reporting Boundary
+
+- `clinic_report_reader` bị `DENY SELECT` trên toàn schema `dbo`; mười grant view
+  legacy được thu hồi khi triển khai lại. Role chỉ còn `EXECUTE` đúng bốn read
+  procedure công khai, nên không thể bỏ qua kiểm tra actor, `REPORTS_VIEW`,
+  capability theo vai trò hoặc branch scope.
+- Regression tạo database user thật thuộc reporting role: procedure vẫn đọc được
+  qua ownership chain nhưng direct `SELECT` view bị SQL Server từ chối với lỗi 229.
+  Manager, Cashier và Pharmacist chỉ nhận capability phù hợp tại `MAIN`; cả danh
+  sách chi nhánh lẫn ba report đều chặn một chi nhánh fixture ngoài phạm vi.
+- Backfill public ID của billing chỉ phát lệnh `UPDATE` khi thực sự còn dữ liệu
+  `NULL`, giữ baseline chạy lặp lại an toàn sau khi trigger ledger append-only tồn tại.
+
 ### Bằng chứng xác minh local toàn bộ
 
 | Kiểm tra | Kết quả |
 |---|---|
 | Baseline SQL chạy lại idempotent | Đạt; 73 bảng, 23 view, 166 procedure, 32 trigger |
-| SQL auth session/staff RBAC/staff safety/password lifecycle/patient registration/patient link/catalog-directory/patient registry/scheduling-appointments/reception-queue/clinical-core/pharmacy-core/pharmacy-FEFO/pharmacy-allergy/billing-core/reports-core/notifications-outbox regression | 17/17 PASS; rollback sạch. Bốn harness SQL thật xác minh queue không gọi trùng, invoice không bỏ sót charge khi race cấp thuốc, payment không thu vượt và ledger bất biến/least-privilege, pharmacy giữ FEFO/idempotency/giới hạn đơn–tồn khi hai quầy race, đồng thời chặn hoàn bán thiếu kiểm tra hoặc lô không an toàn |
+| SQL auth session/staff RBAC/staff safety/password lifecycle/patient registration/patient link/catalog-directory/patient registry/scheduling-appointments/reception-queue/clinical-core/pharmacy-core/pharmacy-FEFO/pharmacy-allergy/billing-core/reports-core/notifications-outbox regression | 17/17 PASS; rollback sạch. Report regression xác minh procedure-only bằng database principal thật, direct `SELECT` bị chặn và ma trận role/branch đúng. Bốn harness SQL thật xác minh queue không gọi trùng, invoice không bỏ sót charge khi race cấp thuốc, payment không thu vượt và ledger bất biến/least-privilege, pharmacy giữ FEFO/idempotency/giới hạn đơn–tồn khi hai quầy race, đồng thời chặn hoàn bán thiếu kiểm tra hoặc lô không an toàn |
 | OpenAPI lint + code generation | Đạt; contract hợp lệ và generated code sinh lặp lại ổn định |
 | npm run lint | Đạt, không cảnh báo |
 | npm run typecheck | Đạt |

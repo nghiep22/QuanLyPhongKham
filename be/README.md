@@ -135,6 +135,9 @@ xóa `request_id`, `actor_user_id`, `branch_id` trong `SESSION_CONTEXT`.
 - Cashier chỉ xem doanh thu, Pharmacist chỉ xem sử dụng/tồn kho; Manager/Admin
   xem đủ nhóm trong branch scope. Các procedure report chỉ được cấp cho
   `clinic_report_reader` và không được cấp cho `clinic_api_executor`.
+- `clinic_report_reader` bị `DENY SELECT` trên schema `dbo` và chỉ có `EXECUTE`
+  đúng bốn read procedure công khai; không cấp view/table trực tiếp vì sẽ bỏ qua
+  kiểm tra actor, capability và branch scope bên trong procedure.
 - Clinic Service mở pool thứ hai bằng `SQL_REPORT_USER`/`SQL_REPORT_PASSWORD`
   khi không dùng trusted connection; thiếu credentials thì report fail closed,
   không fallback sang pool mutation.

@@ -22,6 +22,22 @@ BEGIN TRY
           AND dp.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'clinic_report_reader')
           AND dp.permission_name='EXECUTE' AND dp.state IN('G','W')))
       THROW 55971,N'Report reader thiếu quyền procedure chỉ đọc.',1;
+    IF NOT EXISTS (SELECT 1 FROM sys.database_permissions dp
+      WHERE dp.class_desc='SCHEMA' AND dp.major_id=SCHEMA_ID(N'dbo')
+        AND dp.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'clinic_report_reader')
+        AND dp.permission_name='SELECT' AND dp.state='D')
+      THROW 55981,N'Report reader thiếu DENY SELECT trên schema dbo.',1;
+    IF EXISTS (SELECT 1 FROM sys.database_permissions dp
+      WHERE dp.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'clinic_report_reader')
+        AND dp.permission_name='SELECT' AND dp.state IN('G','W'))
+      THROW 55982,N'Report reader không được có GRANT SELECT trực tiếp.',1;
+    IF EXISTS (SELECT 1 FROM sys.database_permissions dp
+      WHERE dp.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'clinic_report_reader')
+        AND dp.permission_name='EXECUTE' AND dp.state IN('G','W')
+        AND NOT (dp.class_desc='OBJECT_OR_COLUMN' AND dp.minor_id=0 AND dp.major_id IN(
+          OBJECT_ID(N'dbo.sp_clinic_report_branches'),OBJECT_ID(N'dbo.sp_clinic_operations_report'),
+          OBJECT_ID(N'dbo.sp_clinic_revenue_report'),OBJECT_ID(N'dbo.sp_clinic_inventory_report'))))
+      THROW 55983,N'Report reader có quyền EXECUTE ngoài bốn read procedure công khai.',1;
 
     BEGIN TRANSACTION;
     DECLARE @suffix varchar(36)=CONVERT(varchar(36),NEWID()),
@@ -29,6 +45,12 @@ BEGIN TRY
       @branch_public_id uniqueidentifier=(SELECT public_id FROM dbo.branches WHERE branch_code='MAIN'),
       @from date=DATEADD(DAY,-30,CONVERT(date,SYSUTCDATETIME())),@to date=CONVERT(date,SYSUTCDATETIME());
     IF @branch_id IS NULL THROW 55972,N'Thiếu seed chi nhánh MAIN.',1;
+
+    DECLARE @other_branch_code varchar(20)=CONCAT('R',RIGHT(REPLACE(@suffix,'-',''),18));
+    INSERT dbo.branches(branch_code,branch_name,address_line)
+    VALUES(@other_branch_code,N'Report Branch Scope Fixture',N'Fixture only');
+    DECLARE @other_branch_id bigint=SCOPE_IDENTITY(),@other_branch_public_id uniqueidentifier;
+    SELECT @other_branch_public_id=public_id FROM dbo.branches WHERE branch_id=@other_branch_id;
 
     INSERT dbo.users(username,password_hash,display_name,status)
     VALUES(CONCAT(N'report-manager-',@suffix),REPLICATE('x',60),N'Report Manager','ACTIVE'),
@@ -54,16 +76,26 @@ BEGIN TRY
     IF NOT EXISTS (SELECT 1 FROM @branches WHERE publicId=@branch_public_id AND canViewOperations=1
       AND canViewRevenue=1 AND canViewInventory=1)
       THROW 55973,N'Manager không nhận đủ capability tại chi nhánh được cấp.',1;
+    IF EXISTS (SELECT 1 FROM @branches WHERE publicId=@other_branch_public_id)
+      THROW 55984,N'Manager nhìn thấy chi nhánh ngoài phạm vi được cấp.',1;
 
     CREATE USER [clinic_report_regression_user] WITHOUT LOGIN;
     ALTER ROLE clinic_report_reader ADD MEMBER [clinic_report_regression_user];
     DELETE FROM @branches;
+    SET XACT_ABORT OFF;
     EXECUTE AS USER='clinic_report_regression_user';
     INSERT @branches EXEC dbo.sp_clinic_report_branches @actor_user_id=@manager;
     EXEC dbo.sp_clinic_operations_report @actor_user_id=@manager,@branch_public_id=@branch_public_id,@from_date=@from,@to_date=@to;
+    DECLARE @direct_select_error int=0;
+    BEGIN TRY
+      EXEC(N'SELECT TOP (1) * FROM dbo.v_daily_cash_collection;');
+    END TRY BEGIN CATCH SET @direct_select_error=ERROR_NUMBER(); END CATCH;
     REVERT;
+    SET XACT_ABORT ON;
     IF NOT EXISTS (SELECT 1 FROM @branches WHERE publicId=@branch_public_id)
       THROW 55980,N'Report reader không chạy được procedure báo cáo qua ownership chain.',1;
+    IF @direct_select_error<>229
+      THROW 55985,N'Report reader vẫn có thể SELECT trực tiếp và bỏ qua read procedure.',1;
 
     DELETE FROM @branches;
     EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=@cashier;
@@ -71,6 +103,8 @@ BEGIN TRY
     IF NOT EXISTS (SELECT 1 FROM @branches WHERE publicId=@branch_public_id AND canViewOperations=0
       AND canViewRevenue=1 AND canViewInventory=0)
       THROW 55974,N'Cashier nhận sai capability báo cáo.',1;
+    IF EXISTS (SELECT 1 FROM @branches WHERE publicId=@other_branch_public_id)
+      THROW 55986,N'Cashier nhìn thấy chi nhánh ngoài phạm vi được cấp.',1;
 
     DELETE FROM @branches;
     EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=@pharmacist;
@@ -78,6 +112,8 @@ BEGIN TRY
     IF NOT EXISTS (SELECT 1 FROM @branches WHERE publicId=@branch_public_id AND canViewOperations=0
       AND canViewRevenue=0 AND canViewInventory=1)
       THROW 55975,N'Pharmacist nhận sai capability báo cáo.',1;
+    IF EXISTS (SELECT 1 FROM @branches WHERE publicId=@other_branch_public_id)
+      THROW 55987,N'Pharmacist nhìn thấy chi nhánh ngoài phạm vi được cấp.',1;
 
     EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=@manager;
     EXEC dbo.sp_clinic_operations_report @actor_user_id=@manager,@branch_public_id=@branch_public_id,@from_date=@from,@to_date=@to;
@@ -87,6 +123,25 @@ BEGIN TRY
     EXEC dbo.sp_clinic_inventory_report @actor_user_id=@pharmacist,@branch_public_id=@branch_public_id,@from_date=@from,@to_date=@to;
 
     DECLARE @error int=0;
+    EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=@manager;
+    BEGIN TRY
+      EXEC dbo.sp_clinic_operations_report @actor_user_id=@manager,@branch_public_id=@other_branch_public_id,@from_date=@from,@to_date=@to;
+    END TRY BEGIN CATCH SET @error=ERROR_NUMBER(); END CATCH;
+    IF @error<>51002 THROW 55988,N'Manager xem được báo cáo vận hành ngoài branch scope.',1;
+    SET @error=0;
+    EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=@cashier;
+    BEGIN TRY
+      EXEC dbo.sp_clinic_revenue_report @actor_user_id=@cashier,@branch_public_id=@other_branch_public_id,@from_date=@from,@to_date=@to;
+    END TRY BEGIN CATCH SET @error=ERROR_NUMBER(); END CATCH;
+    IF @error<>51002 THROW 55989,N'Cashier xem được báo cáo doanh thu ngoài branch scope.',1;
+    SET @error=0;
+    EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=@pharmacist;
+    BEGIN TRY
+      EXEC dbo.sp_clinic_inventory_report @actor_user_id=@pharmacist,@branch_public_id=@other_branch_public_id,@from_date=@from,@to_date=@to;
+    END TRY BEGIN CATCH SET @error=ERROR_NUMBER(); END CATCH;
+    IF @error<>51002 THROW 55990,N'Pharmacist xem được báo cáo tồn kho ngoài branch scope.',1;
+
+    SET @error=0;
     EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=@cashier;
     BEGIN TRY
       EXEC dbo.sp_clinic_operations_report @actor_user_id=@cashier,@branch_public_id=@branch_public_id,@from_date=@from,@to_date=@to;

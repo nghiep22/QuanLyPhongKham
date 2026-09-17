@@ -2816,7 +2816,8 @@ BEGIN
           +N' ON dbo.'+QUOTENAME(@billing_table)+N'; COMMIT TRANSACTION; '
           +N'END TRY BEGIN CATCH IF XACT_STATE()<>0 ROLLBACK TRANSACTION; THROW; END CATCH;';
     END
-    ELSE SET @billing_sql=N'UPDATE dbo.'+QUOTENAME(@billing_table)
+    ELSE SET @billing_sql=N'IF EXISTS (SELECT 1 FROM dbo.'+QUOTENAME(@billing_table)
+        +N' WHERE public_id IS NULL) UPDATE dbo.'+QUOTENAME(@billing_table)
         +N' SET public_id=NEWID() WHERE public_id IS NULL;';
     EXEC sys.sp_executesql @billing_sql;
     IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.'+@billing_table)
@@ -13459,7 +13460,7 @@ GO
 
 DENY INSERT, UPDATE, DELETE ON SCHEMA::dbo TO clinic_api_executor;
 DENY INSERT, UPDATE, DELETE ON SCHEMA::dbo TO clinic_job_executor;
-DENY INSERT, UPDATE, DELETE ON SCHEMA::dbo TO clinic_report_reader;
+DENY SELECT, INSERT, UPDATE, DELETE ON SCHEMA::dbo TO clinic_report_reader;
 DENY INSERT, UPDATE, DELETE ON SCHEMA::dbo TO auth_core_executor;
 GO
 
@@ -13675,16 +13676,18 @@ GRANT SELECT ON OBJECT::dbo.v_catalog_specialties_v1 TO clinic_api_executor;
 GRANT SELECT ON OBJECT::dbo.v_catalog_services_v1 TO clinic_api_executor;
 GO
 
-GRANT SELECT ON OBJECT::dbo.v_doctor_daily_schedule TO clinic_report_reader;
-GRANT SELECT ON OBJECT::dbo.v_current_queue TO clinic_report_reader;
-GRANT SELECT ON OBJECT::dbo.v_patient_encounter_history TO clinic_report_reader;
-GRANT SELECT ON OBJECT::dbo.v_inventory_by_batch TO clinic_report_reader;
-GRANT SELECT ON OBJECT::dbo.v_low_stock TO clinic_report_reader;
-GRANT SELECT ON OBJECT::dbo.v_expiring_medicine_batches TO clinic_report_reader;
-GRANT SELECT ON OBJECT::dbo.v_inventory_reconciliation TO clinic_report_reader;
-GRANT SELECT ON OBJECT::dbo.v_invoice_balances TO clinic_report_reader;
-GRANT SELECT ON OBJECT::dbo.v_daily_cash_collection TO clinic_report_reader;
-GRANT SELECT ON OBJECT::dbo.v_doctor_time_off_conflicts TO clinic_report_reader;
+-- Reporting is procedure-only: remove legacy view grants so actor, capability and
+-- branch checks inside the public read procedures cannot be bypassed.
+REVOKE SELECT ON OBJECT::dbo.v_doctor_daily_schedule FROM clinic_report_reader;
+REVOKE SELECT ON OBJECT::dbo.v_current_queue FROM clinic_report_reader;
+REVOKE SELECT ON OBJECT::dbo.v_patient_encounter_history FROM clinic_report_reader;
+REVOKE SELECT ON OBJECT::dbo.v_inventory_by_batch FROM clinic_report_reader;
+REVOKE SELECT ON OBJECT::dbo.v_low_stock FROM clinic_report_reader;
+REVOKE SELECT ON OBJECT::dbo.v_expiring_medicine_batches FROM clinic_report_reader;
+REVOKE SELECT ON OBJECT::dbo.v_inventory_reconciliation FROM clinic_report_reader;
+REVOKE SELECT ON OBJECT::dbo.v_invoice_balances FROM clinic_report_reader;
+REVOKE SELECT ON OBJECT::dbo.v_daily_cash_collection FROM clinic_report_reader;
+REVOKE SELECT ON OBJECT::dbo.v_doctor_time_off_conflicts FROM clinic_report_reader;
 GRANT EXECUTE ON OBJECT::dbo.sp_clinic_report_branches TO clinic_report_reader;
 GRANT EXECUTE ON OBJECT::dbo.sp_clinic_operations_report TO clinic_report_reader;
 GRANT EXECUTE ON OBJECT::dbo.sp_clinic_revenue_report TO clinic_report_reader;
