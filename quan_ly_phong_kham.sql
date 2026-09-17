@@ -3679,7 +3679,7 @@ SELECT
     r.room_id, r.public_id, r.branch_id, b.public_id AS branch_public_id,
     b.branch_code, b.branch_name, r.room_code, r.room_name, r.room_type,
     r.floor_no, r.capacity, r.is_active,
-    CONVERT(varchar(16), r.row_ver, 2) AS row_version
+    CONVERT(varbinary(8), r.row_ver) AS row_version
 FROM dbo.rooms r
 JOIN dbo.branches b ON b.branch_id = r.branch_id;
 GO
@@ -3689,7 +3689,7 @@ AS
 SELECT
     s.service_id, s.public_id, s.service_code, s.service_name, s.service_type,
     s.default_duration_min, s.current_price, s.requires_doctor, s.result_schema_json, s.is_active,
-    CONVERT(varchar(16), s.row_ver, 2) AS row_version,
+    CONVERT(varbinary(8), s.row_ver) AS row_version,
     sc.service_category_id, sc.public_id AS category_public_id,
     sc.category_code, sc.category_name,
     sp.specialty_id, sp.public_id AS specialty_public_id,

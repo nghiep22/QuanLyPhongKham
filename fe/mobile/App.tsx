@@ -13,6 +13,7 @@ import {
   type RootStackParamList,
   WelcomeScreen,
 } from './src/features/auth/patient-auth';
+import { ChangePasswordScreen } from './src/features/auth/change-password-screen';
 import { apiClient } from './src/shared/api/client';
 import { authTokenStorage } from './src/shared/storage/auth-token';
 import { DiscoveryNavigator } from './src/features/discovery/discovery-screens';
@@ -25,6 +26,8 @@ const queryClient = new QueryClient();
 function MobileApp() {
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
   const [restoring, setRestoring] = useState(true);
+  const [guestInitialRoute, setGuestInitialRoute] = useState<'Welcome' | 'Login'>('Welcome');
+  const [loginNotice, setLoginNotice] = useState<string>();
   const [pendingBookingIntent, setPendingBookingIntent] = useState<BookingIntent>();
   const clearPendingBookingIntent = useCallback(() => setPendingBookingIntent(undefined), []);
 
@@ -59,6 +62,8 @@ function MobileApp() {
       throw new ApiClientError(403, 'PATIENT_ACCOUNT_REQUIRED', 'Ứng dụng chỉ dành cho tài khoản bệnh nhân.');
     }
     await authTokenStorage.save(response.data.accessToken, response.data.refreshToken);
+    setLoginNotice(undefined);
+    setGuestInitialRoute('Welcome');
     setUser(response.data.user);
   };
 
@@ -72,8 +77,19 @@ function MobileApp() {
       await authTokenStorage.clear();
       queryClient.clear();
       setPendingBookingIntent(undefined);
+      setLoginNotice(undefined);
+      setGuestInitialRoute('Welcome');
       setUser(null);
     }
+  };
+
+  const passwordChanged = async () => {
+    await authTokenStorage.clear();
+    queryClient.clear();
+    setPendingBookingIntent(undefined);
+    setLoginNotice('Đổi mật khẩu thành công. Tất cả phiên cũ đã được thu hồi; vui lòng đăng nhập lại.');
+    setGuestInitialRoute('Login');
+    setUser(null);
   };
 
   if (restoring) {
@@ -84,11 +100,18 @@ function MobileApp() {
 
   return <NavigationContainer>
     <StatusBar style="dark" />
-    <Stack.Navigator screenOptions={{ headerShadowVisible: false, headerTintColor: '#155f55' }}>
+    <Stack.Navigator key={user ? 'patient' : `guest-${guestInitialRoute}`}
+      initialRouteName={user ? 'PatientHome' : guestInitialRoute}
+      screenOptions={{ headerShadowVisible: false, headerTintColor: '#155f55' }}>
       {user ? <>
         <Stack.Screen name="PatientHome" options={{ headerShown: false }}>
-          {() => <PatientTabs user={user} onLogout={logout} initialBookingIntent={pendingBookingIntent}
+          {({ navigation }) => <PatientTabs user={user} onLogout={logout}
+            onOpenSecurity={() => navigation.navigate('AccountSecurity')}
+            initialBookingIntent={pendingBookingIntent}
             onBookingIntentHandled={clearPendingBookingIntent} />}
+        </Stack.Screen>
+        <Stack.Screen name="AccountSecurity" options={{ title: 'Bảo mật tài khoản' }}>
+          {(props) => <ChangePasswordScreen {...props} onPasswordChanged={passwordChanged} />}
         </Stack.Screen>
       </> : <>
         <Stack.Screen name="Welcome" component={WelcomeScreen} options={{ headerShown: false }} />
@@ -98,7 +121,8 @@ function MobileApp() {
             navigation.navigate('Login');
           }} />}
         </Stack.Screen>
-        <Stack.Screen name="Login" options={{ title: 'Đăng nhập' }}>
+        <Stack.Screen name="Login" initialParams={loginNotice ? { notice: loginNotice } : undefined}
+          options={{ title: 'Đăng nhập' }}>
           {(props) => <LoginScreen {...props} onAuthenticated={authenticated} />}
         </Stack.Screen>
         <Stack.Screen name="Register" component={RegistrationScreen} options={{ title: 'Đăng ký bệnh nhân' }} />

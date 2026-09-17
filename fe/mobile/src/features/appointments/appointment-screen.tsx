@@ -55,8 +55,10 @@ export function AppointmentScreen({ bookingIntent, onBookingIntentHandled }: {
   const [date, setDate] = useState(localDate(1));
   const [complaint, setComplaint] = useState(''); const [rescheduling, setRescheduling] = useState<Appointment | null>(null);
   const [loading, setLoading] = useState(true); const [searching, setSearching] = useState(false);
+  const [servicesLoading, setServicesLoading] = useState(false); const [serviceReload, setServiceReload] = useState(0);
   const [submitting, setSubmitting] = useState(false); const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null); const [notice, setNotice] = useState<string | null>(null);
+  const [serviceError, setServiceError] = useState<string | null>(null);
   const retry = useRef<{ payload: string; key: string } | null>(null);
 
   const load = useCallback(async (refresh = false) => {
@@ -89,17 +91,23 @@ export function AppointmentScreen({ bookingIntent, onBookingIntentHandled }: {
   }, [bookingIntent, onBookingIntentHandled]);
 
   useEffect(() => {
-    if (!branchId) return;
+    if (!branchId) {
+      setServices([]); setServiceId(''); setServiceError(null); setServicesLoading(false);
+      return;
+    }
     let active = true;
-    setServices([]); setSlots([]);
+    setServices([]); setSlots([]); setServiceError(null); setServicesLoading(true);
     void apiClient.publicCatalog.services({ branchPublicId: branchId }).then((response) => {
       if (!active) return;
       setServices(response.data);
       setServiceId((current) => response.data.some((item) => item.publicId === current)
         ? current : response.data[0]?.publicId || '');
-    }).catch((cause) => { if (active) setError(message(cause)); });
+    }).catch((cause) => {
+      if (!active) return;
+      setServiceId(''); setServiceError(message(cause));
+    }).finally(() => { if (active) setServicesLoading(false); });
     return () => { active = false; };
-  }, [branchId]);
+  }, [branchId, serviceReload]);
 
   const findSlots = async () => {
     if (!branchId || !serviceId || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -169,16 +177,25 @@ export function AppointmentScreen({ bookingIntent, onBookingIntentHandled }: {
       {!profiles.length && <Text style={styles.empty}>Chưa có hồ sơ được phép đặt lịch.</Text>}</>}
     <Text style={styles.label}>Chi nhánh</Text><View style={styles.wrap}>{branches.map((item) =>
       <Chip key={item.publicId} label={item.name} active={branchId === item.publicId} onPress={() => {
-        setBranchId(item.publicId); setDoctorFilter(null);
+        setBranchId(item.publicId); setServiceId(''); setServices([]); setSlots([]);
+        setServiceError(null); setDoctorFilter(null);
       }} />)}</View>
-    <Text style={styles.label}>Dịch vụ</Text><View style={styles.wrap}>{services.map((item) =>
-      <Chip key={item.publicId} label={`${item.name} · ${money(item.price.amount)}`} active={serviceId === item.publicId}
-        onPress={() => { setServiceId(item.publicId); setDoctorFilter(null); setSlots([]); }} />)}</View>
+    <Text style={styles.label}>Dịch vụ</Text>
+    {servicesLoading ? <View style={styles.serviceLoading}><ActivityIndicator color="#167665" />
+      <Text style={styles.muted}>Đang tải dịch vụ…</Text></View>
+      : serviceError ? <View style={styles.serviceError}><Text style={styles.errorText}>{serviceError}</Text>
+        <Pressable onPress={() => setServiceReload((value) => value + 1)}><Text style={styles.link}>Thử lại</Text></Pressable></View>
+      : services.length ? <><View style={styles.wrap}>{services.map((item) =>
+        <Chip key={item.publicId} label={`${item.name} · ${money(item.price.amount)}`} active={serviceId === item.publicId}
+          onPress={() => { setServiceId(item.publicId); setDoctorFilter(null); setSlots([]); setError(null); setNotice(null); }} />)}</View>
+        {serviceId && <Text style={styles.selectedService}>✓ Đã chọn: {services.find((item) => item.publicId === serviceId)?.name}</Text>}</>
+        : <Text style={styles.empty}>Chi nhánh này chưa có dịch vụ đang mở đặt lịch.</Text>}
     <Text style={styles.label}>Ngày khám</Text><TextInput style={styles.input} value={date} onChangeText={setDate}
       keyboardType="numbers-and-punctuation" placeholder="YYYY-MM-DD" />
     {!rescheduling && <><Text style={styles.label}>Lý do khám (không bắt buộc)</Text><TextInput style={[styles.input, styles.multiline]}
       value={complaint} onChangeText={setComplaint} multiline maxLength={1000} /></>}
-    <Pressable disabled={searching} style={[styles.button, searching && styles.disabled]} onPress={() => void findSlots()}>
+    <Pressable disabled={searching || servicesLoading || !serviceId}
+      style={[styles.button, (searching || servicesLoading || !serviceId) && styles.disabled]} onPress={() => void findSlots()}>
       {searching ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>Tìm khung giờ trống</Text>}
     </Pressable>
 
@@ -206,7 +223,8 @@ export function AppointmentScreen({ bookingIntent, onBookingIntentHandled }: {
 }
 
 function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
-  return <Pressable style={[styles.chip, active && styles.chipActive]} onPress={onPress}>
+  return <Pressable accessibilityRole="radio" accessibilityState={{ selected: active }}
+    style={[styles.chip, active && styles.chipActive]} onPress={onPress}>
     <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text></Pressable>;
 }
 
@@ -230,6 +248,10 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', gap: 10, marginTop: 14 }, secondary: { backgroundColor: '#e7f4f0', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 },
   secondaryText: { color: '#167665', fontWeight: '800' }, danger: { backgroundColor: '#fff0ef', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 }, dangerText: { color: '#a73531', fontWeight: '800' },
   warning: { color: '#8a5c12', marginTop: 8 }, empty: { color: '#70878b', fontStyle: 'italic', paddingVertical: 12 },
+  serviceLoading: { alignItems: 'center', flexDirection: 'row', gap: 10, minHeight: 44 },
+  serviceError: { alignItems: 'center', backgroundColor: '#fff0ef', borderRadius: 10, flexDirection: 'row', gap: 10, justifyContent: 'space-between', padding: 12 },
+  errorText: { color: '#9d2c25', flex: 1, fontSize: 13 },
+  selectedService: { color: '#17614f', fontSize: 13, fontWeight: '800', marginTop: 9 },
   error: { backgroundColor: '#fff0ef', borderRadius: 10, color: '#9d2c25', marginTop: 14, padding: 12 },
   success: { backgroundColor: '#dff3ec', borderRadius: 10, color: '#17614f', marginTop: 14, padding: 12 },
   banner: { alignItems: 'center', backgroundColor: '#fff6df', borderRadius: 12, flexDirection: 'row', justifyContent: 'space-between', marginTop: 14, padding: 14 },

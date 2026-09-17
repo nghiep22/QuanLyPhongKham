@@ -13,8 +13,8 @@ function dateOnly(value: Date | string | null): string | null {
   return (value instanceof Date ? value.toISOString() : value).slice(0, 10);
 }
 
-function rowVersion(hex: string) {
-  return Buffer.from(hex, 'hex').toString('base64');
+export function encodeRowVersion(value: string | Uint8Array) {
+  return (typeof value === 'string' ? Buffer.from(value, 'hex') : Buffer.from(value)).toString('base64');
 }
 
 type DoctorRow = {
@@ -50,7 +50,7 @@ function mapDoctors(rows: IRecordSet<DoctorRow>): PublicDoctor[] {
 type ServiceRow = {
   serviceId: number; publicId: string; serviceCode: string; serviceName: string;
   serviceType: CatalogService['type']; defaultDurationMin: number; currentPrice: string;
-  requiresDoctor: boolean; resultSchemaJson: string | null; isActive: boolean; rowVersion: string;
+  requiresDoctor: boolean; resultSchemaJson: string | null; isActive: boolean; rowVersion: Uint8Array;
   serviceCategoryId: number; categoryPublicId: string; categoryCode: string; categoryName: string;
   specialtyId: number | null; specialtyPublicId: string | null; specialtyCode: string | null;
   specialtyName: string | null;
@@ -86,7 +86,7 @@ function mapCatalogServices(serviceRows: IRecordSet<ServiceRow>, priceRows: IRec
     requiresDoctor: Boolean(row.requiresDoctor),
     resultSchema: row.resultSchemaJson == null ? null : JSON.parse(row.resultSchemaJson) as CatalogService['resultSchema'],
     isActive: Boolean(row.isActive),
-    branchPrices: prices.get(Number(row.serviceId)) ?? [], rowVersion: rowVersion(row.rowVersion),
+    branchPrices: prices.get(Number(row.serviceId)) ?? [], rowVersion: encodeRowVersion(row.rowVersion),
   }));
 }
 
@@ -262,7 +262,7 @@ export class SqlCatalogRepository implements CatalogRepository {
       branch: { publicId: String(row.branchPublicId), code: String(row.branchCode), name: String(row.branchName) },
       code: String(row.code), name: String(row.name), type: row.type as Room['type'],
       floorNo: row.floorNo === null ? null : Number(row.floorNo), capacity: Number(row.capacity),
-      isActive: Boolean(row.isActive), rowVersion: rowVersion(String(row.rowVersion)),
+      isActive: Boolean(row.isActive), rowVersion: encodeRowVersion(row.rowVersion as Uint8Array),
     }));
   }
 

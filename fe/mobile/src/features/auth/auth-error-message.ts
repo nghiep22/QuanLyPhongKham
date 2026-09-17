@@ -8,6 +8,9 @@ export function authErrorMessage(error: unknown, fallback: string) {
   if (error.code === 'INVALID_CREDENTIALS') return 'Email, số điện thoại hoặc mật khẩu không đúng.';
   if (error.code === 'ACCOUNT_LOCKED') return 'Tài khoản đang tạm khóa. Vui lòng thử lại sau.';
   if (error.code === 'PATIENT_ACCOUNT_REQUIRED') return 'Ứng dụng này chỉ dành cho tài khoản bệnh nhân.';
+  if (error.code === 'CURRENT_PASSWORD_INVALID') return 'Mật khẩu hiện tại không đúng.';
+  if (error.code === 'PASSWORD_REUSE_NOT_ALLOWED') return 'Mật khẩu mới phải khác mật khẩu hiện tại.';
+  if (error.code === 'PASSWORD_CHANGED_CONCURRENTLY') return 'Mật khẩu vừa được thay đổi ở phiên khác. Vui lòng đăng nhập lại.';
   if (error.code === 'IDEMPOTENCY_KEY_REUSED') return 'Yêu cầu đăng ký đã thay đổi. Vui lòng gửi lại.';
   if (error.code === 'INVALID_OR_EXPIRED_OTP') return 'Mã OTP không đúng, đã hết hạn hoặc đã được sử dụng.';
   return fallback;

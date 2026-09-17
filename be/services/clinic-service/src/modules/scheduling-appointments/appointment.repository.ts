@@ -7,6 +7,7 @@ import type {
 
 type Row = Record<string, unknown>;
 const dateOnly = (value: unknown) => value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10);
+const timeOnly = (value: unknown) => value instanceof Date ? value.toISOString().slice(11, 16) : String(value).slice(0, 5);
 const utc = (value: unknown) => value instanceof Date ? value.toISOString() : String(value);
 const nullableUtc = (value: unknown) => value == null ? null : utc(value);
 
@@ -15,8 +16,8 @@ function appointment(row: Row): Appointment {
     publicId: String(row.publicId), code: String(row.code), status: row.status as AppointmentStatus,
     bookingChannel: row.bookingChannel as Appointment['bookingChannel'],
     scheduledStartUtc: utc(row.scheduledStartUtc), scheduledEndUtc: utc(row.scheduledEndUtc),
-    serviceDateLocal: dateOnly(row.serviceDateLocal), startTimeLocal: String(row.startTimeLocal).slice(0, 5),
-    endTimeLocal: String(row.endTimeLocal).slice(0, 5), holdExpiresAtUtc: nullableUtc(row.holdExpiresAtUtc),
+    serviceDateLocal: dateOnly(row.serviceDateLocal), startTimeLocal: timeOnly(row.startTimeLocal),
+    endTimeLocal: timeOnly(row.endTimeLocal), holdExpiresAtUtc: nullableUtc(row.holdExpiresAtUtc),
     chiefComplaint: row.chiefComplaint == null ? null : String(row.chiefComplaint),
     patientNote: row.patientNote == null ? null : String(row.patientNote),
     cancellationReason: row.cancellationReason == null ? null : String(row.cancellationReason),
@@ -58,8 +59,8 @@ export class SqlAppointmentRepository implements AppointmentRepository {
       service: { publicId: String(row.service_public_id), code: String(row.service_code), name: String(row.service_name),
         price: { amount: String(row.price_amount), currency: 'VND' } },
       room: { publicId: String(row.room_public_id), code: String(row.room_code), name: String(row.room_name) },
-      serviceDateLocal: dateOnly(row.service_date_local), startTimeLocal: String(row.start_time_local).slice(0, 5),
-      endTimeLocal: String(row.end_time_local).slice(0, 5), startsAtUtc: utc(row.starts_at_utc), endsAtUtc: utc(row.ends_at_utc),
+      serviceDateLocal: dateOnly(row.service_date_local), startTimeLocal: timeOnly(row.start_time_local),
+      endTimeLocal: timeOnly(row.end_time_local), startsAtUtc: utc(row.starts_at_utc), endsAtUtc: utc(row.ends_at_utc),
     }));
   }
 
@@ -80,8 +81,8 @@ export class SqlAppointmentRepository implements AppointmentRepository {
         name: String(row.name), type: String(row.type) })),
       schedules: (sets[3] ?? []).map((row) => ({ publicId: String(row.publicId), doctorPublicId: String(row.doctorPublicId),
         doctorName: String(row.doctorName), roomPublicId: String(row.roomPublicId), roomName: String(row.roomName),
-        weekdayIso: Number(row.weekdayIso), localStartTime: String(row.localStartTime).slice(0, 5),
-        localEndTime: String(row.localEndTime).slice(0, 5), slotDurationMinutes: Number(row.slotDurationMinutes),
+        weekdayIso: Number(row.weekdayIso), localStartTime: timeOnly(row.localStartTime),
+        localEndTime: timeOnly(row.localEndTime), slotDurationMinutes: Number(row.slotDurationMinutes),
         bookingHorizonDays: row.bookingHorizonDays == null ? null : Number(row.bookingHorizonDays),
         effectiveFrom: dateOnly(row.effectiveFrom), effectiveTo: row.effectiveTo == null ? null : dateOnly(row.effectiveTo),
         isActive: Boolean(row.isActive), breaks: breaks(row.breaksJson), slotCount: Number(row.slotCount),

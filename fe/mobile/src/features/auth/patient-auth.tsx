@@ -18,10 +18,11 @@ import { firstValidationMessage, type PatientRegistrationForm } from './registra
 
 export type RootStackParamList = {
   Welcome: undefined;
-  Login: { identifier?: string } | undefined;
+  Login: { identifier?: string; notice?: string } | undefined;
   Register: undefined;
   GuestExplore: undefined;
   PatientHome: undefined;
+  AccountSecurity: undefined;
 };
 
 type SessionCallback = (response: AuthResponse) => Promise<void>;
@@ -83,6 +84,7 @@ export function LoginScreen({ navigation, route, onAuthenticated }:
     <ScrollView contentContainerStyle={styles.formPage} keyboardShouldPersistTaps="handled">
       <Text style={styles.eyebrow}>CỔNG BỆNH NHÂN</Text>
       <Text style={styles.heading}>Đăng nhập</Text>
+      {route.params?.notice && <Text accessibilityRole="alert" style={styles.success}>{route.params.notice}</Text>}
       <Field label="Email hoặc số điện thoại" value={identifier} onChangeText={setIdentifier}
         autoCapitalize="none" keyboardType="email-address" />
       <Field label="Mật khẩu" value={password} onChangeText={setPassword} secureTextEntry />
@@ -286,6 +288,7 @@ const styles = StyleSheet.create({
   disabledButton: { opacity: 0.65 },
   disabledText: { color: '#9aabaa' },
   error: { backgroundColor: '#fff0ef', borderRadius: 10, color: '#9d2c25', marginTop: 14, padding: 12 },
+  success: { backgroundColor: '#dff3ec', borderRadius: 10, color: '#17614f', marginBottom: 4, padding: 12 },
   hint: { color: '#70878b', fontSize: 13, marginTop: 8 },
   link: { color: '#167665', fontSize: 15, fontWeight: '700', marginTop: 18, textAlign: 'center' },
 });

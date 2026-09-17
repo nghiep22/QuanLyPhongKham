@@ -29,6 +29,7 @@ export type PatientTabParamList = {
 type PatientTabsProps = {
   user: AuthenticatedUser;
   onLogout: () => Promise<void>;
+  onOpenSecurity: () => void;
   initialBookingIntent?: BookingIntent;
   onBookingIntentHandled?: () => void;
 };
@@ -44,7 +45,7 @@ const tabMeta: Record<keyof PatientTabParamList, { glyph: string; label: string 
   Account: { glyph: '●', label: 'Tài khoản' },
 };
 
-export function PatientTabs({ user, onLogout, initialBookingIntent, onBookingIntentHandled }: PatientTabsProps) {
+export function PatientTabs({ user, onLogout, onOpenSecurity, initialBookingIntent, onBookingIntentHandled }: PatientTabsProps) {
   return <Tab.Navigator screenOptions={({ route }) => ({
     headerShown: false,
     tabBarActiveTintColor: colors.primary,
@@ -73,7 +74,7 @@ export function PatientTabs({ user, onLogout, initialBookingIntent, onBookingInt
     <Tab.Screen name="Records" component={MedicalRecordsScreen} />
     <Tab.Screen name="Profiles" component={PatientAccessScreen} />
     <Tab.Screen name="Account">
-      {(props) => <AccountScreen {...props} user={user} onLogout={onLogout} />}
+      {(props) => <AccountScreen {...props} user={user} onLogout={onLogout} onOpenSecurity={onOpenSecurity} />}
     </Tab.Screen>
   </Tab.Navigator>;
 }
@@ -148,8 +149,8 @@ function PatientDashboardScreen({ navigation, user }:
   </SafeAreaView>;
 }
 
-function AccountScreen({ navigation, user, onLogout }:
-  BottomTabScreenProps<PatientTabParamList, 'Account'> & Pick<PatientTabsProps, 'user' | 'onLogout'>) {
+function AccountScreen({ navigation, user, onLogout, onOpenSecurity }:
+  BottomTabScreenProps<PatientTabParamList, 'Account'> & Pick<PatientTabsProps, 'user' | 'onLogout' | 'onOpenSecurity'>) {
   const [loggingOut, setLoggingOut] = useState(false);
   return <SafeAreaView style={styles.screen}>
     <ScrollView contentContainerStyle={styles.accountPage}>
@@ -161,7 +162,8 @@ function AccountScreen({ navigation, user, onLogout }:
       <View style={styles.settingsCard}>
         <SettingRow code="HS" title="Hồ sơ được ủy quyền" subtitle="Quản lý hồ sơ của bạn và người thân"
           onPress={() => navigation.navigate('Profiles')} />
-        <SettingRow code="AT" title="Bảo mật tài khoản" subtitle="Mật khẩu và các phiên đăng nhập" status="Sắp có" />
+        <SettingRow code="AT" title="Đổi mật khẩu" subtitle="Thu hồi các phiên cũ để bảo vệ tài khoản"
+          onPress={onOpenSecurity} />
         <SettingRow code="TB" title="Thông báo" subtitle="Nhắc lịch và thông tin từ phòng khám" status="Sắp có" last />
       </View>
       <Pressable disabled={loggingOut} style={styles.logoutButton} onPress={async () => {

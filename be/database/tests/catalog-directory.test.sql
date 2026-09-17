@@ -37,6 +37,19 @@ BEGIN TRY
         )
     ) THROW 55609,N'clinic_api_executor thiếu quyền tối thiểu cho catalog contract.',1;
 
+    IF NOT EXISTS
+    (
+        SELECT 1 FROM sys.columns c JOIN sys.types t ON t.user_type_id=c.user_type_id
+        WHERE c.object_id=OBJECT_ID(N'dbo.v_catalog_rooms_v1') AND c.name=N'row_version'
+          AND t.name=N'varbinary' AND c.max_length=8
+    ) OR NOT EXISTS
+    (
+        SELECT 1 FROM sys.columns c JOIN sys.types t ON t.user_type_id=c.user_type_id
+        WHERE c.object_id=OBJECT_ID(N'dbo.v_catalog_services_v1') AND c.name=N'row_version'
+          AND t.name=N'varbinary' AND c.max_length=8
+    )
+        THROW 55614,N'Catalog row version phải được công bố dưới dạng varbinary(8).',1;
+
     BEGIN TRANSACTION;
     INSERT dbo.users(username,password_hash,display_name,status)
     VALUES(CONCAT(N'catalog-admin-',@suffix),REPLICATE('x',60),N'Catalog Admin','ACTIVE');
