@@ -20,13 +20,18 @@ const result = (number: string): QueueCommandResult => ({ queueTicketPublicId: r
   encounterPublicId: randomUUID(), displayNumber: number });
 const workspace: ReceptionWorkspace = {
   branch: { publicId: branchId, code: 'MAIN', name: 'Chi nhánh chính', timezoneName: 'SE Asia Standard Time',
+    medicalLicenseNo: 'GPHĐ-001', phone: '02812345678', email: 'main@clinic.test', addressLine: '1 Nguyễn Huệ',
+    ward: 'Bến Nghé', district: 'Quận 1', province: 'TP.HCM',
     businessDate: '2026-09-13', checkInEarlyMinutes: 120, checkInLateMinutes: 180 },
   queue: [{ publicId: randomUUID(), encounterPublicId: randomUUID(), displayNumber: 'A0001',
     priorityLevel: 0, status: 'WAITING',
     issuedAtUtc: '2026-09-13T01:00:00.000Z', calledAtUtc: null, serviceStartedAtUtc: null,
-    encounterCode: 'LK-1', encounterSource: 'APPOINTMENT',
-    patient: { publicId: patientId, code: 'BN-1', fullName: 'Nguyễn An' },
-    doctor: { publicId: doctorId, fullName: 'BS Bình' }, room: { publicId: roomId, name: 'Phòng 1' } }],
+    encounterCode: 'LK-1', encounterSource: 'APPOINTMENT', bookingChannel: 'ONLINE',
+    patient: { publicId: patientId, code: 'BN-1', fullName: 'Nguyễn An', dateOfBirth: '1990-01-02',
+      gender: 'FEMALE', phone: '0900000000' },
+    doctor: { publicId: doctorId, fullName: 'BS Bình' }, room: { publicId: roomId, name: 'Phòng 1' },
+    initialService: { code: 'CONSULT', name: 'Khám', quantity: '1.000', unitPrice: '200000.00',
+      lineTotal: '200000.00', currencyCode: 'VND' } }],
   appointments: [{ publicId: appointmentId, code: 'LH-1',
     patient: { publicId: patientId, code: 'BN-1', fullName: 'Nguyễn An' },
     doctor: { publicId: doctorId, fullName: 'BS Bình' }, service: { publicId: serviceId, name: 'Khám' },
@@ -42,7 +47,9 @@ class MemoryReception implements ReceptionRepository {
   cancelled: { encounterId: string; reason: string } | null = null;
   idempotency = new Map<string, { payload: string; result: QueueCommandResult }>();
   branches() { return Promise.resolve([{ publicId: branchId, code: 'MAIN', name: 'Chi nhánh chính',
-    timezoneName: 'SE Asia Standard Time' }]); }
+    timezoneName: 'SE Asia Standard Time', medicalLicenseNo: 'GPHĐ-001', phone: '02812345678',
+    email: 'main@clinic.test', addressLine: '1 Nguyễn Huệ', ward: 'Bến Nghé', district: 'Quận 1',
+    province: 'TP.HCM' }]); }
   workspace() { return this.denied ? Promise.reject({ number: 51002 }) : Promise.resolve(workspace); }
   searchPatients() { return Promise.resolve([{ publicId: patientId, code: 'BN-1', fullName: 'Nguyễn An',
     dateOfBirth: '1990-01-02', gender: 'FEMALE', phone: '0900000000' }]); }
@@ -84,7 +91,11 @@ describe('reception and queue vertical slice', () => {
   it('returns the live workspace with branch policy and public identifiers', async () => {
     const response = await request(app(repository)).get('/api/v1/reception').set(auth).query({ branchPublicId: branchId });
     expect(response.status).toBe(200); expect(response.body.data.branch.checkInEarlyMinutes).toBe(120);
+    expect(response.body.data.branch).toMatchObject({ medicalLicenseNo: 'GPHĐ-001', addressLine: '1 Nguyễn Huệ' });
     expect(response.body.data.queue[0].displayNumber).toBe('A0001');
+    expect(response.body.data.queue[0].bookingChannel).toBe('ONLINE');
+    expect(response.body.data.queue[0].patient.dateOfBirth).toBe('1990-01-02');
+    expect(response.body.data.queue[0].initialService).toMatchObject({ code: 'CONSULT', lineTotal: '200000.00' });
     expect(response.body.data.queue[0]).not.toHaveProperty('queueTicketId');
   });
 

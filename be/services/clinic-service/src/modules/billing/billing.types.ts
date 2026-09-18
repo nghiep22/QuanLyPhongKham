@@ -1,6 +1,8 @@
 import type { ClinicPrincipal } from '../identity/index.js';
 
-export type BillingBranch = { publicId: string; code: string; name: string; timezoneName: string };
+export type BillingBranch = { publicId: string; code: string; name: string; timezoneName: string;
+  medicalLicenseNo: string | null; phone: string | null; email: string | null; addressLine: string;
+  ward: string | null; district: string | null; province: string | null };
 export type BillableEncounter = { publicId: string; code: string; status: string; completedAtUtc: string | null;
   patientPublicId: string; patientCode: string; patientName: string; activeInvoicePublicId: string | null;
   activeInvoiceStatus: string | null };

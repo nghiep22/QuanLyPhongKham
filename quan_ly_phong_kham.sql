@@ -9112,7 +9112,8 @@ AS
 BEGIN
     SET NOCOUNT ON;
     SELECT CONVERT(varchar(36),b.public_id) AS publicId,b.branch_code AS code,b.branch_name AS name,
-           b.timezone_name AS timezoneName
+           b.timezone_name AS timezoneName,b.medical_license_no AS medicalLicenseNo,
+           b.phone,b.email,b.address_line AS addressLine,b.ward,b.district,b.province
     FROM dbo.branches b
     WHERE b.is_active=1 AND EXISTS(
         SELECT 1 FROM dbo.v_clinic_principal_v1 p
@@ -9134,22 +9135,42 @@ BEGIN
     EXEC dbo.sp_assert_permission @actor_user_id,'QUEUE_MANAGE',@branch_id;
     EXEC dbo.sp_get_branch_business_date @branch_id,NULL,@business_date OUTPUT;
 
-    SELECT CONVERT(varchar(36),public_id) AS publicId,branch_code AS code,branch_name AS name,
-           timezone_name AS timezoneName,@business_date AS businessDate,
-           check_in_early_minutes AS checkInEarlyMinutes,check_in_late_minutes AS checkInLateMinutes
-    FROM dbo.branches WHERE branch_id=@branch_id;
+    SELECT CONVERT(varchar(36),b.public_id) AS publicId,b.branch_code AS code,b.branch_name AS name,
+           b.timezone_name AS timezoneName,b.medical_license_no AS medicalLicenseNo,
+           b.phone,b.email,b.address_line AS addressLine,b.ward,b.district,b.province,
+           @business_date AS businessDate,b.check_in_early_minutes AS checkInEarlyMinutes,
+           b.check_in_late_minutes AS checkInLateMinutes
+    FROM dbo.branches b WHERE b.branch_id=@branch_id;
 
     SELECT CONVERT(varchar(36),qt.public_id) AS publicId,CONVERT(varchar(36),e.public_id) AS encounterPublicId,
            qt.display_number AS displayNumber,qt.priority_level AS priorityLevel,qt.status,
            qt.issued_at_utc AS issuedAtUtc,qt.called_at_utc AS calledAtUtc,
            qt.service_started_at_utc AS serviceStartedAtUtc,e.encounter_code AS encounterCode,
-           e.encounter_source AS encounterSource,CONVERT(varchar(36),p.public_id) AS patientPublicId,
-           p.patient_code AS patientCode,p.full_name AS patientName,CONVERT(varchar(36),d.public_id) AS doctorPublicId,
-           emp.full_name AS doctorName,CONVERT(varchar(36),r.public_id) AS roomPublicId,r.room_name AS roomName
+           e.encounter_source AS encounterSource,a.booking_channel AS bookingChannel,
+           CONVERT(varchar(36),p.public_id) AS patientPublicId,p.patient_code AS patientCode,
+           p.full_name AS patientName,p.date_of_birth AS patientDateOfBirth,p.gender AS patientGender,
+           p.phone AS patientPhone,CONVERT(varchar(36),d.public_id) AS doctorPublicId,
+           emp.full_name AS doctorName,CONVERT(varchar(36),r.public_id) AS roomPublicId,r.room_name AS roomName,
+           initial_service.initialServiceCode,initial_service.initialServiceName,
+           initial_service.initialServiceQuantity,initial_service.initialServiceUnitPrice,
+           initial_service.initialServiceLineTotal,initial_service.initialServiceCurrencyCode
     FROM dbo.queue_tickets qt JOIN dbo.queue_sessions qs ON qs.queue_session_id=qt.queue_session_id
     JOIN dbo.encounters e ON e.encounter_id=qt.encounter_id JOIN dbo.patients p ON p.patient_id=e.patient_id
     JOIN dbo.doctors d ON d.doctor_id=e.attending_doctor_id JOIN dbo.employees emp ON emp.employee_id=d.employee_id
+    LEFT JOIN dbo.appointments a ON a.appointment_id=e.appointment_id
     LEFT JOIN dbo.rooms r ON r.room_id=e.room_id
+    OUTER APPLY
+    (
+        SELECT TOP (1) es.service_code_snapshot AS initialServiceCode,
+               es.service_name_snapshot AS initialServiceName,
+               CONVERT(varchar(30),es.quantity) AS initialServiceQuantity,
+               CONVERT(varchar(30),es.unit_price_snapshot) AS initialServiceUnitPrice,
+               CONVERT(varchar(30),es.line_amount) AS initialServiceLineTotal,
+               CONVERT(varchar(3),'VND') AS initialServiceCurrencyCode
+        FROM dbo.encounter_services es
+        WHERE es.encounter_id=e.encounter_id
+        ORDER BY es.ordered_at_utc,es.encounter_service_id
+    ) initial_service
     WHERE qs.branch_id=@branch_id AND qs.queue_date_local=@business_date AND qs.queue_type='GENERAL'
       AND qs.status='OPEN' AND qt.status IN ('WAITING','CALLED','SERVING')
     ORDER BY CASE qt.status WHEN 'SERVING' THEN 0 WHEN 'CALLED' THEN 1 ELSE 2 END,
@@ -10006,7 +10027,9 @@ AS
 BEGIN
     SET NOCOUNT ON;
     SELECT CONVERT(varchar(36),b.public_id) AS publicId,b.branch_code AS code,
-           b.branch_name AS name,b.timezone_name AS timezoneName
+           b.branch_name AS name,b.timezone_name AS timezoneName,
+           b.medical_license_no AS medicalLicenseNo,b.phone,b.email,b.address_line AS addressLine,
+           b.ward,b.district,b.province
     FROM dbo.branches b
     JOIN dbo.doctor_branch_assignments dba ON dba.branch_id=b.branch_id AND dba.is_active=1
     JOIN dbo.doctors d ON d.doctor_id=dba.doctor_id AND d.is_active=1
@@ -10017,7 +10040,8 @@ BEGIN
       AND EXISTS (SELECT 1 FROM dbo.v_clinic_principal_v1 p WHERE p.user_id=@actor_user_id
           AND p.permission_code='ENCOUNTERS_CLINICAL'
           AND (p.role_branch_id IS NULL OR p.role_branch_id=b.branch_id))
-    GROUP BY b.public_id,b.branch_code,b.branch_name,b.timezone_name
+    GROUP BY b.public_id,b.branch_code,b.branch_name,b.timezone_name,b.medical_license_no,b.phone,b.email,
+             b.address_line,b.ward,b.district,b.province
     ORDER BY b.branch_name;
 END;
 GO
@@ -11531,11 +11555,25 @@ BEGIN
     SELECT CONVERT(varchar(36),p.public_id) AS publicId,p.prescription_code AS code,p.status,
            CONVERT(varchar(36),e.public_id) AS encounterPublicId,CONVERT(varchar(36),pat.public_id) AS patientPublicId,
            pat.patient_code AS patientCode,pat.full_name AS patientName,
+           pat.date_of_birth AS patientDateOfBirth,pat.gender AS patientGender,
+           pat.phone AS patientPhone,pat.address_line AS patientAddressLine,
+           pat.health_insurance_no AS patientHealthInsuranceNo,
+           CONVERT(varchar(36),b.public_id) AS branchPublicId,b.branch_code AS branchCode,
+           b.branch_name AS branchName,b.timezone_name AS timezoneName,
+           b.medical_license_no AS branchMedicalLicenseNo,b.phone AS branchPhone,b.email AS branchEmail,
+           b.address_line AS branchAddressLine,b.ward AS branchWard,b.district AS branchDistrict,
+           b.province AS branchProvince,
+           CONVERT(varchar(36),doc.public_id) AS prescriberPublicId,emp.full_name AS prescriberFullName,
+           doc.medical_license_no AS prescriberMedicalLicenseNo,doc.academic_title AS prescriberAcademicTitle,
            p.issued_at_utc AS issuedAtUtc,p.valid_until AS validUntil,
            p.clinical_notes AS clinicalNotes,p.general_instructions AS generalInstructions,
            (SELECT COUNT(*) FROM dbo.prescription_items pi WHERE pi.prescription_id=p.prescription_id) AS itemCount
     FROM dbo.prescriptions p JOIN dbo.encounters e ON e.encounter_id=p.encounter_id
-    JOIN dbo.patients pat ON pat.patient_id=p.patient_id WHERE p.prescription_id=@prescription_id;
+    JOIN dbo.patients pat ON pat.patient_id=p.patient_id
+    JOIN dbo.branches b ON b.branch_id=p.branch_id
+    JOIN dbo.doctors doc ON doc.doctor_id=p.doctor_id
+    JOIN dbo.employees emp ON emp.employee_id=doc.employee_id
+    WHERE p.prescription_id=@prescription_id;
     SELECT CONVERT(varchar(36),pi.public_id) AS publicId,CONVERT(varchar(36),m.public_id) AS medicinePublicId,
            pi.medicine_name_snapshot AS medicineName,pi.strength_snapshot AS strength,
            pi.dosage_form_snapshot AS dosageForm,pi.route_snapshot AS route,
@@ -12627,7 +12665,9 @@ BEGIN
     SET NOCOUNT ON;
     EXEC dbo.sp_assert_actor @actor_user_id;
     SELECT DISTINCT CONVERT(varchar(36),b.public_id) AS publicId,b.branch_code AS code,
-           b.branch_name AS name,b.timezone_name AS timezoneName
+           b.branch_name AS name,b.timezone_name AS timezoneName,
+           b.medical_license_no AS medicalLicenseNo,b.phone,b.email,b.address_line AS addressLine,
+           b.ward,b.district,b.province
     FROM dbo.branches b JOIN dbo.v_clinic_principal_v1 p ON p.user_id=@actor_user_id
     WHERE b.is_active=1 AND p.permission_code IN ('BILLING_MANAGE','PAYMENT_COLLECT','PAYMENT_REFUND')
       AND (p.role_branch_id IS NULL OR p.role_branch_id=b.branch_id)

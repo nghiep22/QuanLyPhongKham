@@ -20,6 +20,13 @@ function detail(): PrescriptionDetail {
   return { publicId: prescriptionId, code: 'DT-1', status: 'DRAFT', encounterPublicId: encounterId,
     patientPublicId: randomUUID(), patientCode: 'BN-1', patientName: 'Nguyễn An', issuedAtUtc: null,
     validUntil: '2026-09-21', itemCount: 0, clinicalNotes: null, generalInstructions: null,
+    branch: { publicId: branchId, code: 'MAIN', name: 'Chi nhánh chính', timezoneName: 'SE Asia Standard Time',
+      medicalLicenseNo: 'PK-001', phone: '02812345678', email: 'main@example.test', addressLine: '1 Đường A',
+      ward: 'Phường 1', district: 'Quận 1', province: 'TP. Hồ Chí Minh' },
+    prescriber: { publicId: randomUUID(), fullName: 'Bác sĩ An', medicalLicenseNo: 'BS-001',
+      academicTitle: null },
+    patient: { dateOfBirth: '1990-01-01', gender: 'MALE', phone: null, addressLine: null,
+      healthInsuranceNo: null },
     items: [], dispensations: [], dispensedItems: [], drugAllergies: [], allergyAlerts: [] };
 }
 function fixture() {

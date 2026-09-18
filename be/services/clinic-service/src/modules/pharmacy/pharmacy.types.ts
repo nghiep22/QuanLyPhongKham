@@ -15,6 +15,12 @@ export type PharmacyWorkspace = { locations: PharmacyLocation[]; medicines: Medi
   prescriptions: PrescriptionSummary[]; lowStock: Array<{ medicinePublicId: string; medicineName: string;
     availableQuantity: string; reorderLevel: string }> };
 export type PrescriptionDetail = PrescriptionSummary & {
+  branch: { publicId: string; code: string; name: string; timezoneName: string;
+    medicalLicenseNo: string | null; phone: string | null; email: string | null; addressLine: string;
+    ward: string | null; district: string | null; province: string | null };
+  prescriber: { publicId: string; fullName: string; medicalLicenseNo: string; academicTitle: string | null };
+  patient: { dateOfBirth: string; gender: string; phone: string | null;
+    addressLine: string | null; healthInsuranceNo: string | null };
   clinicalNotes: string | null; generalInstructions: string | null;
   items: Array<{ publicId: string; medicinePublicId: string; medicineName: string; strength: string;
     dosageForm: string; route: string; prescribedQuantity: string; dispensedQuantity: string;

@@ -4900,12 +4900,19 @@ components:
     ReceptionBranch:
       type: object
       additionalProperties: false
-      required: [publicId, code, name, timezoneName]
+      required: [publicId, code, name, timezoneName, medicalLicenseNo, phone, email, addressLine, ward, district, province]
       properties:
         publicId: { type: string, format: uuid }
         code: { type: string }
         name: { type: string }
         timezoneName: { type: string }
+        medicalLicenseNo: { type: [string, 'null'] }
+        phone: { type: [string, 'null'] }
+        email: { type: [string, 'null'], format: email }
+        addressLine: { type: string }
+        ward: { type: [string, 'null'] }
+        district: { type: [string, 'null'] }
+        province: { type: [string, 'null'] }
     ReceptionBranchListResponse:
       type: object
       additionalProperties: false
@@ -4921,7 +4928,7 @@ components:
       type: object
       additionalProperties: false
       required: [publicId, encounterPublicId, displayNumber, priorityLevel, status, issuedAtUtc, calledAtUtc,
-        serviceStartedAtUtc, encounterCode, encounterSource, patient, doctor, room]
+        serviceStartedAtUtc, encounterCode, encounterSource, bookingChannel, patient, doctor, room, initialService]
       properties:
         publicId: { type: string, format: uuid }
         encounterPublicId: { type: string, format: uuid }
@@ -4933,14 +4940,18 @@ components:
         serviceStartedAtUtc: { type: [string, 'null'], format: date-time }
         encounterCode: { type: string }
         encounterSource: { type: string, enum: [APPOINTMENT, WALK_IN] }
+        bookingChannel: { type: [string, 'null'], enum: [ONLINE, PHONE, COUNTER, null] }
         patient:
           type: object
           additionalProperties: false
-          required: [publicId, code, fullName]
+          required: [publicId, code, fullName, dateOfBirth, gender, phone]
           properties:
             publicId: { type: string, format: uuid }
             code: { type: string }
             fullName: { type: string }
+            dateOfBirth: { type: string, format: date }
+            gender: { type: string, enum: [MALE, FEMALE, OTHER] }
+            phone: { type: [string, 'null'] }
         doctor:
           type: object
           additionalProperties: false
@@ -4956,6 +4967,22 @@ components:
               properties:
                 publicId: { type: string, format: uuid }
                 name: { type: string }
+            - type: 'null'
+        initialService:
+          oneOf:
+            - type: object
+              additionalProperties: false
+              required: [code, name, quantity, unitPrice, lineTotal, currencyCode]
+              properties:
+                code: { type: string }
+                name: { type: string }
+                quantity:
+                  type: string
+                  pattern: '^[0-9]+(?:\.[0-9]{1,3})?$'
+                  description: Exact service quantity encoded as a JSON string.
+                unitPrice: { $ref: '#/components/schemas/MoneyDecimal' }
+                lineTotal: { $ref: '#/components/schemas/MoneyDecimal' }
+                currencyCode: { type: string, enum: [VND] }
             - type: 'null'
     CheckInCandidate:
       type: object
@@ -5024,12 +5051,20 @@ components:
         branch:
           type: object
           additionalProperties: false
-          required: [publicId, code, name, timezoneName, businessDate, checkInEarlyMinutes, checkInLateMinutes]
+          required: [publicId, code, name, timezoneName, medicalLicenseNo, phone, email, addressLine, ward, district,
+            province, businessDate, checkInEarlyMinutes, checkInLateMinutes]
           properties:
             publicId: { type: string, format: uuid }
             code: { type: string }
             name: { type: string }
             timezoneName: { type: string }
+            medicalLicenseNo: { type: [string, 'null'] }
+            phone: { type: [string, 'null'] }
+            email: { type: [string, 'null'], format: email }
+            addressLine: { type: string }
+            ward: { type: [string, 'null'] }
+            district: { type: [string, 'null'] }
+            province: { type: [string, 'null'] }
             businessDate: { type: string, format: date }
             checkInEarlyMinutes: { type: integer, minimum: 0, maximum: 720 }
             checkInLateMinutes: { type: integer, minimum: 0, maximum: 1440 }
@@ -5661,8 +5696,40 @@ components:
       allOf:
         - { $ref: '#/components/schemas/PharmacyPrescriptionSummary' }
         - type: object
-          required: [clinicalNotes, generalInstructions, items, dispensations, dispensedItems, drugAllergies, allergyAlerts]
+          required: [branch, prescriber, patient, clinicalNotes, generalInstructions, items, dispensations, dispensedItems, drugAllergies, allergyAlerts]
           properties:
+            branch:
+              type: object
+              required: [publicId, code, name, timezoneName, medicalLicenseNo, phone, email, addressLine, ward, district, province]
+              properties:
+                publicId: { type: string, format: uuid }
+                code: { type: string }
+                name: { type: string }
+                timezoneName: { type: string }
+                medicalLicenseNo: { type: [string, 'null'] }
+                phone: { type: [string, 'null'] }
+                email: { type: [string, 'null'], format: email }
+                addressLine: { type: string }
+                ward: { type: [string, 'null'] }
+                district: { type: [string, 'null'] }
+                province: { type: [string, 'null'] }
+            prescriber:
+              type: object
+              required: [publicId, fullName, medicalLicenseNo, academicTitle]
+              properties:
+                publicId: { type: string, format: uuid }
+                fullName: { type: string }
+                medicalLicenseNo: { type: string }
+                academicTitle: { type: [string, 'null'] }
+            patient:
+              type: object
+              required: [dateOfBirth, gender, phone, addressLine, healthInsuranceNo]
+              properties:
+                dateOfBirth: { type: string, format: date }
+                gender: { type: string, enum: [MALE, FEMALE, OTHER] }
+                phone: { type: [string, 'null'] }
+                addressLine: { type: [string, 'null'] }
+                healthInsuranceNo: { type: [string, 'null'] }
             clinicalNotes: { type: [string, 'null'] }
             generalInstructions: { type: [string, 'null'] }
             items:
@@ -5885,12 +5952,19 @@ components:
       description: Exact signed decimal amount encoded as a JSON string.
     BillingBranch:
       type: object
-      required: [publicId, code, name, timezoneName]
+      required: [publicId, code, name, timezoneName, medicalLicenseNo, phone, email, addressLine, ward, district, province]
       properties:
         publicId: { type: string, format: uuid }
         code: { type: string }
         name: { type: string }
         timezoneName: { type: string }
+        medicalLicenseNo: { type: [string, 'null'] }
+        phone: { type: [string, 'null'] }
+        email: { type: [string, 'null'], format: email }
+        addressLine: { type: string }
+        ward: { type: [string, 'null'] }
+        district: { type: [string, 'null'] }
+        province: { type: [string, 'null'] }
     BillingBranchListResponse:
       type: object
       required: [data, meta, requestId]

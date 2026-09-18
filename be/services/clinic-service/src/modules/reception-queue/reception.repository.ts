@@ -9,6 +9,14 @@ type Row = Record<string, unknown>;
 const dateOnly = (value: unknown) => value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10);
 const utc = (value: unknown) => value instanceof Date ? value.toISOString() : String(value);
 const nullableUtc = (value: unknown) => value == null ? null : utc(value);
+const nullableText = (value: unknown) => value == null ? null : String(value);
+
+const branchMetadata = (row: Row) => ({
+  publicId: String(row.publicId), code: String(row.code), name: String(row.name),
+  timezoneName: String(row.timezoneName), medicalLicenseNo: nullableText(row.medicalLicenseNo),
+  phone: nullableText(row.phone), email: nullableText(row.email), addressLine: String(row.addressLine),
+  ward: nullableText(row.ward), district: nullableText(row.district), province: nullableText(row.province),
+});
 
 function ticket(row: Row): QueueTicket {
   return {
@@ -17,9 +25,19 @@ function ticket(row: Row): QueueTicket {
     issuedAtUtc: utc(row.issuedAtUtc), calledAtUtc: nullableUtc(row.calledAtUtc),
     serviceStartedAtUtc: nullableUtc(row.serviceStartedAtUtc), encounterCode: String(row.encounterCode),
     encounterSource: row.encounterSource as QueueTicket['encounterSource'],
-    patient: { publicId: String(row.patientPublicId), code: String(row.patientCode), fullName: String(row.patientName) },
+    bookingChannel: row.bookingChannel == null ? null : row.bookingChannel as QueueTicket['bookingChannel'],
+    patient: {
+      publicId: String(row.patientPublicId), code: String(row.patientCode), fullName: String(row.patientName),
+      dateOfBirth: dateOnly(row.patientDateOfBirth), gender: row.patientGender as QueueTicket['patient']['gender'],
+      phone: row.patientPhone == null ? null : String(row.patientPhone),
+    },
     doctor: { publicId: String(row.doctorPublicId), fullName: String(row.doctorName) },
     room: row.roomPublicId == null ? null : { publicId: String(row.roomPublicId), name: String(row.roomName) },
+    initialService: row.initialServiceCode == null ? null : {
+      code: String(row.initialServiceCode), name: String(row.initialServiceName),
+      quantity: String(row.initialServiceQuantity), unitPrice: String(row.initialServiceUnitPrice),
+      lineTotal: String(row.initialServiceLineTotal), currencyCode: String(row.initialServiceCurrencyCode) as 'VND',
+    },
   };
 }
 
@@ -49,8 +67,7 @@ export class SqlReceptionRepository implements ReceptionRepository {
     const result = await executeCommand<Row>('dbo.sp_clinic_reception_branches', [
       { name: 'actor_user_id', type: sql.BigInt, value: actor.userId },
     ], { requestId, actorUserId: actor.userId });
-    return result.recordset.map((row) => ({ publicId: String(row.publicId), code: String(row.code),
-      name: String(row.name), timezoneName: String(row.timezoneName) }));
+    return result.recordset.map(branchMetadata);
   }
 
   async workspace(actor: ClinicPrincipal, branchPublicId: string, requestId: string) {
@@ -59,12 +76,11 @@ export class SqlReceptionRepository implements ReceptionRepository {
       { name: 'branch_public_id', type: sql.UniqueIdentifier, value: branchPublicId },
     ], { requestId, actorUserId: actor.userId });
     const sets = result.recordsets as unknown as Row[][];
-    const branch = sets[0]?.[0];
-    if (!branch) throw new Error('Reception procedure returned no branch.');
+    const branchRow = sets[0]?.[0];
+    if (!branchRow) throw new Error('Reception procedure returned no branch.');
     return {
-      branch: { publicId: String(branch.publicId), code: String(branch.code), name: String(branch.name),
-        timezoneName: String(branch.timezoneName), businessDate: dateOnly(branch.businessDate),
-        checkInEarlyMinutes: Number(branch.checkInEarlyMinutes), checkInLateMinutes: Number(branch.checkInLateMinutes) },
+      branch: { ...branchMetadata(branchRow), businessDate: dateOnly(branchRow.businessDate),
+        checkInEarlyMinutes: Number(branchRow.checkInEarlyMinutes), checkInLateMinutes: Number(branchRow.checkInLateMinutes) },
       queue: (sets[1] ?? []).map(ticket), appointments: (sets[2] ?? []).map(candidate),
       doctors: (sets[3] ?? []).map((row) => ({ publicId: String(row.publicId), fullName: String(row.fullName) })),
       rooms: (sets[4] ?? []).map((row) => ({ publicId: String(row.publicId), code: String(row.code), name: String(row.name) })),

@@ -3,11 +3,15 @@ import request from 'supertest';
 import { describe, expect, it, vi } from 'vitest';
 import { createApp } from '../src/app.js';
 import { BillingService } from '../src/modules/billing/billing.service.js';
-import type { BillingRepository, InvoiceDetail } from '../src/modules/billing/billing.types.js';
+import type { BillingBranch, BillingRepository, InvoiceDetail } from '../src/modules/billing/billing.types.js';
 import type { ClinicPrincipal, PrincipalAuthenticator } from '../src/modules/identity/index.js';
 
 const branchId = randomUUID(); const encounterId = randomUUID(); const invoiceId = randomUUID();
 const allocationId = randomUUID(); const paymentId = randomUUID(); const refundId = randomUUID();
+const billingBranch: BillingBranch = { publicId: branchId, code: 'MAIN', name: 'Chi nhánh chính',
+  timezoneName: 'SE Asia Standard Time', medicalLicenseNo: 'PK-001', phone: '02812345678',
+  email: 'main@example.test', addressLine: '1 Đường A', ward: 'Phường 1', district: 'Quận 1',
+  province: 'TP. Hồ Chí Minh' };
 const principal: ClinicPrincipal = { userId: 42, publicId: randomUUID(), tokenVersion: 1,
   roles: [{ code: 'CASHIER', branchId: 1 }] };
 class Auth implements PrincipalAuthenticator {
@@ -25,8 +29,7 @@ function detail(): InvoiceDetail {
 function fixture() {
   const invoice = detail();
   const repository = {
-    branches: vi.fn().mockResolvedValue([{ publicId: branchId, code: 'MAIN', name: 'Chi nhánh chính',
-      timezoneName: 'SE Asia Standard Time' }]),
+    branches: vi.fn().mockResolvedValue([billingBranch]),
     workspace: vi.fn().mockResolvedValue({ encounters: [], invoices: [] }),
     get: vi.fn().mockImplementation(async () => invoice), create: vi.fn().mockResolvedValue(invoiceId),
     synchronize: vi.fn().mockResolvedValue(undefined), addManualItem: vi.fn().mockResolvedValue(randomUUID()),
@@ -45,7 +48,7 @@ describe('billing API', () => {
     const { app } = fixture();
     expect((await request(app).get('/api/v1/billing/branches')).status).toBe(401);
     const result = await request(app).get('/api/v1/billing/branches').set(authorization);
-    expect(result.status).toBe(200); expect(result.body.data[0].publicId).toBe(branchId);
+    expect(result.status).toBe(200); expect(result.body.data[0]).toEqual(billingBranch);
     expect(result.body.data[0]).not.toHaveProperty('branchId');
   });
   it('creates, synchronizes and issues an invoice with an idempotency key', async () => {

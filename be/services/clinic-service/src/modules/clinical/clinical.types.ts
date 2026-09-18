@@ -8,6 +8,13 @@ export type ClinicalBranch = {
   code: string;
   name: string;
   timezoneName: string;
+  medicalLicenseNo: string | null;
+  phone: string | null;
+  email: string | null;
+  addressLine: string;
+  ward: string | null;
+  district: string | null;
+  province: string | null;
 };
 
 export type ClinicalEncounterSummary = {

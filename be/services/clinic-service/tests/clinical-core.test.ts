@@ -45,7 +45,9 @@ class MemoryClinical implements ClinicalRepository {
   finalizeError: number | null = null;
   lastQueueBypassReason: string | null = null;
   branches() { return Promise.resolve([{ publicId: branchId, code: 'MAIN', name: 'Chi nhánh chính',
-    timezoneName: 'SE Asia Standard Time' }]); }
+    timezoneName: 'SE Asia Standard Time', medicalLicenseNo: 'GPHĐ-001', phone: '02812345678',
+    email: 'main@clinic.test', addressLine: '1 Nguyễn Huệ', ward: 'Bến Nghé', district: 'Quận 1',
+    province: 'TP.HCM' }]); }
   list(_actor: ClinicPrincipal, _branchId: string, statuses: EncounterStatus[]) {
     if (this.denied) return Promise.reject({ number: 51002 });
     return Promise.resolve(statuses.includes(this.item.status) ? [this.item] : []);
@@ -148,6 +150,7 @@ describe('clinical core API', () => {
     const branches = await request(server).get('/api/v1/clinical/branches').set(auth);
     const list = await request(server).get('/api/v1/encounters').set(auth).query({ branchPublicId: branchId });
     expect(branches.body.data[0].publicId).toBe(branchId);
+    expect(branches.body.data[0]).toMatchObject({ medicalLicenseNo: 'GPHĐ-001', addressLine: '1 Nguyễn Huệ' });
     expect(list.body.data[0].publicId).toBe(encounterId);
     expect(list.body.data[0]).not.toHaveProperty('encounterId');
   });

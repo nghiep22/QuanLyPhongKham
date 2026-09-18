@@ -128,7 +128,9 @@ export class SqlClinicalRepository implements ClinicalRepository {
   async branches(actor: ClinicPrincipal, requestId: string) {
     const result = await executeCommand<Row>('dbo.sp_clinic_clinical_branches', [actorParam(actor)], context(actor, requestId));
     return result.recordset.map((row) => ({ publicId: String(row.publicId), code: String(row.code), name: String(row.name),
-      timezoneName: String(row.timezoneName) }));
+      timezoneName: String(row.timezoneName), medicalLicenseNo: nullable(row.medicalLicenseNo),
+      phone: nullable(row.phone), email: nullable(row.email), addressLine: String(row.addressLine),
+      ward: nullable(row.ward), district: nullable(row.district), province: nullable(row.province) }));
   }
   async list(actor: ClinicPrincipal, branchPublicId: string, statuses: EncounterStatus[], requestId: string) {
     const result = await executeCommand<Row>('dbo.sp_clinic_list_encounters', [actorParam(actor),

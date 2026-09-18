@@ -1097,6 +1097,13 @@ export type ReceptionBranch = {
     code: string;
     name: string;
     timezoneName: string;
+    medicalLicenseNo: string | null;
+    phone: string | null;
+    email: string | null;
+    addressLine: string;
+    ward: string | null;
+    district: string | null;
+    province: string | null;
 };
 
 export type ReceptionBranchListResponse = {
@@ -1118,10 +1125,14 @@ export type QueueTicket = {
     serviceStartedAtUtc: string | null;
     encounterCode: string;
     encounterSource: 'APPOINTMENT' | 'WALK_IN';
+    bookingChannel: 'ONLINE' | 'PHONE' | 'COUNTER' | null;
     patient: {
         publicId: string;
         code: string;
         fullName: string;
+        dateOfBirth: string;
+        gender: 'MALE' | 'FEMALE' | 'OTHER';
+        phone: string | null;
     };
     doctor: {
         publicId: string;
@@ -1130,6 +1141,17 @@ export type QueueTicket = {
     room: {
         publicId: string;
         name: string;
+    } | null;
+    initialService: {
+        code: string;
+        name: string;
+        /**
+         * Exact service quantity encoded as a JSON string.
+         */
+        quantity: string;
+        unitPrice: MoneyDecimal;
+        lineTotal: MoneyDecimal;
+        currencyCode: 'VND';
     } | null;
 };
 
@@ -1180,6 +1202,13 @@ export type ReceptionWorkspace = {
         code: string;
         name: string;
         timezoneName: string;
+        medicalLicenseNo: string | null;
+        phone: string | null;
+        email: string | null;
+        addressLine: string;
+        ward: string | null;
+        district: string | null;
+        province: string | null;
         businessDate: string;
         checkInEarlyMinutes: number;
         checkInLateMinutes: number;
@@ -1626,6 +1655,32 @@ export type PharmacyWorkspaceResponse = {
 };
 
 export type PrescriptionDetail = PharmacyPrescriptionSummary & {
+    branch: {
+        publicId: string;
+        code: string;
+        name: string;
+        timezoneName: string;
+        medicalLicenseNo: string | null;
+        phone: string | null;
+        email: string | null;
+        addressLine: string;
+        ward: string | null;
+        district: string | null;
+        province: string | null;
+    };
+    prescriber: {
+        publicId: string;
+        fullName: string;
+        medicalLicenseNo: string;
+        academicTitle: string | null;
+    };
+    patient: {
+        dateOfBirth: string;
+        gender: 'MALE' | 'FEMALE' | 'OTHER';
+        phone: string | null;
+        addressLine: string | null;
+        healthInsuranceNo: string | null;
+    };
     clinicalNotes: string | null;
     generalInstructions: string | null;
     items: Array<{
@@ -1809,6 +1864,13 @@ export type BillingBranch = {
     code: string;
     name: string;
     timezoneName: string;
+    medicalLicenseNo: string | null;
+    phone: string | null;
+    email: string | null;
+    addressLine: string;
+    ward: string | null;
+    district: string | null;
+    province: string | null;
 };
 
 export type BillingBranchListResponse = {

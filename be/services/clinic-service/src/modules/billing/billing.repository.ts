@@ -27,7 +27,9 @@ export class SqlBillingRepository implements BillingRepository {
   async branches(actor: ClinicPrincipal, requestId: string) {
     const result = await executeCommand<Row>('dbo.sp_clinic_billing_branches', [actorParam(actor)], ctx(actor, requestId));
     return result.recordset.map((r) => ({ publicId: id(r.publicId), code: id(r.code), name: id(r.name),
-      timezoneName: id(r.timezoneName) }));
+      timezoneName: id(r.timezoneName), medicalLicenseNo: nullable(r.medicalLicenseNo), phone: nullable(r.phone),
+      email: nullable(r.email), addressLine: id(r.addressLine), ward: nullable(r.ward),
+      district: nullable(r.district), province: nullable(r.province) }));
   }
   async workspace(actor: ClinicPrincipal, branchPublicId: string, requestId: string) {
     const sets = rows(await executeCommand<Row>('dbo.sp_clinic_billing_workspace', [actorParam(actor),
