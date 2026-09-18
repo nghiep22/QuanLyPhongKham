@@ -96,6 +96,7 @@ export function SchedulingPage() {
 
 function ScheduleCard({ schedule, branchId }: { schedule: SchedulingData['schedules'][number]; branchId: string }) {
   const client = useQueryClient(); const [fromDate, setFromDate] = useState(today()); const [toDate, setToDate] = useState(plusDays(30))
+  const validRange = Boolean(fromDate && toDate && fromDate <= toDate)
   const generate = useMutation({ mutationFn: () => apiClient.scheduling.generateSlots(schedule.publicId, { fromDate, toDate }),
     onSuccess: () => void client.invalidateQueries({ queryKey: ['scheduling', branchId] }) })
   return <article className="schedule-card"><div className="catalog-card-heading"><div><span className="status status-active">{weekdays[schedule.weekdayIso]}</span>
@@ -103,9 +104,9 @@ function ScheduleCard({ schedule, branchId }: { schedule: SchedulingData['schedu
     <strong>{schedule.slotCount} slot</strong></div>
     <p>Hiệu lực {schedule.effectiveFrom}{schedule.effectiveTo ? ` → ${schedule.effectiveTo}` : ' trở đi'}</p>
     {schedule.breaks.map((item, index) => <small key={`${item.localStartTime}-${index}`}>Nghỉ {item.localStartTime}–{item.localEndTime} {item.breakName}</small>)}
-    <div className="generate-row"><label>Từ<input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} /></label>
-      <label>Đến<input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} /></label>
-      <button type="button" disabled={generate.isPending} onClick={() => generate.mutate()}>{generate.isPending ? 'Đang sinh…' : 'Sinh slot'}</button></div>
+    <div className="generate-row"><label>Từ<input type="date" max={toDate} value={fromDate} onChange={(event) => setFromDate(event.target.value)} /></label>
+      <label>Đến<input type="date" min={fromDate} value={toDate} onChange={(event) => setToDate(event.target.value)} /></label>
+      <button type="button" disabled={generate.isPending || !validRange} onClick={() => generate.mutate()}>{generate.isPending ? 'Đang sinh…' : 'Sinh slot'}</button></div>
     {generate.data && <div className="form-success">Đã tạo thêm {generate.data.data.createdCount} slot.</div>}
     {generate.error && <div className="form-error">{message(generate.error)}</div>}
   </article>

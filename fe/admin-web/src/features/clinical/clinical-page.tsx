@@ -1,9 +1,10 @@
 import { ApiClientError } from '@clinic/generated-api-client'
-import type { ClinicalEncounterDetail, ClinicalEncounterStatus, ClinicalNotesRequest } from '@clinic/generated-api-types'
+import type { ClinicalEncounterDetail, ClinicalEncounterStatus, ClinicalNotesRequest, ReceptionBranch } from '@clinic/generated-api-types'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { apiClient } from '../../shared/api/client'
+import { clinicalReportPrintDocument, openPrintDocument } from '../../shared/printing'
 import { useAuth } from '../auth/auth-context'
 
 const labels: Record<ClinicalEncounterStatus, string> = {
@@ -92,14 +93,17 @@ export function ClinicalPage() {
           : detail.isLoading ? <section className="panel page-state">Đang tải hồ sơ khám…</section>
             : detail.error ? <section className="panel error-state page-state">{errorMessage(detail.error)}</section>
               : detail.data && <EncounterEditor key={detail.data.data.publicId} item={detail.data.data} busy={busy} run={run}
+                  branch={branches.data.data.find((branch) => branch.publicId === selectedBranchId) ?? branches.data.data[0]}
+                  printedBy={user?.displayName ?? null}
                   canBypassQueue={Boolean(user?.permissions.includes('ENCOUNTERS_QUEUE_BYPASS'))} />}
       </div>
     </div>
   </>
 }
 
-function EncounterEditor({ item, busy, run, canBypassQueue }: {
-  item: ClinicalEncounterDetail; busy: string; run: Action; canBypassQueue: boolean
+function EncounterEditor({ item, branch, printedBy, busy, run, canBypassQueue }: {
+  item: ClinicalEncounterDetail; branch: ReceptionBranch; printedBy: string | null;
+  busy: string; run: Action; canBypassQueue: boolean
 }) {
   const open = item.status === 'IN_PROGRESS'
   const [notes, setNotes] = useState<ClinicalNotesRequest>({
@@ -170,7 +174,12 @@ function EncounterEditor({ item, busy, run, canBypassQueue }: {
           onClick={() => void run('Ký hồ sơ', () => apiClient.clinical.sign(item.publicId))}>Ký hồ sơ</button>}
         {item.status === 'SIGNED' && !item.patientRelease && <button type="button" disabled={Boolean(busy)}
           onClick={() => void run('Công bố cho bệnh nhân', () => apiClient.clinical.releaseToPatient(item.publicId))}>
-          Công bố cho bệnh nhân</button>}</div></div>
+          Công bố cho bệnh nhân</button>}
+        {item.status === 'COMPLETED' && <button type="button" className="secondary"
+          onClick={() => openPrintDocument(clinicalReportPrintDocument(branch, item, printedBy))}>In bản chờ ký</button>}
+        {item.status === 'SIGNED' && <button type="button" className="secondary"
+          disabled={!item.signature?.isVerified} title={!item.signature?.isVerified ? 'Không thể in bản chính thức khi dấu ký không hợp lệ.' : undefined}
+          onClick={() => openPrintDocument(clinicalReportPrintDocument(branch, item, printedBy))}>In kết quả khám</button>}</div></div>
       <div className="clinical-facts"><span><b>Số:</b> {item.queue?.displayNumber ?? '—'} ({item.queue?.status ?? '—'})</span>
         <span><b>Bác sĩ:</b> {item.doctor.fullName}</span><span><b>Phòng:</b> {item.room?.name ?? 'Chưa xếp'}</span>
         <span><b>Đến lúc:</b> {utc(item.arrivedAtUtc)}</span><span><b>Lý do:</b> {item.chiefComplaint ?? 'Chưa ghi'}</span></div>

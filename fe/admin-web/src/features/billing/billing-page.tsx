@@ -2,6 +2,8 @@ import { ApiClientError } from '@clinic/generated-api-client'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
 import { apiClient } from '../../shared/api/client'
+import { invoicePrintDocument, openPrintDocument, paymentReceiptPrintDocument, refundReceiptPrintDocument } from '../../shared/printing'
+import { useAuth } from '../auth/auth-context'
 
 function message(error: unknown) {
   if (!(error instanceof ApiClientError)) return 'Không thể kết nối hệ thống. Hãy thử lại.'
@@ -15,6 +17,7 @@ const methodName: Record<string, string> = {
 }
 
 export function BillingPage() {
+  const { user } = useAuth()
   const queryClient = useQueryClient()
   const [branchId, setBranchId] = useState('')
   const [selectedId, setSelectedId] = useState('')
@@ -84,6 +87,7 @@ export function BillingPage() {
   if (!branches.data?.data.length) return <div className="panel page-state">Tài khoản chưa có quyền thu ngân tại chi nhánh nào.</div>
   const data = workspace.data?.data
   const bill = invoice.data?.data
+  const branch = branches.data.data.find((entry) => entry.publicId === selectedBranch) ?? branches.data.data[0]
 
   return <>
     <header><div><span className="eyebrow">BILLING WORKSPACE</span><h1>Thu ngân</h1>
@@ -119,7 +123,10 @@ export function BillingPage() {
                 : invoice.error ? <section className="panel error-state page-state">{message(invoice.error)}</section>
                   : bill && <>
                     <section className="panel"><div className="detail-heading"><div><h2>{bill.number}</h2>
-                      <p>{bill.patientName} · {bill.patientCode} · {bill.encounterCode}</p></div><span className="status">{bill.status}</span></div>
+                      <p>{bill.patientName} · {bill.patientCode} · {bill.encounterCode}</p></div><div className="action-row">
+                        <span className="status">{bill.status}</span><button type="button" className="secondary"
+                          onClick={() => openPrintDocument(invoicePrintDocument(branch, bill, user?.displayName ?? null))}>
+                          {bill.status === 'DRAFT' ? 'In tạm tính' : 'In bảng kê'}</button></div></div>
                       <div className="summary-grid"><div><span>Tổng cộng</span><strong>{money(bill.totalAmount)}</strong></div>
                         <div><span>Bảo hiểm</span><strong>{money(bill.insuranceAmount)}</strong></div>
                         <div><span>Đã thu ròng</span><strong>{money(Number(bill.paidAmount) - Number(bill.refundedAmount))}</strong></div>
@@ -163,11 +170,16 @@ export function BillingPage() {
                       {bill.payments.map((payment) => <article className="clinical-record" key={payment.publicId}>
                         <strong>{payment.number} · {money(payment.amount)}</strong><p>{methodName[payment.method] ?? payment.method}</p>
                         <small>Còn có thể hoàn {money(payment.refundableAmount)}</small>
-                        {Number(payment.refundableAmount) > 0 && <button type="button" className="secondary" disabled={Boolean(busy)}
-                          onClick={() => void refund(payment.publicId, payment.refundableAmount)}>Hoàn tiền</button>}
+                        <div className="action-row">{payment.status === 'SUCCEEDED' && <button type="button" className="secondary"
+                          onClick={() => openPrintDocument(paymentReceiptPrintDocument(branch, bill, payment, user?.displayName ?? null))}>In phiếu thu</button>}
+                          {Number(payment.refundableAmount) > 0 && <button type="button" className="secondary" disabled={Boolean(busy)}
+                            onClick={() => void refund(payment.publicId, payment.refundableAmount)}>Hoàn tiền</button>}</div>
                       </article>)}
-                      {bill.refunds.map((entry) => <p className="clinical-record" key={entry.publicId}>
-                        Hoàn {entry.number}: {money(entry.amount)} · {entry.reason}</p>)}</section>}
+                      {bill.refunds.map((entry) => <article className="clinical-record" key={entry.publicId}>
+                        <p>Hoàn {entry.number}: {money(entry.amount)} · {entry.reason}</p>
+                        {entry.status === 'SUCCEEDED' && <button type="button" className="secondary"
+                          onClick={() => openPrintDocument(refundReceiptPrintDocument(branch, bill, entry, user?.displayName ?? null))}>
+                          In phiếu hoàn tiền</button>}</article>)}</section>}
                   </>}</div></div>
         </>}
   </>

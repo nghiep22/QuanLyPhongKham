@@ -3,6 +3,7 @@ import type { PatientDetail, PatientSummary, PatientWriteRequest } from '@clinic
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { apiClient } from '../../shared/api/client'
+import { downloadExcelCsv, openPrintDocument, patientProfilePrintDocument } from '../../shared/printing'
 
 type FormValues = {
   fullName: string; dateOfBirth: string; gender: PatientWriteRequest['gender'];
@@ -117,9 +118,26 @@ function EditForm({ branchPublicId, patient }: { branchPublicId: string; patient
       void client.invalidateQueries({ queryKey: ['patient-detail', branchPublicId, patient.publicId] })
     },
   })
+  const exportPatient = () => downloadExcelCsv<PatientDetail>(`ho-so-${patient.code}`, [
+    { header: 'Mã bệnh nhân', value: 'code' },
+    { header: 'Họ tên', value: 'fullName' },
+    { header: 'Ngày sinh', value: 'dateOfBirth' },
+    { header: 'Giới tính', value: 'gender' },
+    { header: 'Điện thoại', value: 'phone' },
+    { header: 'Email', value: 'email' },
+    { header: 'Số định danh', value: 'nationalId' },
+    { header: 'Số BHYT', value: 'healthInsuranceNo' },
+    { header: 'Địa chỉ', value: 'addressLine' },
+    { header: 'Tỉnh/thành', value: 'province' },
+    { header: 'Chi nhánh', value: (row) => row.branch.name },
+    { header: 'Trạng thái', value: 'status' },
+  ], [patient])
   return <section className="panel patient-form-panel">
-    <h2>{patient.fullName}</h2>
-    <p>{patient.code} · Chi nhánh đăng ký: {patient.branch.name}</p>
+    <div className="detail-heading"><div><h2>{patient.fullName}</h2>
+      <p>{patient.code} · Chi nhánh đăng ký: {patient.branch.name}</p></div>
+      <div className="action-row"><button type="button" className="secondary"
+        onClick={() => openPrintDocument(patientProfilePrintDocument(patient))}>In hồ sơ hành chính</button>
+        <button type="button" className="secondary" onClick={exportPatient}>Xuất Excel (.csv)</button></div></div>
     <form onSubmit={(event) => { event.preventDefault(); update.mutate() }}>
       <PatientFields values={values} change={setValues} />
       {update.error && <div className="form-error" role="alert">{message(update.error)}</div>}

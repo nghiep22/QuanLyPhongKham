@@ -4,6 +4,7 @@ import { useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/auth-context'
 import { apiClient } from '../../shared/api/client'
+import { openPrintDocument, prescriptionPrintDocument } from '../../shared/printing'
 
 function message(error: unknown) {
   if (!(error instanceof ApiClientError)) return 'Không thể kết nối hệ thống. Hãy thử lại.'
@@ -195,7 +196,11 @@ export function PharmacyPage() {
                   : rx && <>
                     <section className="panel"><div className="detail-heading"><div><h2>{rx.code}</h2>
                       <p>{rx.patientName} · {rx.patientCode} · Hạn {rx.validUntil ?? '—'}</p></div>
-                      <span className="status">{rx.status}</span></div>
+                      <div className="action-row"><span className="status">{rx.status}</span>
+                        {['ISSUED', 'PARTIALLY_DISPENSED', 'DISPENSED'].includes(rx.status)
+                          && <button type="button" className="secondary"
+                            onClick={() => openPrintDocument(prescriptionPrintDocument(rx, user?.displayName ?? null))}>
+                            In đơn thuốc</button>}</div></div>
                       {!!rx.drugAllergies.length && <div className="notice" role="alert">
                         Dị ứng thuốc: {rx.drugAllergies.map((allergy) => `${allergy.allergenName} (${allergy.severity})`).join(', ')}</div>}
                       {!!rx.allergyAlerts.length && <div className="form-error" role="alert">

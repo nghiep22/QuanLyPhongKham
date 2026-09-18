@@ -1,8 +1,10 @@
 import { ApiClientError } from '@clinic/generated-api-client'
 import type { Appointment, AppointmentStatus, AvailabilitySlot, PatientSummary, PublicService } from '@clinic/generated-api-types'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { apiClient } from '../../shared/api/client'
+import { appointmentPrintDocument, openPrintDocument } from '../../shared/printing'
+import { canMarkAppointmentNoShow } from './appointment-actions'
 
 const statuses: Array<['' | AppointmentStatus, string]> = [['', 'Tất cả'], ['PENDING', 'Chờ xác nhận'],
   ['CONFIRMED', 'Đã xác nhận'], ['CHECKED_IN', 'Đã check-in'], ['IN_PROGRESS', 'Đang khám'],
@@ -26,6 +28,7 @@ function message(error: unknown) {
 
 export function AppointmentsPage() {
   const client = useQueryClient()
+  const [now, setNow] = useState(0)
   const references = useQuery({ queryKey: ['patient-reference'], queryFn: () => apiClient.patients.references() })
   const [branchId, setBranchId] = useState(''); const [date, setDate] = useState(today())
   const [status, setStatus] = useState<'' | AppointmentStatus>(''); const [query, setQuery] = useState('')
@@ -34,6 +37,12 @@ export function AppointmentsPage() {
     queryFn: () => apiClient.appointmentAdmin.list({ branchPublicId: selectedBranchId, serviceDate: date,
       ...(status ? { status } : {}), ...(query.trim() ? { query: query.trim() } : {}) }), enabled: Boolean(selectedBranchId && date) })
   const refresh = () => void client.invalidateQueries({ queryKey: ['appointments-admin', selectedBranchId] })
+  useEffect(() => {
+    const updateNow = () => setNow(Date.now())
+    const initial = window.setTimeout(updateNow, 0)
+    const timer = window.setInterval(updateNow, 30_000)
+    return () => { window.clearTimeout(initial); window.clearInterval(timer) }
+  }, [])
   if (references.isLoading) return <div className="page-state">Đang tải phạm vi lịch hẹn…</div>
   if (references.error) return <div className="page-state error-state">{message(references.error)}</div>
   return <><header><div><span className="eyebrow">APPOINTMENTS</span><h1>Lịch hẹn</h1>
@@ -50,7 +59,7 @@ export function AppointmentsPage() {
     <section className="appointment-list"><h2>Lịch trong ngày</h2>
       {list.isLoading ? <div className="page-state panel">Đang tải lịch hẹn…</div>
         : list.error ? <div className="page-state error-state">{message(list.error)}</div>
-          : list.data?.data.length ? list.data.data.map((item) => <AppointmentCard key={item.publicId} item={item} onDone={refresh} />)
+          : list.data?.data.length ? list.data.data.map((item) => <AppointmentCard key={item.publicId} item={item} now={now} onDone={refresh} />)
             : <div className="page-state panel">Không có lịch phù hợp bộ lọc.</div>}
     </section>
   </>
@@ -99,7 +108,7 @@ function CounterBooking({ branchId, date, onDone }: { branchId: string; date: st
   </section>
 }
 
-function AppointmentCard({ item, onDone }: { item: Appointment; onDone: () => void }) {
+function AppointmentCard({ item, now, onDone }: { item: Appointment; now: number; onDone: () => void }) {
   const [error, setError] = useState<unknown>(null); const [busy, setBusy] = useState(false)
   const run = async (action: () => Promise<unknown>) => { setBusy(true); setError(null); try { await action(); onDone() } catch (cause) { setError(cause) } finally { setBusy(false) } }
   const cancel = () => { const reason = window.prompt('Lý do hủy lịch (tối thiểu 3 ký tự):'); if (reason?.trim() && reason.trim().length >= 3)
@@ -110,9 +119,12 @@ function AppointmentCard({ item, onDone }: { item: Appointment; onDone: () => vo
     <p>{item.roomName}{item.chiefComplaint ? ` · ${item.chiefComplaint}` : ''}</p>
     {item.holdExpiresAtUtc && <p className="appointment-warning">Giữ chỗ đến {new Date(item.holdExpiresAtUtc).toLocaleString('vi-VN')}</p>}
     <div className="appointment-actions">
+      {(['CONFIRMED', 'CHECKED_IN', 'IN_PROGRESS', 'COMPLETED'] as AppointmentStatus[]).includes(item.status)
+        && <button className="secondary" type="button"
+          onClick={() => openPrintDocument(appointmentPrintDocument(item))}>In phiếu hẹn</button>}
       {item.status === 'PENDING' && <button disabled={busy} type="button" onClick={() => void run(() => apiClient.appointmentAdmin.confirm(item.publicId))}>Xác nhận</button>}
       {(['PENDING', 'CONFIRMED'] as AppointmentStatus[]).includes(item.status) && <button disabled={busy} className="danger-button" type="button" onClick={cancel}>Hủy lịch</button>}
-      {item.status === 'CONFIRMED' && <button disabled={busy} className="secondary" type="button"
+      {canMarkAppointmentNoShow(item, now) && <button disabled={busy} className="secondary" type="button"
         onClick={() => void run(() => apiClient.appointmentAdmin.noShow(item.publicId, { reason: 'Bệnh nhân không đến' }))}>Không đến</button>}
     </div>{Boolean(error) && <div className="form-error">{message(error)}</div>}
   </article>

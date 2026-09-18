@@ -102,6 +102,7 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
 function AdminLayout() {
   const { user, logout } = useAuth()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
   const {
     canManageStaff, canManagePatientLinks, canManageCatalog, canManagePatients,
     canManageAppointments, canManageSchedules, canManageReception, canUseClinical,
@@ -114,10 +115,16 @@ function AdminLayout() {
   }
 
   return (
-    <div className="app-shell">
-      <aside>
+    <div className={`app-shell${isMobileNavOpen ? ' mobile-nav-open' : ''}`}>
+      <button className="mobile-nav-toggle" type="button" aria-controls="admin-navigation"
+        aria-expanded={isMobileNavOpen} onClick={() => setIsMobileNavOpen((open) => !open)}>
+        {isMobileNavOpen ? 'Đóng menu' : 'Mở menu'}
+      </button>
+      {isMobileNavOpen && <button className="mobile-nav-backdrop" type="button" aria-label="Đóng menu điều hướng"
+        onClick={() => setIsMobileNavOpen(false)} />}
+      <aside id="admin-navigation">
         <div className="brand">Clinic Admin</div>
-        <nav>
+        <nav onClick={() => setIsMobileNavOpen(false)}>
           <NavLink to="/dashboard">Tổng quan</NavLink>
           {canManageStaff && <NavLink to="/staff">Nhân sự</NavLink>}
           {canManagePatientLinks && <NavLink to="/patient-links">Liên kết hồ sơ</NavLink>}

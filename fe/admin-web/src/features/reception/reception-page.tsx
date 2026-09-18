@@ -3,8 +3,10 @@ import type { CheckInCandidate, CreateWalkInRequest, ReceptionPatient, Reception
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useRef, useState } from 'react'
 import { apiClient } from '../../shared/api/client'
+import { openPrintDocument, receptionSlipPrintDocument } from '../../shared/printing'
 import { getAdminAccess } from '../auth/admin-access'
 import { useAuth } from '../auth/auth-context'
+import { scopedSelection } from './scoped-selection'
 
 function idempotencyKey() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID()
@@ -49,7 +51,8 @@ export function ReceptionPage() {
   const data = workspace.data?.data
   return <><header><div><span className="eyebrow">RECEPTION & QUEUE</span><h1>Tiếp nhận & hàng đợi</h1>
     <p>Check-in lịch đã xác nhận, tiếp nhận khách đến trực tiếp và gọi số theo ưu tiên rồi FIFO.</p></div>
-    <button type="button" disabled={calling || !data} onClick={() => void callNext()}>{calling ? 'Đang gọi…' : 'Gọi bệnh nhân kế tiếp'}</button></header>
+    <button type="button" disabled={calling || !data?.queue.some((ticket) => ticket.status === 'WAITING')}
+      onClick={() => void callNext()}>{calling ? 'Đang gọi…' : 'Gọi bệnh nhân kế tiếp'}</button></header>
     <section className="panel reception-toolbar"><label>Chi nhánh<select value={selectedBranchId} onChange={(event) => setBranchId(event.target.value)}>
       {branches.data.data.map((item) => <option key={item.publicId} value={item.publicId}>{item.name}</option>)}</select></label>
       {data && <div className="policy-note"><strong>Ngày nghiệp vụ {data.branch.businessDate}</strong>
@@ -58,15 +61,17 @@ export function ReceptionPage() {
     {Boolean(callError) && <div className="form-error" role="alert">{message(callError)}</div>}
     {workspace.isLoading ? <div className="page-state panel">Đang tải quầy tiếp nhận…</div>
       : workspace.error ? <div className="page-state error-state">{message(workspace.error)}</div>
-        : data && <><section className="reception-grid"><QueueBoard tickets={data.queue} refresh={refresh}
+        : data && <><section className="reception-grid"><QueueBoard branch={data.branch} tickets={data.queue} refresh={refresh}
+          printedBy={user?.displayName ?? null}
           canCancel={canCancelEncounters} />
           <AppointmentArrivals items={data.appointments} refresh={refresh} /></section>
-          <WalkInPanel branchId={selectedBranchId} data={data} refresh={refresh} /></>}
+          <WalkInPanel key={selectedBranchId} branchId={selectedBranchId} data={data} refresh={refresh} /></>}
   </>
 }
 
-function QueueBoard({ tickets, refresh, canCancel }: {
-  tickets: ReceptionWorkspace['queue']; refresh: () => void; canCancel: boolean
+function QueueBoard({ branch, tickets, printedBy, refresh, canCancel }: {
+  branch: ReceptionWorkspace['branch']; tickets: ReceptionWorkspace['queue']; printedBy: string | null;
+  refresh: () => void; canCancel: boolean
 }) {
   const groups = [['SERVING', 'Đang phục vụ'], ['CALLED', 'Đã gọi'], ['WAITING', 'Đang chờ']] as const
   const [busy, setBusy] = useState(''); const [error, setError] = useState<unknown>(null); const [notice, setNotice] = useState('')
@@ -91,25 +96,32 @@ function QueueBoard({ tickets, refresh, canCancel }: {
       {tickets.filter((ticket) => ticket.status === status).map((ticket) => <article className={`queue-ticket queue-${status.toLowerCase()}`} key={ticket.publicId}>
         <strong>{ticket.displayNumber}</strong><div><b>{ticket.patient.fullName}</b><span>{ticket.patient.code} · {ticket.doctor.fullName}</span>
           <small>{ticket.room?.name ?? 'Chưa xếp phòng'}{ticket.priorityLevel ? ` · Ưu tiên ${ticket.priorityLevel}` : ''}</small></div>
-        {canCancel && <button type="button" className="danger-link queue-cancel-button" disabled={Boolean(busy)} onClick={() => void cancel(ticket)}>
-          {busy === ticket.publicId ? 'Đang hủy…' : 'Hủy lượt'}
-        </button>}</article>)}
+        <div className="queue-ticket-actions"><button type="button" className="secondary"
+          onClick={() => openPrintDocument(receptionSlipPrintDocument(branch, ticket, printedBy))}>In phiếu</button>
+          {canCancel && <button type="button" className="danger-link" disabled={Boolean(busy)} onClick={() => void cancel(ticket)}>
+            {busy === ticket.publicId ? 'Đang hủy…' : 'Hủy lượt'}
+          </button>}</div></article>)}
       {!tickets.some((ticket) => ticket.status === status) && <div className="empty-column">Trống</div>}</div>)}</div>
   </section>
 }
 
 function AppointmentArrivals({ items, refresh }: { items: CheckInCandidate[]; refresh: () => void }) {
   const [busy, setBusy] = useState(''); const [error, setError] = useState<unknown>(null)
+  const [notice, setNotice] = useState('')
   const checkIn = async (item: CheckInCandidate) => { const entered = window.prompt('Mức ưu tiên 0–9:', '0')
     if (entered == null) return; const priority = Number(entered)
     if (!Number.isInteger(priority) || priority < 0 || priority > 9) { setError(new Error('priority')); return }
-    setBusy(item.publicId); setError(null); try { await apiClient.reception.checkIn(item.publicId, { priorityLevel: priority }, idempotencyKey()); refresh() }
+    setBusy(item.publicId); setError(null); setNotice(''); try {
+      const response = await apiClient.reception.checkIn(item.publicId, { priorityLevel: priority }, idempotencyKey())
+      setNotice(`Đã cấp số ${response.data.displayNumber}. Dùng “In phiếu” tại hàng đợi để giao bệnh nhân.`); refresh()
+    }
     catch (cause) { setError(cause) } finally { setBusy('') } }
   return <section className="panel arrival-list"><h2>Lịch chờ check-in</h2><p>{items.length} lịch CONFIRMED trong ngày nghiệp vụ.</p>
     {items.map((item) => <article key={item.publicId} className="arrival-card"><div><strong>{item.startTimeLocal} · {item.patient.fullName}</strong>
       <span>{item.code} · {item.service.name}</span><small>{item.doctor.fullName} · {item.room.name}</small></div>
       <button type="button" disabled={Boolean(busy)} onClick={() => void checkIn(item)}>{busy === item.publicId ? 'Đang cấp số…' : 'Check-in'}</button></article>)}
     {!items.length && <div className="empty-column">Không có lịch chờ check-in.</div>}
+    {notice && <div className="form-success" role="status">{notice}</div>}
     {Boolean(error) && <div className="form-error" role="alert">{error instanceof ApiClientError ? message(error) : 'Mức ưu tiên phải từ 0 đến 9.'}</div>}
   </section>
 }
@@ -117,39 +129,45 @@ function AppointmentArrivals({ items, refresh }: { items: CheckInCandidate[]; re
 function WalkInPanel({ branchId, data, refresh }: { branchId: string; data: ReceptionWorkspace; refresh: () => void }) {
   const [patientQuery, setPatientQuery] = useState(''); const [patients, setPatients] = useState<ReceptionPatient[]>([])
   const [patient, setPatient] = useState<ReceptionPatient | null>(null); const [serviceId, setServiceId] = useState(data.services[0]?.publicId ?? '')
+  const selectedServiceId = scopedSelection(serviceId, data.services)
   const eligibleDoctors = useMemo(() => data.doctors.filter((doctor) => data.doctorServices.some((item) =>
-    item.doctorPublicId === doctor.publicId && item.servicePublicId === serviceId)), [data, serviceId])
+    item.doctorPublicId === doctor.publicId && item.servicePublicId === selectedServiceId)), [data, selectedServiceId])
   const [doctorId, setDoctorId] = useState(''); const [roomId, setRoomId] = useState(data.rooms[0]?.publicId ?? '')
   const [complaint, setComplaint] = useState(''); const [priority, setPriority] = useState(0); const [error, setError] = useState<unknown>(null)
-  const [busy, setBusy] = useState(false); const retry = useRef<{ payload: string; key: string } | null>(null)
+  const [busy, setBusy] = useState(false); const [notice, setNotice] = useState('')
+  const retry = useRef<{ payload: string; key: string } | null>(null)
   const selectedDoctorId = eligibleDoctors.some((item) => item.publicId === doctorId) ? doctorId : eligibleDoctors[0]?.publicId ?? ''
+  const selectedRoomId = scopedSelection(roomId, data.rooms)
   const search = async () => { if (patientQuery.trim().length < 2) return; setError(null); try {
     setPatients((await apiClient.reception.searchPatients(branchId, patientQuery.trim())).data)
   } catch (cause) { setError(cause) } }
-  const create = async () => { if (!patient || !serviceId || !selectedDoctorId || !roomId) return
+  const create = async () => { if (!patient || !selectedServiceId || !selectedDoctorId || !selectedRoomId) return
     const body: CreateWalkInRequest = { branchPublicId: branchId, patientPublicId: patient.publicId,
-      doctorPublicId: selectedDoctorId, roomPublicId: roomId, servicePublicId: serviceId, priorityLevel: priority,
+      doctorPublicId: selectedDoctorId, roomPublicId: selectedRoomId, servicePublicId: selectedServiceId, priorityLevel: priority,
       ...(complaint.trim() ? { chiefComplaint: complaint.trim() } : {}) }
     const payload = JSON.stringify(body); if (!retry.current || retry.current.payload !== payload) retry.current = { payload, key: idempotencyKey() }
-    setBusy(true); setError(null); try { const response = await apiClient.reception.createWalkIn(body, retry.current.key)
-      retry.current = null; setPatient(null); setPatients([]); setComplaint(''); refresh(); window.alert(`Đã cấp số ${response.data.displayNumber}.`)
+    setBusy(true); setError(null); setNotice(''); try { const response = await apiClient.reception.createWalkIn(body, retry.current.key)
+      retry.current = null; setPatient(null); setPatients([]); setComplaint(''); refresh()
+      setNotice(`Đã cấp số ${response.data.displayNumber}. Dùng “In phiếu” tại hàng đợi để giao bệnh nhân.`)
     } catch (cause) { setError(cause) } finally { setBusy(false) } }
   return <section className="panel walk-in-panel"><div className="detail-heading"><div><h2>Tiếp nhận walk-in</h2>
     <p>Tạo thẳng lượt khám, dịch vụ ban đầu và số hàng đợi — không tạo lịch hẹn giả.</p></div></div>
     <div className="inline-search"><label>Tìm bệnh nhân<input value={patientQuery} onChange={(event) => setPatientQuery(event.target.value)}
-      placeholder="Mã BN, họ tên hoặc số điện thoại" /></label><button type="button" className="secondary" onClick={() => void search()}>Tìm</button></div>
+      placeholder="Mã BN, họ tên hoặc số điện thoại" /></label><button type="button" className="secondary"
+        disabled={patientQuery.trim().length < 2} onClick={() => void search()}>Tìm</button></div>
     {patients.length > 0 && <div className="choice-list">{patients.map((item) => <button type="button" key={item.publicId}
       className={patient?.publicId === item.publicId ? 'selected-choice' : 'secondary'} onClick={() => setPatient(item)}>{item.fullName} · {item.code}</button>)}</div>}
-    {patient && <div className="walk-in-fields"><label>Dịch vụ<select value={serviceId} onChange={(event) => { setServiceId(event.target.value); setDoctorId('') }}>
+    {patient && <div className="walk-in-fields"><label>Dịch vụ<select value={selectedServiceId} onChange={(event) => { setServiceId(event.target.value); setDoctorId('') }}>
       {data.services.map((item) => <option value={item.publicId} key={item.publicId}>{item.name} · {Number(item.priceAmount).toLocaleString('vi-VN')} ₫</option>)}</select></label>
       <label>Bác sĩ<select value={selectedDoctorId} onChange={(event) => setDoctorId(event.target.value)}>{eligibleDoctors.map((item) =>
         <option value={item.publicId} key={item.publicId}>{item.fullName}</option>)}</select></label>
-      <label>Phòng<select value={roomId} onChange={(event) => setRoomId(event.target.value)}>{data.rooms.map((item) =>
+      <label>Phòng<select value={selectedRoomId} onChange={(event) => setRoomId(event.target.value)}>{data.rooms.map((item) =>
         <option value={item.publicId} key={item.publicId}>{item.name}</option>)}</select></label>
       <label>Ưu tiên<select value={priority} onChange={(event) => setPriority(Number(event.target.value))}>{Array.from({ length: 10 }, (_, value) =>
         <option value={value} key={value}>{value === 0 ? '0 · Thường' : value}</option>)}</select></label>
       <label className="wide">Lý do khám<input maxLength={1000} value={complaint} onChange={(event) => setComplaint(event.target.value)} /></label>
-      <button type="button" disabled={busy || !selectedDoctorId || !roomId} onClick={() => void create()}>{busy ? 'Đang cấp số…' : 'Tiếp nhận & cấp số'}</button></div>}
+      <button type="button" disabled={busy || !selectedServiceId || !selectedDoctorId || !selectedRoomId} onClick={() => void create()}>{busy ? 'Đang cấp số…' : 'Tiếp nhận & cấp số'}</button></div>}
+    {notice && <div className="form-success" role="status">{notice}</div>}
     {Boolean(error) && <div className="form-error" role="alert">{message(error)}</div>}
   </section>
 }
