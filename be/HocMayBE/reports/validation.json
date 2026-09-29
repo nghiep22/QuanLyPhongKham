@@ -1,0 +1,1630 @@
+{
+  "chosen": "unigram",
+  "experiments": [
+    {
+      "name": "keyword_overlap",
+      "config": null,
+      "vocabularySize": 0,
+      "validation": {
+        "queries": 200,
+        "precisionAt5": 0.2940000000000001,
+        "mrr": 0.5053194444444444,
+        "medianLatencyMs": 3.4219000000000506,
+        "p95LatencyMs": 3.9763999999999555,
+        "byCategory": {
+          "comp.graphics": {
+            "queries": 25,
+            "precisionAt5": 0.52,
+            "mrr": 0.968
+          },
+          "comp.sys.ibm.pc.hardware": {
+            "queries": 25,
+            "precisionAt5": 0.18400000000000002,
+            "mrr": 0.33665079365079364
+          },
+          "misc.forsale": {
+            "queries": 25,
+            "precisionAt5": 0.2240000000000001,
+            "mrr": 0.4203333333333332
+          },
+          "rec.autos": {
+            "queries": 25,
+            "precisionAt5": 0.28,
+            "mrr": 0.4586507936507936
+          },
+          "rec.sport.baseball": {
+            "queries": 25,
+            "precisionAt5": 0.35999999999999993,
+            "mrr": 0.5666666666666665
+          },
+          "sci.med": {
+            "queries": 25,
+            "precisionAt5": 0.2960000000000001,
+            "mrr": 0.4830476190476191
+          },
+          "sci.space": {
+            "queries": 25,
+            "precisionAt5": 0.2720000000000001,
+            "mrr": 0.37615873015873014
+          },
+          "talk.politics.guns": {
+            "queries": 25,
+            "precisionAt5": 0.21600000000000003,
+            "mrr": 0.4330476190476191
+          }
+        },
+        "errors": [
+          {
+            "query": "i have 2 new smc 270e arcnet cards for sale they are brand new 50 each email removed",
+            "relevantCategory": "comp.sys.ibm.pc.hardware",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.6393999999999664,
+            "topCategory": "rec.autos"
+          },
+          {
+            "query": "has anyone taken a look at the new viewsonic 17 they claim 1280x1024 at 76hz how does it",
+            "relevantCategory": "comp.sys.ibm.pc.hardware",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.7380000000000564,
+            "topCategory": "comp.graphics"
+          },
+          {
+            "query": "i have a like new hayes jt fax for sale 125 or offer or trade wally waggoner email",
+            "relevantCategory": "comp.sys.ibm.pc.hardware",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.6215000000000828,
+            "topCategory": "sci.space"
+          },
+          {
+            "query": "email removed jon pastor writes i am one of those middle of the road gw2000 owners who is",
+            "relevantCategory": "comp.sys.ibm.pc.hardware",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.5919000000000096,
+            "topCategory": "talk.politics.guns"
+          },
+          {
+            "query": "email removed writes yep this was on the news great news for consumers bad news for intel",
+            "relevantCategory": "comp.sys.ibm.pc.hardware",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.4236000000000786,
+            "topCategory": "sci.med"
+          },
+          {
+            "query": "not true dial 811 and listen to the recording if you get it then your phone was recognized",
+            "relevantCategory": "misc.forsale",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.5819999999999936,
+            "topCategory": "comp.graphics"
+          },
+          {
+            "query": "heise model 710a pressure meter this is a precision 4 1 2 digit meter measuring 0 15 psi",
+            "relevantCategory": "misc.forsale",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.154700000000048,
+            "topCategory": "comp.graphics"
+          },
+          {
+            "query": "486 dx 50 mhz in zero insertion force socket empty over drive socket eisa motherboard with 256k cache",
+            "relevantCategory": "misc.forsale",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.087599999999952,
+            "topCategory": "comp.graphics"
+          },
+          {
+            "query": "i was wrong i guess they are closer to 800 new i will probably still sell them for",
+            "relevantCategory": "misc.forsale",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.4891999999999825,
+            "topCategory": "sci.med"
+          },
+          {
+            "query": "hi folks i have a 386 25 daughter board for zeos which i want to upgrade to 486",
+            "relevantCategory": "misc.forsale",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.4162999999999784,
+            "topCategory": "comp.graphics"
+          },
+          {
+            "query": "i just had my 41 chrysler painted i was told to refrain from waxing it and to leave",
+            "relevantCategory": "rec.autos",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.524799999999914,
+            "topCategory": "sci.space"
+          },
+          {
+            "query": "rumor has it that a guy at dell computer had his miata totalled so that would be about",
+            "relevantCategory": "rec.autos",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.5534000000000106,
+            "topCategory": "comp.graphics"
+          }
+        ],
+        "confusion": {
+          "comp.graphics": {
+            "comp.graphics": 24,
+            "rec.autos": 1
+          },
+          "comp.sys.ibm.pc.hardware": {
+            "rec.autos": 2,
+            "comp.graphics": 15,
+            "comp.sys.ibm.pc.hardware": 4,
+            "sci.space": 2,
+            "talk.politics.guns": 1,
+            "sci.med": 1
+          },
+          "misc.forsale": {
+            "comp.graphics": 13,
+            "misc.forsale": 7,
+            "rec.sport.baseball": 1,
+            "comp.sys.ibm.pc.hardware": 2,
+            "rec.autos": 1,
+            "sci.med": 1
+          },
+          "rec.autos": {
+            "comp.graphics": 13,
+            "sci.med": 2,
+            "rec.autos": 7,
+            "sci.space": 2,
+            "comp.sys.ibm.pc.hardware": 1
+          },
+          "rec.sport.baseball": {
+            "comp.graphics": 8,
+            "rec.sport.baseball": 11,
+            "rec.autos": 2,
+            "comp.sys.ibm.pc.hardware": 1,
+            "sci.med": 2,
+            "talk.politics.guns": 1
+          },
+          "sci.med": {
+            "comp.graphics": 13,
+            "sci.med": 7,
+            "rec.autos": 3,
+            "sci.space": 2
+          },
+          "sci.space": {
+            "comp.graphics": 14,
+            "sci.space": 4,
+            "rec.autos": 3,
+            "talk.politics.guns": 1,
+            "sci.med": 3
+          },
+          "talk.politics.guns": {
+            "talk.politics.guns": 7,
+            "sci.space": 3,
+            "comp.graphics": 11,
+            "comp.sys.ibm.pc.hardware": 1,
+            "rec.autos": 2,
+            "rec.sport.baseball": 1
+          }
+        }
+      },
+      "manual": {
+        "queries": 32,
+        "precisionAt5": 0.7812500000000002,
+        "mrr": 0.8942708333333333,
+        "medianLatencyMs": 1.8214000000000397,
+        "p95LatencyMs": 2.5960000000000036,
+        "byCategory": {
+          "comp.graphics": {
+            "queries": 4,
+            "precisionAt5": 0.95,
+            "mrr": 1
+          },
+          "comp.sys.ibm.pc.hardware": {
+            "queries": 4,
+            "precisionAt5": 0.39999999999999997,
+            "mrr": 0.675
+          },
+          "misc.forsale": {
+            "queries": 4,
+            "precisionAt5": 0.49999999999999994,
+            "mrr": 0.6458333333333334
+          },
+          "rec.autos": {
+            "queries": 4,
+            "precisionAt5": 0.8500000000000001,
+            "mrr": 0.8333333333333333
+          },
+          "rec.sport.baseball": {
+            "queries": 4,
+            "precisionAt5": 0.8999999999999999,
+            "mrr": 1
+          },
+          "sci.med": {
+            "queries": 4,
+            "precisionAt5": 0.85,
+            "mrr": 1
+          },
+          "sci.space": {
+            "queries": 4,
+            "precisionAt5": 1,
+            "mrr": 1
+          },
+          "talk.politics.guns": {
+            "queries": 4,
+            "precisionAt5": 0.8,
+            "mrr": 1
+          }
+        },
+        "errors": [
+          {
+            "query": "installing new ram in desktop pc",
+            "relevantCategory": "comp.sys.ibm.pc.hardware",
+            "precisionAt5": 0.2,
+            "reciprocalRank": 0.2,
+            "latencyMs": 2.5960000000000036,
+            "topCategory": "comp.graphics"
+          },
+          {
+            "query": "selling used computer equipment",
+            "relevantCategory": "misc.forsale",
+            "precisionAt5": 0.4,
+            "reciprocalRank": 0.25,
+            "latencyMs": 1.5335000000000036,
+            "topCategory": "comp.graphics"
+          },
+          {
+            "query": "wanted to buy used electronics",
+            "relevantCategory": "misc.forsale",
+            "precisionAt5": 0.2,
+            "reciprocalRank": 0.3333333333333333,
+            "latencyMs": 2.1730999999999767,
+            "topCategory": "rec.autos"
+          },
+          {
+            "query": "car engine fuel mileage",
+            "relevantCategory": "rec.autos",
+            "precisionAt5": 0.6,
+            "reciprocalRank": 0.3333333333333333,
+            "latencyMs": 1.0349999999998545,
+            "topCategory": "misc.forsale"
+          },
+          {
+            "query": "computer bios and cpu compatibility",
+            "relevantCategory": "comp.sys.ibm.pc.hardware",
+            "precisionAt5": 0.2,
+            "reciprocalRank": 0.5,
+            "latencyMs": 2.5832000000000335,
+            "topCategory": "comp.graphics"
+          }
+        ],
+        "confusion": {
+          "comp.graphics": {
+            "comp.graphics": 4
+          },
+          "comp.sys.ibm.pc.hardware": {
+            "comp.sys.ibm.pc.hardware": 2,
+            "comp.graphics": 2
+          },
+          "misc.forsale": {
+            "comp.graphics": 1,
+            "misc.forsale": 2,
+            "rec.autos": 1
+          },
+          "rec.autos": {
+            "misc.forsale": 1,
+            "rec.autos": 3
+          },
+          "rec.sport.baseball": {
+            "rec.sport.baseball": 4
+          },
+          "sci.med": {
+            "sci.med": 4
+          },
+          "sci.space": {
+            "sci.space": 4
+          },
+          "talk.politics.guns": {
+            "talk.politics.guns": 4
+          }
+        }
+      }
+    },
+    {
+      "name": "unigram",
+      "config": {
+        "minDf": 3,
+        "maxDf": 0.95,
+        "ngramMax": 1
+      },
+      "vocabularySize": 12079,
+      "validation": {
+        "queries": 200,
+        "precisionAt5": 0.46900000000000014,
+        "mrr": 0.6831289682539682,
+        "medianLatencyMs": 3.040499999999838,
+        "p95LatencyMs": 6.089199999999892,
+        "byCategory": {
+          "comp.graphics": {
+            "queries": 25,
+            "precisionAt5": 0.42400000000000004,
+            "mrr": 0.649047619047619
+          },
+          "comp.sys.ibm.pc.hardware": {
+            "queries": 25,
+            "precisionAt5": 0.4319999999999999,
+            "mrr": 0.6133809523809524
+          },
+          "misc.forsale": {
+            "queries": 25,
+            "precisionAt5": 0.44800000000000006,
+            "mrr": 0.6880000000000002
+          },
+          "rec.autos": {
+            "queries": 25,
+            "precisionAt5": 0.376,
+            "mrr": 0.5844444444444445
+          },
+          "rec.sport.baseball": {
+            "queries": 25,
+            "precisionAt5": 0.5920000000000001,
+            "mrr": 0.795
+          },
+          "sci.med": {
+            "queries": 25,
+            "precisionAt5": 0.5039999999999999,
+            "mrr": 0.6843809523809523
+          },
+          "sci.space": {
+            "queries": 25,
+            "precisionAt5": 0.4640000000000001,
+            "mrr": 0.699111111111111
+          },
+          "talk.politics.guns": {
+            "queries": 25,
+            "precisionAt5": 0.5120000000000001,
+            "mrr": 0.7516666666666666
+          }
+        },
+        "errors": [
+          {
+            "query": "does anyone know of a vl bus video card based on the et4000 w32 card if so how",
+            "relevantCategory": "comp.graphics",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.7296000000001186,
+            "topCategory": "comp.sys.ibm.pc.hardware"
+          },
+          {
+            "query": "in email removed email removed mark stucky writes try graphigs from ibm it is an excellent package doug",
+            "relevantCategory": "comp.graphics",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.0161000000000513,
+            "topCategory": "sci.med"
+          },
+          {
+            "query": "in email removed email removed richard ottolini writes so they should sue the newspaper i got it from",
+            "relevantCategory": "comp.graphics",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.7934999999999945,
+            "topCategory": "sci.med"
+          },
+          {
+            "query": "i have a like new hayes jt fax for sale 125 or offer or trade wally waggoner email",
+            "relevantCategory": "comp.sys.ibm.pc.hardware",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.0222000000001117,
+            "topCategory": "sci.space"
+          },
+          {
+            "query": "email removed thomas d barrett writes someone else could you please comment on that i have just bought",
+            "relevantCategory": "comp.sys.ibm.pc.hardware",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.350599999999986,
+            "topCategory": "rec.autos"
+          },
+          {
+            "query": "email removed writes yep this was on the news great news for consumers bad news for intel",
+            "relevantCategory": "comp.sys.ibm.pc.hardware",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.039800000000014,
+            "topCategory": "sci.space"
+          },
+          {
+            "query": "kirsch pull down window shades white light filtering 73 25 wide 72 high can be cut to width",
+            "relevantCategory": "misc.forsale",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 1.8700000000001182,
+            "topCategory": "comp.graphics"
+          },
+          {
+            "query": "hi folks i have a 386 25 daughter board for zeos which i want to upgrade to 486",
+            "relevantCategory": "misc.forsale",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.1755000000000564,
+            "topCategory": "comp.graphics"
+          },
+          {
+            "query": "i want to start of list for syclone and typhoon owners if you are interested in participating please",
+            "relevantCategory": "rec.autos",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 4.21550000000002,
+            "topCategory": "rec.sport.baseball"
+          },
+          {
+            "query": "hello netters i would like to find out information about a device that is used on vans and",
+            "relevantCategory": "rec.autos",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 7.300799999999981,
+            "topCategory": "comp.sys.ibm.pc.hardware"
+          },
+          {
+            "query": "email removed allen tobias writes the girl's ok actually and she recovered well enough to go home i",
+            "relevantCategory": "rec.autos",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.576000000000022,
+            "topCategory": "talk.politics.guns"
+          },
+          {
+            "query": "email removed said it's not a cliche and unlike your comments below it's not a tautology it needn't",
+            "relevantCategory": "rec.sport.baseball",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.040499999999838,
+            "topCategory": "talk.politics.guns"
+          }
+        ],
+        "confusion": {
+          "comp.graphics": {
+            "comp.sys.ibm.pc.hardware": 3,
+            "comp.graphics": 13,
+            "sci.space": 1,
+            "rec.autos": 3,
+            "misc.forsale": 1,
+            "sci.med": 4
+          },
+          "comp.sys.ibm.pc.hardware": {
+            "misc.forsale": 3,
+            "comp.sys.ibm.pc.hardware": 13,
+            "comp.graphics": 2,
+            "sci.med": 2,
+            "rec.sport.baseball": 1,
+            "sci.space": 3,
+            "rec.autos": 1
+          },
+          "misc.forsale": {
+            "misc.forsale": 13,
+            "comp.sys.ibm.pc.hardware": 4,
+            "sci.med": 1,
+            "comp.graphics": 3,
+            "rec.sport.baseball": 3,
+            "rec.autos": 1
+          },
+          "rec.autos": {
+            "rec.sport.baseball": 2,
+            "rec.autos": 11,
+            "comp.sys.ibm.pc.hardware": 4,
+            "sci.med": 3,
+            "sci.space": 2,
+            "misc.forsale": 1,
+            "talk.politics.guns": 2
+          },
+          "rec.sport.baseball": {
+            "rec.sport.baseball": 18,
+            "sci.med": 1,
+            "comp.graphics": 1,
+            "talk.politics.guns": 2,
+            "comp.sys.ibm.pc.hardware": 1,
+            "misc.forsale": 1,
+            "rec.autos": 1
+          },
+          "sci.med": {
+            "sci.med": 14,
+            "comp.sys.ibm.pc.hardware": 3,
+            "sci.space": 3,
+            "misc.forsale": 2,
+            "rec.autos": 2,
+            "comp.graphics": 1
+          },
+          "sci.space": {
+            "sci.space": 15,
+            "rec.autos": 2,
+            "rec.sport.baseball": 2,
+            "comp.sys.ibm.pc.hardware": 3,
+            "sci.med": 3
+          },
+          "talk.politics.guns": {
+            "talk.politics.guns": 18,
+            "comp.sys.ibm.pc.hardware": 1,
+            "sci.med": 4,
+            "sci.space": 1,
+            "comp.graphics": 1
+          }
+        }
+      },
+      "manual": {
+        "queries": 32,
+        "precisionAt5": 0.8625,
+        "mrr": 0.9419642857142857,
+        "medianLatencyMs": 0.9497000000001208,
+        "p95LatencyMs": 1.4673999999999978,
+        "byCategory": {
+          "comp.graphics": {
+            "queries": 4,
+            "precisionAt5": 0.7,
+            "mrr": 0.7857142857142857
+          },
+          "comp.sys.ibm.pc.hardware": {
+            "queries": 4,
+            "precisionAt5": 0.55,
+            "mrr": 0.875
+          },
+          "misc.forsale": {
+            "queries": 4,
+            "precisionAt5": 0.8500000000000001,
+            "mrr": 0.875
+          },
+          "rec.autos": {
+            "queries": 4,
+            "precisionAt5": 0.95,
+            "mrr": 1
+          },
+          "rec.sport.baseball": {
+            "queries": 4,
+            "precisionAt5": 0.95,
+            "mrr": 1
+          },
+          "sci.med": {
+            "queries": 4,
+            "precisionAt5": 1,
+            "mrr": 1
+          },
+          "sci.space": {
+            "queries": 4,
+            "precisionAt5": 0.95,
+            "mrr": 1
+          },
+          "talk.politics.guns": {
+            "queries": 4,
+            "precisionAt5": 0.95,
+            "mrr": 1
+          }
+        },
+        "errors": [
+          {
+            "query": "graphics card display resolution",
+            "relevantCategory": "comp.graphics",
+            "precisionAt5": 0,
+            "reciprocalRank": 0.14285714285714285,
+            "latencyMs": 0.18449999999984357,
+            "topCategory": "misc.forsale"
+          },
+          {
+            "query": "hard drive controller for ibm pc",
+            "relevantCategory": "comp.sys.ibm.pc.hardware",
+            "precisionAt5": 0.4,
+            "reciprocalRank": 0.5,
+            "latencyMs": 1.1239000000000487,
+            "topCategory": "misc.forsale"
+          },
+          {
+            "query": "wanted to buy used electronics",
+            "relevantCategory": "misc.forsale",
+            "precisionAt5": 0.8,
+            "reciprocalRank": 0.5,
+            "latencyMs": 1.343499999999949,
+            "topCategory": "sci.space"
+          }
+        ],
+        "confusion": {
+          "comp.graphics": {
+            "comp.graphics": 3,
+            "misc.forsale": 1
+          },
+          "comp.sys.ibm.pc.hardware": {
+            "comp.sys.ibm.pc.hardware": 3,
+            "misc.forsale": 1
+          },
+          "misc.forsale": {
+            "misc.forsale": 3,
+            "sci.space": 1
+          },
+          "rec.autos": {
+            "rec.autos": 4
+          },
+          "rec.sport.baseball": {
+            "rec.sport.baseball": 4
+          },
+          "sci.med": {
+            "sci.med": 4
+          },
+          "sci.space": {
+            "sci.space": 4
+          },
+          "talk.politics.guns": {
+            "talk.politics.guns": 4
+          }
+        }
+      }
+    },
+    {
+      "name": "unigram_bigram",
+      "config": {
+        "minDf": 3,
+        "maxDf": 0.95,
+        "ngramMax": 2
+      },
+      "vocabularySize": 39985,
+      "validation": {
+        "queries": 200,
+        "precisionAt5": 0.425,
+        "mrr": 0.6368908730158729,
+        "medianLatencyMs": 3.516599999999926,
+        "p95LatencyMs": 6.690900000000056,
+        "byCategory": {
+          "comp.graphics": {
+            "queries": 25,
+            "precisionAt5": 0.3760000000000001,
+            "mrr": 0.5570476190476191
+          },
+          "comp.sys.ibm.pc.hardware": {
+            "queries": 25,
+            "precisionAt5": 0.29600000000000004,
+            "mrr": 0.43249206349206337
+          },
+          "misc.forsale": {
+            "queries": 25,
+            "precisionAt5": 0.52,
+            "mrr": 0.79
+          },
+          "rec.autos": {
+            "queries": 25,
+            "precisionAt5": 0.368,
+            "mrr": 0.6044444444444445
+          },
+          "rec.sport.baseball": {
+            "queries": 25,
+            "precisionAt5": 0.45600000000000007,
+            "mrr": 0.6596031746031745
+          },
+          "sci.med": {
+            "queries": 25,
+            "precisionAt5": 0.4479999999999999,
+            "mrr": 0.739047619047619
+          },
+          "sci.space": {
+            "queries": 25,
+            "precisionAt5": 0.45600000000000007,
+            "mrr": 0.6343333333333333
+          },
+          "talk.politics.guns": {
+            "queries": 25,
+            "precisionAt5": 0.4800000000000001,
+            "mrr": 0.6781587301587301
+          }
+        },
+        "errors": [
+          {
+            "query": "hello i am looking to add voice input capability to a user interface i am developing on an",
+            "relevantCategory": "comp.graphics",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.1347999999998137,
+            "topCategory": "sci.space"
+          },
+          {
+            "query": "does anyone know of a vl bus video card based on the et4000 w32 card if so how",
+            "relevantCategory": "comp.graphics",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.6334999999999127,
+            "topCategory": "comp.sys.ibm.pc.hardware"
+          },
+          {
+            "query": "in email removed email removed mark stucky writes try graphigs from ibm it is an excellent package doug",
+            "relevantCategory": "comp.graphics",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.7291999999997643,
+            "topCategory": "sci.med"
+          },
+          {
+            "query": "in email removed email removed richard ottolini writes so they should sue the newspaper i got it from",
+            "relevantCategory": "comp.graphics",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 4.491799999999785,
+            "topCategory": "sci.med"
+          },
+          {
+            "query": "i have 2 new smc 270e arcnet cards for sale they are brand new 50 each email removed",
+            "relevantCategory": "comp.sys.ibm.pc.hardware",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.7314000000001215,
+            "topCategory": "misc.forsale"
+          },
+          {
+            "query": "this past winter i found myself spending a ridiculous amout of time in front of my computer since",
+            "relevantCategory": "comp.sys.ibm.pc.hardware",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.4115999999999076,
+            "topCategory": "talk.politics.guns"
+          },
+          {
+            "query": "where did you get this driver please please please i've been waiting months for this",
+            "relevantCategory": "comp.sys.ibm.pc.hardware",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 2.4056000000000495,
+            "topCategory": "sci.space"
+          },
+          {
+            "query": "i have a like new hayes jt fax for sale 125 or offer or trade wally waggoner email",
+            "relevantCategory": "comp.sys.ibm.pc.hardware",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.4646999999999935,
+            "topCategory": "misc.forsale"
+          },
+          {
+            "query": "not true dial 811 and listen to the recording if you get it then your phone was recognized",
+            "relevantCategory": "misc.forsale",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 4.614100000000235,
+            "topCategory": "sci.space"
+          },
+          {
+            "query": "i want to start of list for syclone and typhoon owners if you are interested in participating please",
+            "relevantCategory": "rec.autos",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 4.544199999999819,
+            "topCategory": "comp.sys.ibm.pc.hardware"
+          },
+          {
+            "query": "in email removed email removed franklinkl writes right in the thirties both buick and packard had two spares",
+            "relevantCategory": "rec.autos",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.99330000000009,
+            "topCategory": "sci.med"
+          },
+          {
+            "query": "hello netters i would like to find out information about a device that is used on vans and",
+            "relevantCategory": "rec.autos",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 5.321699999999964,
+            "topCategory": "comp.graphics"
+          }
+        ],
+        "confusion": {
+          "comp.graphics": {
+            "comp.sys.ibm.pc.hardware": 2,
+            "sci.space": 3,
+            "comp.graphics": 10,
+            "sci.med": 6,
+            "rec.autos": 2,
+            "talk.politics.guns": 1,
+            "rec.sport.baseball": 1
+          },
+          "comp.sys.ibm.pc.hardware": {
+            "misc.forsale": 5,
+            "comp.graphics": 3,
+            "comp.sys.ibm.pc.hardware": 6,
+            "rec.autos": 3,
+            "talk.politics.guns": 1,
+            "rec.sport.baseball": 2,
+            "sci.space": 3,
+            "sci.med": 2
+          },
+          "misc.forsale": {
+            "misc.forsale": 18,
+            "comp.sys.ibm.pc.hardware": 3,
+            "comp.graphics": 3,
+            "sci.space": 1
+          },
+          "rec.autos": {
+            "comp.sys.ibm.pc.hardware": 1,
+            "rec.autos": 11,
+            "sci.med": 4,
+            "comp.graphics": 4,
+            "sci.space": 3,
+            "rec.sport.baseball": 1,
+            "misc.forsale": 1
+          },
+          "rec.sport.baseball": {
+            "rec.sport.baseball": 14,
+            "sci.med": 2,
+            "sci.space": 2,
+            "talk.politics.guns": 2,
+            "comp.sys.ibm.pc.hardware": 2,
+            "misc.forsale": 2,
+            "rec.autos": 1
+          },
+          "sci.med": {
+            "sci.med": 15,
+            "comp.sys.ibm.pc.hardware": 2,
+            "talk.politics.guns": 2,
+            "rec.autos": 4,
+            "comp.graphics": 2
+          },
+          "sci.space": {
+            "sci.med": 6,
+            "comp.graphics": 1,
+            "sci.space": 12,
+            "rec.autos": 3,
+            "rec.sport.baseball": 2,
+            "comp.sys.ibm.pc.hardware": 1
+          },
+          "talk.politics.guns": {
+            "talk.politics.guns": 15,
+            "rec.sport.baseball": 1,
+            "sci.med": 6,
+            "rec.autos": 2,
+            "misc.forsale": 1
+          }
+        }
+      },
+      "manual": {
+        "queries": 32,
+        "precisionAt5": 0.8562500000000001,
+        "mrr": 0.959375,
+        "medianLatencyMs": 1.0201999999999316,
+        "p95LatencyMs": 1.7078999999998814,
+        "byCategory": {
+          "comp.graphics": {
+            "queries": 4,
+            "precisionAt5": 0.7999999999999999,
+            "mrr": 1
+          },
+          "comp.sys.ibm.pc.hardware": {
+            "queries": 4,
+            "precisionAt5": 0.5,
+            "mrr": 0.875
+          },
+          "misc.forsale": {
+            "queries": 4,
+            "precisionAt5": 0.65,
+            "mrr": 0.8
+          },
+          "rec.autos": {
+            "queries": 4,
+            "precisionAt5": 0.8999999999999999,
+            "mrr": 1
+          },
+          "rec.sport.baseball": {
+            "queries": 4,
+            "precisionAt5": 1,
+            "mrr": 1
+          },
+          "sci.med": {
+            "queries": 4,
+            "precisionAt5": 1,
+            "mrr": 1
+          },
+          "sci.space": {
+            "queries": 4,
+            "precisionAt5": 1,
+            "mrr": 1
+          },
+          "talk.politics.guns": {
+            "queries": 4,
+            "precisionAt5": 1,
+            "mrr": 1
+          }
+        },
+        "errors": [
+          {
+            "query": "wanted to buy used electronics",
+            "relevantCategory": "misc.forsale",
+            "precisionAt5": 0.2,
+            "reciprocalRank": 0.2,
+            "latencyMs": 1.4823999999998705,
+            "topCategory": "sci.space"
+          },
+          {
+            "query": "hard drive controller for ibm pc",
+            "relevantCategory": "comp.sys.ibm.pc.hardware",
+            "precisionAt5": 0.4,
+            "reciprocalRank": 0.5,
+            "latencyMs": 1.1675999999997657,
+            "topCategory": "comp.graphics"
+          }
+        ],
+        "confusion": {
+          "comp.graphics": {
+            "comp.graphics": 4
+          },
+          "comp.sys.ibm.pc.hardware": {
+            "comp.sys.ibm.pc.hardware": 3,
+            "comp.graphics": 1
+          },
+          "misc.forsale": {
+            "misc.forsale": 3,
+            "sci.space": 1
+          },
+          "rec.autos": {
+            "rec.autos": 4
+          },
+          "rec.sport.baseball": {
+            "rec.sport.baseball": 4
+          },
+          "sci.med": {
+            "sci.med": 4
+          },
+          "sci.space": {
+            "sci.space": 4
+          },
+          "talk.politics.guns": {
+            "talk.politics.guns": 4
+          }
+        }
+      }
+    },
+    {
+      "name": "low_min_df",
+      "config": {
+        "minDf": 2,
+        "maxDf": 0.95,
+        "ngramMax": 2
+      },
+      "vocabularySize": 74495,
+      "validation": {
+        "queries": 200,
+        "precisionAt5": 0.4340000000000001,
+        "mrr": 0.6531884920634918,
+        "medianLatencyMs": 3.5509000000001834,
+        "p95LatencyMs": 6.785700000000361,
+        "byCategory": {
+          "comp.graphics": {
+            "queries": 25,
+            "precisionAt5": 0.408,
+            "mrr": 0.5753809523809524
+          },
+          "comp.sys.ibm.pc.hardware": {
+            "queries": 25,
+            "precisionAt5": 0.31200000000000006,
+            "mrr": 0.4629999999999999
+          },
+          "misc.forsale": {
+            "queries": 25,
+            "precisionAt5": 0.4799999999999999,
+            "mrr": 0.8056666666666668
+          },
+          "rec.autos": {
+            "queries": 25,
+            "precisionAt5": 0.3760000000000001,
+            "mrr": 0.6757142857142858
+          },
+          "rec.sport.baseball": {
+            "queries": 25,
+            "precisionAt5": 0.4960000000000001,
+            "mrr": 0.6701587301587302
+          },
+          "sci.med": {
+            "queries": 25,
+            "precisionAt5": 0.43999999999999984,
+            "mrr": 0.7070476190476189
+          },
+          "sci.space": {
+            "queries": 25,
+            "precisionAt5": 0.488,
+            "mrr": 0.6824444444444444
+          },
+          "talk.politics.guns": {
+            "queries": 25,
+            "precisionAt5": 0.47200000000000003,
+            "mrr": 0.6460952380952381
+          }
+        },
+        "errors": [
+          {
+            "query": "hello i am looking to add voice input capability to a user interface i am developing on an",
+            "relevantCategory": "comp.graphics",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.3436000000001513,
+            "topCategory": "sci.space"
+          },
+          {
+            "query": "in email removed email removed mark stucky writes try graphigs from ibm it is an excellent package doug",
+            "relevantCategory": "comp.graphics",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.796100000000024,
+            "topCategory": "sci.med"
+          },
+          {
+            "query": "i have 2 new smc 270e arcnet cards for sale they are brand new 50 each email removed",
+            "relevantCategory": "comp.sys.ibm.pc.hardware",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.8548000000000684,
+            "topCategory": "misc.forsale"
+          },
+          {
+            "query": "where did you get this driver please please please i've been waiting months for this",
+            "relevantCategory": "comp.sys.ibm.pc.hardware",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 2.4018999999998414,
+            "topCategory": "sci.space"
+          },
+          {
+            "query": "i have a like new hayes jt fax for sale 125 or offer or trade wally waggoner email",
+            "relevantCategory": "comp.sys.ibm.pc.hardware",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.5057999999999083,
+            "topCategory": "misc.forsale"
+          },
+          {
+            "query": "not true dial 811 and listen to the recording if you get it then your phone was recognized",
+            "relevantCategory": "misc.forsale",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 4.564300000000003,
+            "topCategory": "sci.space"
+          },
+          {
+            "query": "i want to start of list for syclone and typhoon owners if you are interested in participating please",
+            "relevantCategory": "rec.autos",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 4.617699999999786,
+            "topCategory": "comp.sys.ibm.pc.hardware"
+          },
+          {
+            "query": "in email removed email removed franklinkl writes right in the thirties both buick and packard had two spares",
+            "relevantCategory": "rec.autos",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.7318999999997686,
+            "topCategory": "sci.med"
+          },
+          {
+            "query": "email removed allen tobias writes the girl's ok actually and she recovered well enough to go home i",
+            "relevantCategory": "rec.autos",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 4.030099999999948,
+            "topCategory": "sci.space"
+          },
+          {
+            "query": "email removed craig eid writes interesting article craig it's amazing how hard it is to get baseball teams",
+            "relevantCategory": "rec.sport.baseball",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.4768000000003667,
+            "topCategory": "sci.med"
+          },
+          {
+            "query": "this leads me to believe that it's not really a rabbitball year and that we've just had a",
+            "relevantCategory": "rec.sport.baseball",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.943699999999808,
+            "topCategory": "comp.sys.ibm.pc.hardware"
+          },
+          {
+            "query": "i saw a lifetime medical television show a few months back on travel medicine it briefly mentioned some",
+            "relevantCategory": "sci.med",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 2.934599999999591,
+            "topCategory": "rec.autos"
+          }
+        ],
+        "confusion": {
+          "comp.graphics": {
+            "comp.sys.ibm.pc.hardware": 4,
+            "comp.graphics": 10,
+            "sci.space": 1,
+            "sci.med": 8,
+            "rec.sport.baseball": 1,
+            "rec.autos": 1
+          },
+          "comp.sys.ibm.pc.hardware": {
+            "misc.forsale": 6,
+            "comp.graphics": 4,
+            "comp.sys.ibm.pc.hardware": 7,
+            "rec.autos": 1,
+            "talk.politics.guns": 1,
+            "rec.sport.baseball": 2,
+            "sci.space": 3,
+            "sci.med": 1
+          },
+          "misc.forsale": {
+            "misc.forsale": 19,
+            "comp.sys.ibm.pc.hardware": 3,
+            "comp.graphics": 2,
+            "sci.space": 1
+          },
+          "rec.autos": {
+            "comp.sys.ibm.pc.hardware": 2,
+            "rec.autos": 14,
+            "sci.med": 3,
+            "comp.graphics": 1,
+            "sci.space": 3,
+            "rec.sport.baseball": 1,
+            "talk.politics.guns": 1
+          },
+          "rec.sport.baseball": {
+            "rec.sport.baseball": 14,
+            "sci.med": 3,
+            "comp.graphics": 1,
+            "comp.sys.ibm.pc.hardware": 2,
+            "talk.politics.guns": 2,
+            "sci.space": 1,
+            "rec.autos": 1,
+            "misc.forsale": 1
+          },
+          "sci.med": {
+            "sci.med": 14,
+            "comp.sys.ibm.pc.hardware": 2,
+            "talk.politics.guns": 1,
+            "sci.space": 1,
+            "rec.autos": 4,
+            "comp.graphics": 2,
+            "misc.forsale": 1
+          },
+          "sci.space": {
+            "sci.med": 5,
+            "comp.graphics": 2,
+            "sci.space": 13,
+            "rec.autos": 2,
+            "rec.sport.baseball": 2,
+            "comp.sys.ibm.pc.hardware": 1
+          },
+          "talk.politics.guns": {
+            "talk.politics.guns": 14,
+            "rec.sport.baseball": 2,
+            "sci.med": 6,
+            "rec.autos": 1,
+            "comp.graphics": 1,
+            "misc.forsale": 1
+          }
+        }
+      },
+      "manual": {
+        "queries": 32,
+        "precisionAt5": 0.8625,
+        "mrr": 0.9375,
+        "medianLatencyMs": 1.0397000000002663,
+        "p95LatencyMs": 1.6026999999994587,
+        "byCategory": {
+          "comp.graphics": {
+            "queries": 4,
+            "precisionAt5": 0.7999999999999999,
+            "mrr": 1
+          },
+          "comp.sys.ibm.pc.hardware": {
+            "queries": 4,
+            "precisionAt5": 0.55,
+            "mrr": 0.875
+          },
+          "misc.forsale": {
+            "queries": 4,
+            "precisionAt5": 0.6,
+            "mrr": 0.625
+          },
+          "rec.autos": {
+            "queries": 4,
+            "precisionAt5": 0.95,
+            "mrr": 1
+          },
+          "rec.sport.baseball": {
+            "queries": 4,
+            "precisionAt5": 1,
+            "mrr": 1
+          },
+          "sci.med": {
+            "queries": 4,
+            "precisionAt5": 1,
+            "mrr": 1
+          },
+          "sci.space": {
+            "queries": 4,
+            "precisionAt5": 1,
+            "mrr": 1
+          },
+          "talk.politics.guns": {
+            "queries": 4,
+            "precisionAt5": 1,
+            "mrr": 1
+          }
+        },
+        "errors": [
+          {
+            "query": "wanted to buy used electronics",
+            "relevantCategory": "misc.forsale",
+            "precisionAt5": 0,
+            "reciprocalRank": 0.16666666666666666,
+            "latencyMs": 1.512300000000323,
+            "topCategory": "comp.graphics"
+          },
+          {
+            "query": "shipping payment for second hand sale",
+            "relevantCategory": "misc.forsale",
+            "precisionAt5": 0.6,
+            "reciprocalRank": 0.3333333333333333,
+            "latencyMs": 1.195199999999204,
+            "topCategory": "comp.graphics"
+          },
+          {
+            "query": "hard drive controller for ibm pc",
+            "relevantCategory": "comp.sys.ibm.pc.hardware",
+            "precisionAt5": 0.4,
+            "reciprocalRank": 0.5,
+            "latencyMs": 1.238299999999981,
+            "topCategory": "comp.graphics"
+          }
+        ],
+        "confusion": {
+          "comp.graphics": {
+            "comp.graphics": 4
+          },
+          "comp.sys.ibm.pc.hardware": {
+            "comp.sys.ibm.pc.hardware": 3,
+            "comp.graphics": 1
+          },
+          "misc.forsale": {
+            "misc.forsale": 2,
+            "comp.graphics": 2
+          },
+          "rec.autos": {
+            "rec.autos": 4
+          },
+          "rec.sport.baseball": {
+            "rec.sport.baseball": 4
+          },
+          "sci.med": {
+            "sci.med": 4
+          },
+          "sci.space": {
+            "sci.space": 4
+          },
+          "talk.politics.guns": {
+            "talk.politics.guns": 4
+          }
+        }
+      }
+    },
+    {
+      "name": "high_min_df_low_max_df",
+      "config": {
+        "minDf": 5,
+        "maxDf": 0.85,
+        "ngramMax": 2
+      },
+      "vocabularySize": 20903,
+      "validation": {
+        "queries": 200,
+        "precisionAt5": 0.402,
+        "mrr": 0.6120059523809522,
+        "medianLatencyMs": 3.1080999999994674,
+        "p95LatencyMs": 5.899400000000242,
+        "byCategory": {
+          "comp.graphics": {
+            "queries": 25,
+            "precisionAt5": 0.3360000000000001,
+            "mrr": 0.5525396825396826
+          },
+          "comp.sys.ibm.pc.hardware": {
+            "queries": 25,
+            "precisionAt5": 0.32,
+            "mrr": 0.3993809523809524
+          },
+          "misc.forsale": {
+            "queries": 25,
+            "precisionAt5": 0.504,
+            "mrr": 0.7416666666666667
+          },
+          "rec.autos": {
+            "queries": 25,
+            "precisionAt5": 0.344,
+            "mrr": 0.604047619047619
+          },
+          "rec.sport.baseball": {
+            "queries": 25,
+            "precisionAt5": 0.4,
+            "mrr": 0.6602698412698413
+          },
+          "sci.med": {
+            "queries": 25,
+            "precisionAt5": 0.42399999999999993,
+            "mrr": 0.6773809523809523
+          },
+          "sci.space": {
+            "queries": 25,
+            "precisionAt5": 0.44,
+            "mrr": 0.6394285714285713
+          },
+          "talk.politics.guns": {
+            "queries": 25,
+            "precisionAt5": 0.44799999999999995,
+            "mrr": 0.6213333333333333
+          }
+        },
+        "errors": [
+          {
+            "query": "hello i am looking to add voice input capability to a user interface i am developing on an",
+            "relevantCategory": "comp.graphics",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 5.745999999999185,
+            "topCategory": "sci.space"
+          },
+          {
+            "query": "in email removed email removed mark stucky writes try graphigs from ibm it is an excellent package doug",
+            "relevantCategory": "comp.graphics",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.837300000000141,
+            "topCategory": "sci.med"
+          },
+          {
+            "query": "in email removed email removed richard ottolini writes so they should sue the newspaper i got it from",
+            "relevantCategory": "comp.graphics",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.735899999999674,
+            "topCategory": "sci.med"
+          },
+          {
+            "query": "i have 2 new smc 270e arcnet cards for sale they are brand new 50 each email removed",
+            "relevantCategory": "comp.sys.ibm.pc.hardware",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.7619999999997162,
+            "topCategory": "misc.forsale"
+          },
+          {
+            "query": "this past winter i found myself spending a ridiculous amout of time in front of my computer since",
+            "relevantCategory": "comp.sys.ibm.pc.hardware",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.483999999999469,
+            "topCategory": "talk.politics.guns"
+          },
+          {
+            "query": "where did you get this driver please please please i've been waiting months for this",
+            "relevantCategory": "comp.sys.ibm.pc.hardware",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 2.433899999999994,
+            "topCategory": "comp.graphics"
+          },
+          {
+            "query": "i have a like new hayes jt fax for sale 125 or offer or trade wally waggoner email",
+            "relevantCategory": "comp.sys.ibm.pc.hardware",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.4304000000001906,
+            "topCategory": "misc.forsale"
+          },
+          {
+            "query": "email removed writes yep this was on the news great news for consumers bad news for intel",
+            "relevantCategory": "comp.sys.ibm.pc.hardware",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 2.9655000000002474,
+            "topCategory": "sci.space"
+          },
+          {
+            "query": "not true dial 811 and listen to the recording if you get it then your phone was recognized",
+            "relevantCategory": "misc.forsale",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.6556000000000495,
+            "topCategory": "sci.space"
+          },
+          {
+            "query": "hi folks i have a 386 25 daughter board for zeos which i want to upgrade to 486",
+            "relevantCategory": "misc.forsale",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 3.0028000000002066,
+            "topCategory": "comp.sys.ibm.pc.hardware"
+          },
+          {
+            "query": "i want to start of list for syclone and typhoon owners if you are interested in participating please",
+            "relevantCategory": "rec.autos",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 7.540799999999763,
+            "topCategory": "comp.sys.ibm.pc.hardware"
+          },
+          {
+            "query": "hello netters i would like to find out information about a device that is used on vans and",
+            "relevantCategory": "rec.autos",
+            "precisionAt5": 0,
+            "reciprocalRank": 0,
+            "latencyMs": 4.570999999999913,
+            "topCategory": "comp.sys.ibm.pc.hardware"
+          }
+        ],
+        "confusion": {
+          "comp.graphics": {
+            "comp.graphics": 10,
+            "sci.space": 3,
+            "rec.autos": 3,
+            "sci.med": 5,
+            "comp.sys.ibm.pc.hardware": 2,
+            "talk.politics.guns": 1,
+            "rec.sport.baseball": 1
+          },
+          "comp.sys.ibm.pc.hardware": {
+            "misc.forsale": 6,
+            "comp.sys.ibm.pc.hardware": 5,
+            "comp.graphics": 5,
+            "rec.autos": 2,
+            "talk.politics.guns": 1,
+            "rec.sport.baseball": 3,
+            "sci.med": 1,
+            "sci.space": 2
+          },
+          "misc.forsale": {
+            "misc.forsale": 16,
+            "comp.sys.ibm.pc.hardware": 4,
+            "comp.graphics": 3,
+            "sci.space": 1,
+            "rec.sport.baseball": 1
+          },
+          "rec.autos": {
+            "comp.sys.ibm.pc.hardware": 2,
+            "rec.autos": 11,
+            "comp.graphics": 4,
+            "sci.med": 4,
+            "rec.sport.baseball": 1,
+            "sci.space": 3
+          },
+          "rec.sport.baseball": {
+            "rec.sport.baseball": 14,
+            "sci.med": 3,
+            "comp.graphics": 1,
+            "comp.sys.ibm.pc.hardware": 3,
+            "misc.forsale": 2,
+            "rec.autos": 1,
+            "talk.politics.guns": 1
+          },
+          "sci.med": {
+            "sci.med": 14,
+            "comp.sys.ibm.pc.hardware": 2,
+            "rec.autos": 4,
+            "talk.politics.guns": 3,
+            "comp.graphics": 2
+          },
+          "sci.space": {
+            "sci.med": 7,
+            "comp.graphics": 1,
+            "sci.space": 12,
+            "rec.autos": 3,
+            "rec.sport.baseball": 2
+          },
+          "talk.politics.guns": {
+            "talk.politics.guns": 13,
+            "rec.sport.baseball": 1,
+            "sci.med": 6,
+            "rec.autos": 3,
+            "sci.space": 1,
+            "misc.forsale": 1
+          }
+        }
+      },
+      "manual": {
+        "queries": 32,
+        "precisionAt5": 0.8562500000000001,
+        "mrr": 0.96875,
+        "medianLatencyMs": 0.8708999999998923,
+        "p95LatencyMs": 1.3350999999993292,
+        "byCategory": {
+          "comp.graphics": {
+            "queries": 4,
+            "precisionAt5": 0.7999999999999999,
+            "mrr": 1
+          },
+          "comp.sys.ibm.pc.hardware": {
+            "queries": 4,
+            "precisionAt5": 0.55,
+            "mrr": 0.875
+          },
+          "misc.forsale": {
+            "queries": 4,
+            "precisionAt5": 0.65,
+            "mrr": 0.875
+          },
+          "rec.autos": {
+            "queries": 4,
+            "precisionAt5": 0.8999999999999999,
+            "mrr": 1
+          },
+          "rec.sport.baseball": {
+            "queries": 4,
+            "precisionAt5": 1,
+            "mrr": 1
+          },
+          "sci.med": {
+            "queries": 4,
+            "precisionAt5": 1,
+            "mrr": 1
+          },
+          "sci.space": {
+            "queries": 4,
+            "precisionAt5": 1,
+            "mrr": 1
+          },
+          "talk.politics.guns": {
+            "queries": 4,
+            "precisionAt5": 0.95,
+            "mrr": 1
+          }
+        },
+        "errors": [
+          {
+            "query": "hard drive controller for ibm pc",
+            "relevantCategory": "comp.sys.ibm.pc.hardware",
+            "precisionAt5": 0.4,
+            "reciprocalRank": 0.5,
+            "latencyMs": 1.0614000000005035,
+            "topCategory": "comp.graphics"
+          },
+          {
+            "query": "shipping payment for second hand sale",
+            "relevantCategory": "misc.forsale",
+            "precisionAt5": 0.6,
+            "reciprocalRank": 0.5,
+            "latencyMs": 0.8984999999993306,
+            "topCategory": "comp.graphics"
+          }
+        ],
+        "confusion": {
+          "comp.graphics": {
+            "comp.graphics": 4
+          },
+          "comp.sys.ibm.pc.hardware": {
+            "comp.sys.ibm.pc.hardware": 3,
+            "comp.graphics": 1
+          },
+          "misc.forsale": {
+            "misc.forsale": 3,
+            "comp.graphics": 1
+          },
+          "rec.autos": {
+            "rec.autos": 4
+          },
+          "rec.sport.baseball": {
+            "rec.sport.baseball": 4
+          },
+          "sci.med": {
+            "sci.med": 4
+          },
+          "sci.space": {
+            "sci.space": 4
+          },
+          "talk.politics.guns": {
+            "talk.politics.guns": 4
+          }
+        }
+      }
+    }
+  ],
+  "heldOutQueryCount": 200,
+  "manualQueryCount": 32
+}
