@@ -281,6 +281,17 @@ describe('authentication vertical slice', () => {
     expect(delivery.messages[0]?.recipient).toBe('admin@example.com');
   });
 
+  it('returns the password reset link to the requesting patient web origin', async () => {
+    const delivery = new MemoryRecoveryDelivery();
+    const server = app(repository, delivery);
+    const result = await request(server).post('/api/v1/auth/password/forgot')
+      .set('origin', 'http://localhost:5174').send({ identifier: 'admin' });
+    expect(result.status).toBe(202);
+    const url = new URL(delivery.messages[0]!.resetUrl);
+    expect(`${url.origin}${url.pathname}`).toBe('http://localhost:5174/reset-password');
+    expect(new URLSearchParams(url.hash.slice(1)).get('token')).toBeTruthy();
+  });
+
   it('resets a password with a one-time opaque link and rejects replay', async () => {
     const delivery = new MemoryRecoveryDelivery();
     const server = app(repository, delivery);

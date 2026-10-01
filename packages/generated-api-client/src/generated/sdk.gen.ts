@@ -2,7 +2,7 @@
 
 import { client } from './client.gen.js';
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client/index.js';
-import type { AddClinicalDiagnosisData, AddClinicalDiagnosisErrors, AddClinicalDiagnosisResponses, AddClinicalVitalSignsData, AddClinicalVitalSignsErrors, AddClinicalVitalSignsResponses, AddManualInvoiceItemData, AddManualInvoiceItemErrors, AddManualInvoiceItemResponses, AddPrescriptionMedicineData, AddPrescriptionMedicineErrors, AddPrescriptionMedicineResponses, AmendClinicalEncounterData, AmendClinicalEncounterErrors, AmendClinicalEncounterResponses, BookOnlineAppointmentData, BookOnlineAppointmentErrors, BookOnlineAppointmentResponses, BookStaffAppointmentData, BookStaffAppointmentErrors, BookStaffAppointmentResponses, CallNextQueueTicketData, CallNextQueueTicketErrors, CallNextQueueTicketResponses, CancelAdminAppointmentData, CancelAdminAppointmentErrors, CancelAdminAppointmentResponses, CancelEncounterData, CancelEncounterErrors, CancelEncounterResponses, CancelMyAppointmentData, CancelMyAppointmentErrors, CancelMyAppointmentResponses, CancelPatientLinkRequestData, CancelPatientLinkRequestErrors, CancelPatientLinkRequestResponses, CancelPharmacyDispensationData, CancelPharmacyDispensationErrors, CancelPharmacyDispensationResponses, CancelPharmacyPrescriptionData, CancelPharmacyPrescriptionErrors, CancelPharmacyPrescriptionResponses, ChangePasswordData, ChangePasswordErrors, ChangePasswordResponses, CheckInAppointmentData, CheckInAppointmentErrors, CheckInAppointmentResponses, CompleteClinicalEncounterData, CompleteClinicalEncounterErrors, CompleteClinicalEncounterResponses, CompletePharmacyDispensationData, CompletePharmacyDispensationErrors, CompletePharmacyDispensationResponses, ConfirmAppointmentData, ConfirmAppointmentErrors, ConfirmAppointmentResponses, CreateCatalogRoomData, CreateCatalogRoomErrors, CreateCatalogRoomResponses, CreateCatalogServiceData, CreateCatalogServiceErrors, CreateCatalogServiceResponses, CreateEncounterInvoiceData, CreateEncounterInvoiceErrors, CreateEncounterInvoiceResponses, CreateEncounterPrescriptionData, CreateEncounterPrescriptionErrors, CreateEncounterPrescriptionResponses, CreatePatientData, CreatePatientErrors, CreatePatientResponses, CreatePharmacyBatchData, CreatePharmacyBatchErrors, CreatePharmacyBatchResponses, CreatePharmacyLocationData, CreatePharmacyLocationErrors, CreatePharmacyLocationResponses, CreatePharmacyMedicineData, CreatePharmacyMedicineErrors, CreatePharmacyMedicineResponses, CreateStaffData, CreateStaffErrors, CreateStaffResponses, CreateWalkInEncounterData, CreateWalkInEncounterErrors, CreateWalkInEncounterResponses, CreateWorkingScheduleData, CreateWorkingScheduleErrors, CreateWorkingScheduleResponses, DecidePatientLinkRequestData, DecidePatientLinkRequestErrors, DecidePatientLinkRequestResponses, DispensePharmacyItemData, DispensePharmacyItemErrors, DispensePharmacyItemResponses, FinalizeClinicalServiceResultData, FinalizeClinicalServiceResultErrors, FinalizeClinicalServiceResultResponses, FindPatientDuplicatesData, FindPatientDuplicatesErrors, FindPatientDuplicatesResponses, GenerateWorkingScheduleSlotsData, GenerateWorkingScheduleSlotsErrors, GenerateWorkingScheduleSlotsResponses, GetAuthJwksData, GetAuthJwksResponses, GetBillingWorkspaceData, GetBillingWorkspaceErrors, GetBillingWorkspaceResponses, GetCatalogReferenceDataData, GetCatalogReferenceDataErrors, GetCatalogReferenceDataResponses, GetClinicalEncounterData, GetClinicalEncounterErrors, GetClinicalEncounterResponses, GetInventoryReportData, GetInventoryReportErrors, GetInventoryReportResponses, GetInvoiceData, GetInvoiceErrors, GetInvoiceResponses, GetLivenessData, GetLivenessResponses, GetManagedPatientLinkReferenceDataData, GetManagedPatientLinkReferenceDataErrors, GetManagedPatientLinkReferenceDataResponses, GetOperationsReportData, GetOperationsReportErrors, GetOperationsReportResponses, GetPatientAccessData, GetPatientAccessErrors, GetPatientAccessResponses, GetPatientClinicalRecordData, GetPatientClinicalRecordErrors, GetPatientClinicalRecordResponses, GetPatientClinicalSummaryData, GetPatientClinicalSummaryErrors, GetPatientClinicalSummaryResponses, GetPatientData, GetPatientErrors, GetPatientLinkReferenceDataData, GetPatientLinkReferenceDataErrors, GetPatientLinkReferenceDataResponses, GetPatientReferenceDataData, GetPatientReferenceDataErrors, GetPatientReferenceDataResponses, GetPatientResponses, GetPharmacyPrescriptionData, GetPharmacyPrescriptionErrors, GetPharmacyPrescriptionResponses, GetPharmacyWorkspaceData, GetPharmacyWorkspaceErrors, GetPharmacyWorkspaceResponses, GetReadinessData, GetReadinessErrors, GetReadinessResponses, GetReceptionWorkspaceData, GetReceptionWorkspaceErrors, GetReceptionWorkspaceResponses, GetRevenueReportData, GetRevenueReportErrors, GetRevenueReportResponses, GetSchedulingData, GetSchedulingErrors, GetSchedulingResponses, GetStaffData, GetStaffErrors, GetStaffReferenceDataData, GetStaffReferenceDataErrors, GetStaffReferenceDataResponses, GetStaffResponses, GrantStaffRoleData, GrantStaffRoleErrors, GrantStaffRoleResponses, IssueInvoiceData, IssueInvoiceErrors, IssueInvoiceResponses, IssuePharmacyPrescriptionData, IssuePharmacyPrescriptionErrors, IssuePharmacyPrescriptionResponses, ListAdminAppointmentsData, ListAdminAppointmentsErrors, ListAdminAppointmentsResponses, ListBillingBranchesData, ListBillingBranchesErrors, ListBillingBranchesResponses, ListCatalogRoomsData, ListCatalogRoomsErrors, ListCatalogRoomsResponses, ListCatalogServicesData, ListCatalogServicesErrors, ListCatalogServicesResponses, ListClinicalBranchesData, ListClinicalBranchesErrors, ListClinicalBranchesResponses, ListClinicalEncountersData, ListClinicalEncountersErrors, ListClinicalEncountersResponses, ListMyAppointmentsData, ListMyAppointmentsErrors, ListMyAppointmentsResponses, ListPatientClinicalRecordsData, ListPatientClinicalRecordsErrors, ListPatientClinicalRecordsResponses, ListPatientLinkRequestsData, ListPatientLinkRequestsErrors, ListPatientLinkRequestsResponses, ListPharmacyBranchesData, ListPharmacyBranchesErrors, ListPharmacyBranchesResponses, ListPublicAvailabilityData, ListPublicAvailabilityErrors, ListPublicAvailabilityResponses, ListPublicBranchesData, ListPublicBranchesResponses, ListPublicDoctorsData, ListPublicDoctorsErrors, ListPublicDoctorsResponses, ListPublicServicesData, ListPublicServicesErrors, ListPublicServicesResponses, ListPublicSpecialtiesData, ListPublicSpecialtiesResponses, ListReceptionBranchesData, ListReceptionBranchesErrors, ListReceptionBranchesResponses, ListReportBranchesData, ListReportBranchesErrors, ListReportBranchesResponses, ListStaffData, ListStaffErrors, ListStaffResponses, LoginData, LoginErrors, LoginResponses, LogoutAllData2, LogoutAllErrors, LogoutAllResponses, LogoutData2, LogoutErrors, LogoutResponses, MarkAppointmentNoShowData, MarkAppointmentNoShowErrors, MarkAppointmentNoShowResponses, OpenPharmacyDispensationData, OpenPharmacyDispensationErrors, OpenPharmacyDispensationResponses, OrderClinicalServiceData, OrderClinicalServiceErrors, OrderClinicalServiceResponses, ReceivePharmacyStockData, ReceivePharmacyStockErrors, ReceivePharmacyStockResponses, ReconcilePharmacyStockData, ReconcilePharmacyStockErrors, ReconcilePharmacyStockResponses, RecordInvoicePaymentData, RecordInvoicePaymentErrors, RecordInvoicePaymentResponses, RefreshSessionData, RefreshSessionErrors, RefreshSessionResponses, RefundPaymentAllocationData, RefundPaymentAllocationErrors, RefundPaymentAllocationResponses, ReleaseClinicalEncounterToPatientData, ReleaseClinicalEncounterToPatientErrors, ReleaseClinicalEncounterToPatientResponses, RequestPasswordResetData, RequestPasswordResetErrors, RequestPasswordResetResponses, RequestPatientLinkData, RequestPatientLinkErrors, RequestPatientLinkResponses, RequestPatientRegistrationData, RequestPatientRegistrationErrors, RequestPatientRegistrationResponses, RescheduleAdminAppointmentData, RescheduleAdminAppointmentErrors, RescheduleAdminAppointmentResponses, RescheduleMyAppointmentData, RescheduleMyAppointmentErrors, RescheduleMyAppointmentResponses, ResetPasswordData, ResetPasswordErrors, ResetPasswordResponses, ReversePharmacyDispensationItemData, ReversePharmacyDispensationItemErrors, ReversePharmacyDispensationItemResponses, RevokeOwnPatientLinkData, RevokeOwnPatientLinkErrors, RevokeOwnPatientLinkResponses, RevokePatientLinkAsStaffData, RevokePatientLinkAsStaffErrors, RevokePatientLinkAsStaffResponses, RevokeStaffRoleData, RevokeStaffRoleErrors, RevokeStaffRoleResponses, SearchPatientsData, SearchPatientsErrors, SearchPatientsResponses, SearchReceptionPatientsData, SearchReceptionPatientsErrors, SearchReceptionPatientsResponses, SetCatalogBranchPriceData, SetCatalogBranchPriceErrors, SetCatalogBranchPriceResponses, SetInvoiceInsuranceAmountData, SetInvoiceInsuranceAmountErrors, SetInvoiceInsuranceAmountResponses, SetStaffAccountStatusData, SetStaffAccountStatusErrors, SetStaffAccountStatusResponses, SignClinicalEncounterData, SignClinicalEncounterErrors, SignClinicalEncounterResponses, StartClinicalEncounterData, StartClinicalEncounterErrors, StartClinicalEncounterResponses, SynchronizeInvoiceChargesData, SynchronizeInvoiceChargesErrors, SynchronizeInvoiceChargesResponses, UnlockStaffAccountData, UnlockStaffAccountErrors, UnlockStaffAccountResponses, UpdateCatalogRoomData, UpdateCatalogRoomErrors, UpdateCatalogRoomResponses, UpdateCatalogServiceData, UpdateCatalogServiceErrors, UpdateCatalogServiceResponses, UpdateClinicalNotesData, UpdateClinicalNotesErrors, UpdateClinicalNotesResponses, UpdatePatientData, UpdatePatientErrors, UpdatePatientResponses, UpdateStaffData, UpdateStaffErrors, UpdateStaffResponses, VerifyPatientRegistrationData, VerifyPatientRegistrationErrors, VerifyPatientRegistrationResponses, VoidInvoiceData, VoidInvoiceErrors, VoidInvoiceResponses } from './types.gen.js';
+import type { AddClinicalDiagnosisData, AddClinicalDiagnosisErrors, AddClinicalDiagnosisResponses, AddClinicalVitalSignsData, AddClinicalVitalSignsErrors, AddClinicalVitalSignsResponses, AddManualInvoiceItemData, AddManualInvoiceItemErrors, AddManualInvoiceItemResponses, AddPatientAllergyData, AddPatientAllergyErrors, AddPatientAllergyResponses, AddPatientConditionData, AddPatientConditionErrors, AddPatientConditionResponses, AddPrescriptionMedicineData, AddPrescriptionMedicineErrors, AddPrescriptionMedicineResponses, AmendClinicalEncounterData, AmendClinicalEncounterErrors, AmendClinicalEncounterResponses, ApproveDoctorTimeOffData, ApproveDoctorTimeOffErrors, ApproveDoctorTimeOffResponses, BookOnlineAppointmentData, BookOnlineAppointmentErrors, BookOnlineAppointmentResponses, BookStaffAppointmentData, BookStaffAppointmentErrors, BookStaffAppointmentResponses, CallNextQueueTicketData, CallNextQueueTicketErrors, CallNextQueueTicketResponses, CancelAdminAppointmentData, CancelAdminAppointmentErrors, CancelAdminAppointmentResponses, CancelEncounterData, CancelEncounterErrors, CancelEncounterResponses, CancelMyAppointmentData, CancelMyAppointmentErrors, CancelMyAppointmentResponses, CancelMyDoctorTimeOffData, CancelMyDoctorTimeOffErrors, CancelMyDoctorTimeOffResponses, CancelPatientLinkRequestData, CancelPatientLinkRequestErrors, CancelPatientLinkRequestResponses, CancelPharmacyDispensationData, CancelPharmacyDispensationErrors, CancelPharmacyDispensationResponses, CancelPharmacyPrescriptionData, CancelPharmacyPrescriptionErrors, CancelPharmacyPrescriptionResponses, ChangePasswordData, ChangePasswordErrors, ChangePasswordResponses, CheckInAppointmentData, CheckInAppointmentErrors, CheckInAppointmentResponses, CompleteClinicalEncounterData, CompleteClinicalEncounterErrors, CompleteClinicalEncounterResponses, CompletePharmacyDispensationData, CompletePharmacyDispensationErrors, CompletePharmacyDispensationResponses, ConfirmAppointmentData, ConfirmAppointmentErrors, ConfirmAppointmentResponses, ConfirmWorkingScheduleData, ConfirmWorkingScheduleErrors, ConfirmWorkingScheduleResponses, CreateCatalogRoomData, CreateCatalogRoomErrors, CreateCatalogRoomResponses, CreateCatalogServiceData, CreateCatalogServiceErrors, CreateCatalogServiceResponses, CreateEncounterInvoiceData, CreateEncounterInvoiceErrors, CreateEncounterInvoiceResponses, CreateEncounterPrescriptionData, CreateEncounterPrescriptionErrors, CreateEncounterPrescriptionResponses, CreateOrganizationBranchData, CreateOrganizationBranchErrors, CreateOrganizationBranchResponses, CreateOrganizationCategoryData, CreateOrganizationCategoryErrors, CreateOrganizationCategoryResponses, CreateOrganizationSpecialtyData, CreateOrganizationSpecialtyErrors, CreateOrganizationSpecialtyResponses, CreatePatientData, CreatePatientErrors, CreatePatientResponses, CreatePharmacyBatchData, CreatePharmacyBatchErrors, CreatePharmacyBatchResponses, CreatePharmacyLocationData, CreatePharmacyLocationErrors, CreatePharmacyLocationResponses, CreatePharmacyMedicineData, CreatePharmacyMedicineErrors, CreatePharmacyMedicineResponses, CreateStaffData, CreateStaffErrors, CreateStaffResponses, CreateWalkInEncounterData, CreateWalkInEncounterErrors, CreateWalkInEncounterResponses, CreateWorkingScheduleData, CreateWorkingScheduleErrors, CreateWorkingScheduleResponses, DeactivatePatientAllergyData, DeactivatePatientAllergyErrors, DeactivatePatientAllergyResponses, DecidePatientLinkRequestData, DecidePatientLinkRequestErrors, DecidePatientLinkRequestResponses, DispensePharmacyItemData, DispensePharmacyItemErrors, DispensePharmacyItemResponses, FinalizeClinicalServiceResultData, FinalizeClinicalServiceResultErrors, FinalizeClinicalServiceResultResponses, FindPatientDuplicatesData, FindPatientDuplicatesErrors, FindPatientDuplicatesResponses, GenerateWorkingScheduleSlotsData, GenerateWorkingScheduleSlotsErrors, GenerateWorkingScheduleSlotsResponses, GetAuthJwksData, GetAuthJwksResponses, GetBillingWorkspaceData, GetBillingWorkspaceErrors, GetBillingWorkspaceResponses, GetCatalogReferenceDataData, GetCatalogReferenceDataErrors, GetCatalogReferenceDataResponses, GetClinicalEncounterData, GetClinicalEncounterErrors, GetClinicalEncounterResponses, GetInventoryReportData, GetInventoryReportErrors, GetInventoryReportResponses, GetInvoiceData, GetInvoiceErrors, GetInvoiceResponses, GetLivenessData, GetLivenessResponses, GetManagedPatientLinkReferenceDataData, GetManagedPatientLinkReferenceDataErrors, GetManagedPatientLinkReferenceDataResponses, GetMyEmergencyContactsData, GetMyEmergencyContactsErrors, GetMyEmergencyContactsResponses, GetOperationsReportData, GetOperationsReportErrors, GetOperationsReportResponses, GetOrganizationCatalogData, GetOrganizationCatalogErrors, GetOrganizationCatalogResponses, GetPatientAccessData, GetPatientAccessErrors, GetPatientAccessResponses, GetPatientClinicalRecordData, GetPatientClinicalRecordErrors, GetPatientClinicalRecordResponses, GetPatientClinicalSummaryData, GetPatientClinicalSummaryErrors, GetPatientClinicalSummaryResponses, GetPatientData, GetPatientErrors, GetPatientLinkReferenceDataData, GetPatientLinkReferenceDataErrors, GetPatientLinkReferenceDataResponses, GetPatientReferenceDataData, GetPatientReferenceDataErrors, GetPatientReferenceDataResponses, GetPatientResponses, GetPharmacyPrescriptionData, GetPharmacyPrescriptionErrors, GetPharmacyPrescriptionResponses, GetPharmacyWorkspaceData, GetPharmacyWorkspaceErrors, GetPharmacyWorkspaceResponses, GetReadinessData, GetReadinessErrors, GetReadinessResponses, GetReceptionWorkspaceData, GetReceptionWorkspaceErrors, GetReceptionWorkspaceResponses, GetRevenueReportData, GetRevenueReportErrors, GetRevenueReportResponses, GetSchedulingData, GetSchedulingErrors, GetSchedulingResponses, GetStaffData, GetStaffErrors, GetStaffReferenceDataData, GetStaffReferenceDataErrors, GetStaffReferenceDataResponses, GetStaffResponses, GrantStaffRoleData, GrantStaffRoleErrors, GrantStaffRoleResponses, IssueInvoiceData, IssueInvoiceErrors, IssueInvoiceResponses, IssuePharmacyPrescriptionData, IssuePharmacyPrescriptionErrors, IssuePharmacyPrescriptionResponses, ListAdminAppointmentAvailabilityData, ListAdminAppointmentAvailabilityErrors, ListAdminAppointmentAvailabilityResponses, ListAdminAppointmentsData, ListAdminAppointmentsErrors, ListAdminAppointmentsResponses, ListBillingBranchesData, ListBillingBranchesErrors, ListBillingBranchesResponses, ListCatalogRoomsData, ListCatalogRoomsErrors, ListCatalogRoomsResponses, ListCatalogServicesData, ListCatalogServicesErrors, ListCatalogServicesResponses, ListClinicalBranchesData, ListClinicalBranchesErrors, ListClinicalBranchesResponses, ListClinicalEncountersData, ListClinicalEncountersErrors, ListClinicalEncountersResponses, ListDoctorTimeOffData, ListDoctorTimeOffErrors, ListDoctorTimeOffResponses, ListMyAppointmentsData, ListMyAppointmentsErrors, ListMyAppointmentsResponses, ListMyWorkingSchedulesData, ListMyWorkingSchedulesErrors, ListMyWorkingSchedulesResponses, ListPatientClinicalRecordsData, ListPatientClinicalRecordsErrors, ListPatientClinicalRecordsResponses, ListPatientLinkRequestsData, ListPatientLinkRequestsErrors, ListPatientLinkRequestsResponses, ListPatientMergeHistoryData, ListPatientMergeHistoryErrors, ListPatientMergeHistoryResponses, ListPharmacyBranchesData, ListPharmacyBranchesErrors, ListPharmacyBranchesResponses, ListPublicAvailabilityData, ListPublicAvailabilityErrors, ListPublicAvailabilityResponses, ListPublicBranchesData, ListPublicBranchesResponses, ListPublicDoctorsData, ListPublicDoctorsErrors, ListPublicDoctorsResponses, ListPublicServicesData, ListPublicServicesErrors, ListPublicServicesResponses, ListPublicSpecialtiesData, ListPublicSpecialtiesResponses, ListReceptionBranchesData, ListReceptionBranchesErrors, ListReceptionBranchesResponses, ListReportBranchesData, ListReportBranchesErrors, ListReportBranchesResponses, ListStaffData, ListStaffErrors, ListStaffResponses, LoginData, LoginErrors, LoginResponses, LogoutAllData2, LogoutAllErrors, LogoutAllResponses, LogoutData2, LogoutErrors, LogoutResponses, MarkAppointmentNoShowData, MarkAppointmentNoShowErrors, MarkAppointmentNoShowResponses, MergePatientsData, MergePatientsErrors, MergePatientsResponses, OpenPharmacyDispensationData, OpenPharmacyDispensationErrors, OpenPharmacyDispensationResponses, OrderClinicalServiceData, OrderClinicalServiceErrors, OrderClinicalServiceResponses, PreviewPatientMergeData, PreviewPatientMergeErrors, PreviewPatientMergeResponses, PublishWorkingScheduleData, PublishWorkingScheduleErrors, PublishWorkingScheduleResponses, RecallQueueTicketData, RecallQueueTicketErrors, RecallQueueTicketResponses, ReceivePharmacyStockData, ReceivePharmacyStockErrors, ReceivePharmacyStockResponses, ReconcilePharmacyStockData, ReconcilePharmacyStockErrors, ReconcilePharmacyStockResponses, RecordInvoicePaymentData, RecordInvoicePaymentErrors, RecordInvoicePaymentResponses, RefreshSessionData, RefreshSessionErrors, RefreshSessionResponses, RefundPaymentAllocationData, RefundPaymentAllocationErrors, RefundPaymentAllocationResponses, RejectDoctorTimeOffData, RejectDoctorTimeOffErrors, RejectDoctorTimeOffResponses, RejectWorkingScheduleData, RejectWorkingScheduleErrors, RejectWorkingScheduleResponses, ReleaseClinicalEncounterToPatientData, ReleaseClinicalEncounterToPatientErrors, ReleaseClinicalEncounterToPatientResponses, ReplaceMyEmergencyContactsData, ReplaceMyEmergencyContactsErrors, ReplaceMyEmergencyContactsResponses, ReplacePatientEmergencyContactsData, ReplacePatientEmergencyContactsErrors, ReplacePatientEmergencyContactsResponses, RequestDoctorTimeOffData, RequestDoctorTimeOffErrors, RequestDoctorTimeOffResponses, RequestPasswordResetData, RequestPasswordResetErrors, RequestPasswordResetResponses, RequestPatientLinkData, RequestPatientLinkErrors, RequestPatientLinkResponses, RequestPatientRegistrationData, RequestPatientRegistrationErrors, RequestPatientRegistrationResponses, RescheduleAdminAppointmentData, RescheduleAdminAppointmentErrors, RescheduleAdminAppointmentResponses, RescheduleMyAppointmentData, RescheduleMyAppointmentErrors, RescheduleMyAppointmentResponses, ResetPasswordData, ResetPasswordErrors, ResetPasswordResponses, ResolvePatientConditionData, ResolvePatientConditionErrors, ResolvePatientConditionResponses, ReversePharmacyDispensationItemData, ReversePharmacyDispensationItemErrors, ReversePharmacyDispensationItemResponses, RevokeOwnPatientLinkData, RevokeOwnPatientLinkErrors, RevokeOwnPatientLinkResponses, RevokePatientLinkAsStaffData, RevokePatientLinkAsStaffErrors, RevokePatientLinkAsStaffResponses, RevokeStaffRoleData, RevokeStaffRoleErrors, RevokeStaffRoleResponses, SearchPatientsData, SearchPatientsErrors, SearchPatientsResponses, SearchReceptionPatientsData, SearchReceptionPatientsErrors, SearchReceptionPatientsResponses, SetCatalogBranchPriceData, SetCatalogBranchPriceErrors, SetCatalogBranchPriceResponses, SetInvoiceInsuranceAmountData, SetInvoiceInsuranceAmountErrors, SetInvoiceInsuranceAmountResponses, SetStaffAccountStatusData, SetStaffAccountStatusErrors, SetStaffAccountStatusResponses, SignClinicalEncounterData, SignClinicalEncounterErrors, SignClinicalEncounterResponses, SkipQueueTicketData, SkipQueueTicketErrors, SkipQueueTicketResponses, StartClinicalEncounterData, StartClinicalEncounterErrors, StartClinicalEncounterResponses, SynchronizeInvoiceChargesData, SynchronizeInvoiceChargesErrors, SynchronizeInvoiceChargesResponses, UnlockStaffAccountData, UnlockStaffAccountErrors, UnlockStaffAccountResponses, UpdateCatalogRoomData, UpdateCatalogRoomErrors, UpdateCatalogRoomResponses, UpdateCatalogServiceData, UpdateCatalogServiceErrors, UpdateCatalogServiceResponses, UpdateClinicalNotesData, UpdateClinicalNotesErrors, UpdateClinicalNotesResponses, UpdateOrganizationBranchData, UpdateOrganizationBranchErrors, UpdateOrganizationBranchResponses, UpdateOrganizationCategoryData, UpdateOrganizationCategoryErrors, UpdateOrganizationCategoryResponses, UpdateOrganizationSpecialtyData, UpdateOrganizationSpecialtyErrors, UpdateOrganizationSpecialtyResponses, UpdatePatientData, UpdatePatientErrors, UpdatePatientResponses, UpdateStaffData, UpdateStaffErrors, UpdateStaffResponses, VerifyPatientRegistrationData, VerifyPatientRegistrationErrors, VerifyPatientRegistrationResponses, VoidInvoiceData, VoidInvoiceErrors, VoidInvoiceResponses } from './types.gen.js';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -444,6 +444,128 @@ export const updatePatient = <ThrowOnError extends boolean = false>(options: Opt
 });
 
 /**
+ * Preview a duplicate merge for a global administrator
+ */
+export const previewPatientMerge = <ThrowOnError extends boolean = false>(options: Options<PreviewPatientMergeData, ThrowOnError>): RequestResult<PreviewPatientMergeResponses, PreviewPatientMergeErrors, ThrowOnError> => (options.client ?? client).post<PreviewPatientMergeResponses, PreviewPatientMergeErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/patients/{patientId}/merge-preview',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Merge a duplicate into a canonical patient while preserving immutable history
+ */
+export const mergePatients = <ThrowOnError extends boolean = false>(options: Options<MergePatientsData, ThrowOnError>): RequestResult<MergePatientsResponses, MergePatientsErrors, ThrowOnError> => (options.client ?? client).post<MergePatientsResponses, MergePatientsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/patients/{patientId}/merge',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Read audited merge history for a canonical patient
+ */
+export const listPatientMergeHistory = <ThrowOnError extends boolean = false>(options: Options<ListPatientMergeHistoryData, ThrowOnError>): RequestResult<ListPatientMergeHistoryResponses, ListPatientMergeHistoryErrors, ThrowOnError> => (options.client ?? client).get<ListPatientMergeHistoryResponses, ListPatientMergeHistoryErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/patients/{patientId}/merge-history',
+    ...options
+});
+
+/**
+ * Replace active emergency contacts with optimistic concurrency and audit
+ */
+export const replacePatientEmergencyContacts = <ThrowOnError extends boolean = false>(options: Options<ReplacePatientEmergencyContactsData, ThrowOnError>): RequestResult<ReplacePatientEmergencyContactsResponses, ReplacePatientEmergencyContactsErrors, ThrowOnError> => (options.client ?? client).put<ReplacePatientEmergencyContactsResponses, ReplacePatientEmergencyContactsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/patients/{patientId}/emergency-contacts',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Read emergency contacts for a verified self-linked patient
+ */
+export const getMyEmergencyContacts = <ThrowOnError extends boolean = false>(options: Options<GetMyEmergencyContactsData, ThrowOnError>): RequestResult<GetMyEmergencyContactsResponses, GetMyEmergencyContactsErrors, ThrowOnError> => (options.client ?? client).get<GetMyEmergencyContactsResponses, GetMyEmergencyContactsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/patients/{patientId}/my-emergency-contacts',
+    ...options
+});
+
+/**
+ * Replace own emergency contacts with optimistic concurrency
+ */
+export const replaceMyEmergencyContacts = <ThrowOnError extends boolean = false>(options: Options<ReplaceMyEmergencyContactsData, ThrowOnError>): RequestResult<ReplaceMyEmergencyContactsResponses, ReplaceMyEmergencyContactsErrors, ThrowOnError> => (options.client ?? client).put<ReplaceMyEmergencyContactsResponses, ReplaceMyEmergencyContactsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/patients/{patientId}/my-emergency-contacts',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Record an allergy during an active care relationship
+ */
+export const addPatientAllergy = <ThrowOnError extends boolean = false>(options: Options<AddPatientAllergyData, ThrowOnError>): RequestResult<AddPatientAllergyResponses, AddPatientAllergyErrors, ThrowOnError> => (options.client ?? client).post<AddPatientAllergyResponses, AddPatientAllergyErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/patients/{patientId}/allergies',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Deactivate an allergy with an audited reason
+ */
+export const deactivatePatientAllergy = <ThrowOnError extends boolean = false>(options: Options<DeactivatePatientAllergyData, ThrowOnError>): RequestResult<DeactivatePatientAllergyResponses, DeactivatePatientAllergyErrors, ThrowOnError> => (options.client ?? client).post<DeactivatePatientAllergyResponses, DeactivatePatientAllergyErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/patients/{patientId}/allergies/{allergyId}/deactivate',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Record a chronic condition during an active care relationship
+ */
+export const addPatientCondition = <ThrowOnError extends boolean = false>(options: Options<AddPatientConditionData, ThrowOnError>): RequestResult<AddPatientConditionResponses, AddPatientConditionErrors, ThrowOnError> => (options.client ?? client).post<AddPatientConditionResponses, AddPatientConditionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/patients/{patientId}/conditions',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Resolve a condition with an audited reason
+ */
+export const resolvePatientCondition = <ThrowOnError extends boolean = false>(options: Options<ResolvePatientConditionData, ThrowOnError>): RequestResult<ResolvePatientConditionResponses, ResolvePatientConditionErrors, ThrowOnError> => (options.client ?? client).post<ResolvePatientConditionResponses, ResolvePatientConditionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/patients/{patientId}/conditions/{conditionId}/resolve',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
  * Read allergies and conditions for an active assigned care relationship
  *
  * Only an assigned doctor or nurse who created the open encounter can read. This endpoint does not return internal results or prescriptions to patients.
@@ -461,6 +583,93 @@ export const getCatalogReferenceData = <ThrowOnError extends boolean = false>(op
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/v1/admin/catalog/reference-data',
     ...options
+});
+
+/**
+ * List branches, specialties and categories for global catalog management
+ */
+export const getOrganizationCatalog = <ThrowOnError extends boolean = false>(options?: Options<GetOrganizationCatalogData, ThrowOnError>): RequestResult<GetOrganizationCatalogResponses, GetOrganizationCatalogErrors, ThrowOnError> => (options?.client ?? client).get<GetOrganizationCatalogResponses, GetOrganizationCatalogErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/catalog/organization',
+    ...options
+});
+
+/**
+ * Create a branch
+ */
+export const createOrganizationBranch = <ThrowOnError extends boolean = false>(options: Options<CreateOrganizationBranchData, ThrowOnError>): RequestResult<CreateOrganizationBranchResponses, CreateOrganizationBranchErrors, ThrowOnError> => (options.client ?? client).post<CreateOrganizationBranchResponses, CreateOrganizationBranchErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/catalog/branches',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Update branch policies or activity
+ */
+export const updateOrganizationBranch = <ThrowOnError extends boolean = false>(options: Options<UpdateOrganizationBranchData, ThrowOnError>): RequestResult<UpdateOrganizationBranchResponses, UpdateOrganizationBranchErrors, ThrowOnError> => (options.client ?? client).put<UpdateOrganizationBranchResponses, UpdateOrganizationBranchErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/catalog/branches/{branchId}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Create specialty
+ */
+export const createOrganizationSpecialty = <ThrowOnError extends boolean = false>(options: Options<CreateOrganizationSpecialtyData, ThrowOnError>): RequestResult<CreateOrganizationSpecialtyResponses, CreateOrganizationSpecialtyErrors, ThrowOnError> => (options.client ?? client).post<CreateOrganizationSpecialtyResponses, CreateOrganizationSpecialtyErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/catalog/specialties',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Update specialty
+ */
+export const updateOrganizationSpecialty = <ThrowOnError extends boolean = false>(options: Options<UpdateOrganizationSpecialtyData, ThrowOnError>): RequestResult<UpdateOrganizationSpecialtyResponses, UpdateOrganizationSpecialtyErrors, ThrowOnError> => (options.client ?? client).put<UpdateOrganizationSpecialtyResponses, UpdateOrganizationSpecialtyErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/catalog/specialties/{specialtyId}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Create service category
+ */
+export const createOrganizationCategory = <ThrowOnError extends boolean = false>(options: Options<CreateOrganizationCategoryData, ThrowOnError>): RequestResult<CreateOrganizationCategoryResponses, CreateOrganizationCategoryErrors, ThrowOnError> => (options.client ?? client).post<CreateOrganizationCategoryResponses, CreateOrganizationCategoryErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/catalog/categories',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Update service category
+ */
+export const updateOrganizationCategory = <ThrowOnError extends boolean = false>(options: Options<UpdateOrganizationCategoryData, ThrowOnError>): RequestResult<UpdateOrganizationCategoryResponses, UpdateOrganizationCategoryErrors, ThrowOnError> => (options.client ?? client).put<UpdateOrganizationCategoryResponses, UpdateOrganizationCategoryErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/catalog/categories/{categoryId}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -624,6 +833,15 @@ export const bookStaffAppointment = <ThrowOnError extends boolean = false>(optio
 });
 
 /**
+ * List branch scoped staff booking slots, including doctors unavailable for online booking
+ */
+export const listAdminAppointmentAvailability = <ThrowOnError extends boolean = false>(options: Options<ListAdminAppointmentAvailabilityData, ThrowOnError>): RequestResult<ListAdminAppointmentAvailabilityResponses, ListAdminAppointmentAvailabilityErrors, ThrowOnError> => (options.client ?? client).get<ListAdminAppointmentAvailabilityResponses, ListAdminAppointmentAvailabilityErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/admin/appointments/availability',
+    ...options
+});
+
+/**
  * Confirm a PENDING appointment before its hold expires
  */
 export const confirmAppointment = <ThrowOnError extends boolean = false>(options: Options<ConfirmAppointmentData, ThrowOnError>): RequestResult<ConfirmAppointmentResponses, ConfirmAppointmentErrors, ThrowOnError> => (options.client ?? client).post<ConfirmAppointmentResponses, ConfirmAppointmentErrors, ThrowOnError>({
@@ -681,7 +899,7 @@ export const getScheduling = <ThrowOnError extends boolean = false>(options: Opt
 });
 
 /**
- * Create a non-overlapping recurring doctor and room schedule
+ * Propose a recurring doctor and room schedule for doctor confirmation
  */
 export const createWorkingSchedule = <ThrowOnError extends boolean = false>(options: Options<CreateWorkingScheduleData, ThrowOnError>): RequestResult<CreateWorkingScheduleResponses, CreateWorkingScheduleErrors, ThrowOnError> => (options.client ?? client).post<CreateWorkingScheduleResponses, CreateWorkingScheduleErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
@@ -691,6 +909,99 @@ export const createWorkingSchedule = <ThrowOnError extends boolean = false>(opti
         'Content-Type': 'application/json',
         ...options.headers
     }
+});
+
+/**
+ * List recurring schedules for the authenticated doctor
+ */
+export const listMyWorkingSchedules = <ThrowOnError extends boolean = false>(options?: Options<ListMyWorkingSchedulesData, ThrowOnError>): RequestResult<ListMyWorkingSchedulesResponses, ListMyWorkingSchedulesErrors, ThrowOnError> => (options?.client ?? client).get<ListMyWorkingSchedulesResponses, ListMyWorkingSchedulesErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/schedules/mine',
+    ...options
+});
+
+/**
+ * List own time-off requests or branch requests for a schedule manager
+ */
+export const listDoctorTimeOff = <ThrowOnError extends boolean = false>(options?: Options<ListDoctorTimeOffData, ThrowOnError>): RequestResult<ListDoctorTimeOffResponses, ListDoctorTimeOffErrors, ThrowOnError> => (options?.client ?? client).get<ListDoctorTimeOffResponses, ListDoctorTimeOffErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/schedules/time-off',
+    ...options
+});
+
+/**
+ * Doctor requests time off at a branch for a future local date and time
+ */
+export const requestDoctorTimeOff = <ThrowOnError extends boolean = false>(options: Options<RequestDoctorTimeOffData, ThrowOnError>): RequestResult<RequestDoctorTimeOffResponses, RequestDoctorTimeOffErrors, ThrowOnError> => (options.client ?? client).post<RequestDoctorTimeOffResponses, RequestDoctorTimeOffErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/schedules/time-off',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Approve time off after resolving conflicting appointments and block open slots
+ */
+export const approveDoctorTimeOff = <ThrowOnError extends boolean = false>(options: Options<ApproveDoctorTimeOffData, ThrowOnError>): RequestResult<ApproveDoctorTimeOffResponses, ApproveDoctorTimeOffErrors, ThrowOnError> => (options.client ?? client).post<ApproveDoctorTimeOffResponses, ApproveDoctorTimeOffErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/schedules/time-off/{timeOffId}/approve',
+    ...options
+});
+
+/**
+ * Reject a doctor's time-off request with reason
+ */
+export const rejectDoctorTimeOff = <ThrowOnError extends boolean = false>(options: Options<RejectDoctorTimeOffData, ThrowOnError>): RequestResult<RejectDoctorTimeOffResponses, RejectDoctorTimeOffErrors, ThrowOnError> => (options.client ?? client).post<RejectDoctorTimeOffResponses, RejectDoctorTimeOffErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/schedules/time-off/{timeOffId}/reject',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Doctor cancels own pending time-off request
+ */
+export const cancelMyDoctorTimeOff = <ThrowOnError extends boolean = false>(options: Options<CancelMyDoctorTimeOffData, ThrowOnError>): RequestResult<CancelMyDoctorTimeOffResponses, CancelMyDoctorTimeOffErrors, ThrowOnError> => (options.client ?? client).post<CancelMyDoctorTimeOffResponses, CancelMyDoctorTimeOffErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/schedules/time-off/{timeOffId}/cancel',
+    ...options
+});
+
+/**
+ * Confirm own proposed working schedule
+ */
+export const confirmWorkingSchedule = <ThrowOnError extends boolean = false>(options: Options<ConfirmWorkingScheduleData, ThrowOnError>): RequestResult<ConfirmWorkingScheduleResponses, ConfirmWorkingScheduleErrors, ThrowOnError> => (options.client ?? client).post<ConfirmWorkingScheduleResponses, ConfirmWorkingScheduleErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/schedules/{scheduleId}/confirm',
+    ...options
+});
+
+/**
+ * Reject own proposed working schedule with reason
+ */
+export const rejectWorkingSchedule = <ThrowOnError extends boolean = false>(options: Options<RejectWorkingScheduleData, ThrowOnError>): RequestResult<RejectWorkingScheduleResponses, RejectWorkingScheduleErrors, ThrowOnError> => (options.client ?? client).post<RejectWorkingScheduleResponses, RejectWorkingScheduleErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/schedules/{scheduleId}/reject',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Publish a doctor-confirmed schedule and allow slot generation
+ */
+export const publishWorkingSchedule = <ThrowOnError extends boolean = false>(options: Options<PublishWorkingScheduleData, ThrowOnError>): RequestResult<PublishWorkingScheduleResponses, PublishWorkingScheduleErrors, ThrowOnError> => (options.client ?? client).post<PublishWorkingScheduleResponses, PublishWorkingScheduleErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/schedules/{scheduleId}/publish',
+    ...options
 });
 
 /**
@@ -767,6 +1078,32 @@ export const createWalkInEncounter = <ThrowOnError extends boolean = false>(opti
 export const callNextQueueTicket = <ThrowOnError extends boolean = false>(options: Options<CallNextQueueTicketData, ThrowOnError>): RequestResult<CallNextQueueTicketResponses, CallNextQueueTicketErrors, ThrowOnError> => (options.client ?? client).post<CallNextQueueTicketResponses, CallNextQueueTicketErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/v1/queues/call-next',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Skip a called ticket with a recorded reason
+ */
+export const skipQueueTicket = <ThrowOnError extends boolean = false>(options: Options<SkipQueueTicketData, ThrowOnError>): RequestResult<SkipQueueTicketResponses, SkipQueueTicketErrors, ThrowOnError> => (options.client ?? client).post<SkipQueueTicketResponses, SkipQueueTicketErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/queues/{ticketId}/skip',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Recall a skipped ticket with a recorded reason
+ */
+export const recallQueueTicket = <ThrowOnError extends boolean = false>(options: Options<RecallQueueTicketData, ThrowOnError>): RequestResult<RecallQueueTicketResponses, RecallQueueTicketErrors, ThrowOnError> => (options.client ?? client).post<RecallQueueTicketResponses, RecallQueueTicketErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/queues/{ticketId}/recall',
     ...options,
     headers: {
         'Content-Type': 'application/json',

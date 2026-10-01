@@ -4,6 +4,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { apiClient } from '../../shared/api/client'
 import { downloadExcelCsv, openPrintDocument, patientProfilePrintDocument } from '../../shared/printing'
+import { useAuth } from '../auth/auth-context'
+import { PatientMergePanel } from './patient-merge-panel'
 
 type FormValues = {
   fullName: string; dateOfBirth: string; gender: PatientWriteRequest['gender'];
@@ -111,12 +113,29 @@ function CreateForm({ branchPublicId, onCreated }: { branchPublicId: string; onC
 function EditForm({ branchPublicId, patient }: { branchPublicId: string; patient: PatientDetail }) {
   const client = useQueryClient()
   const [values, setValues] = useState<FormValues>(() => fromPatient(patient))
+  const [contacts, setContacts] = useState(() => patient.emergencyContacts.map((contact) => ({
+    fullName: contact.fullName, relationshipName: contact.relationshipName ?? '',
+    phone: contact.phone, isPrimary: contact.isPrimary,
+  })))
   const update = useMutation({
     mutationFn: () => apiClient.patients.update(patient.publicId, branchPublicId, body(values), patient.rowVersion),
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: ['patients-search'] })
       void client.invalidateQueries({ queryKey: ['patient-detail', branchPublicId, patient.publicId] })
     },
+  })
+  const saveContacts = useMutation({
+    mutationFn: () => apiClient.patients.replaceEmergencyContacts(patient.publicId, branchPublicId, {
+      contacts: contacts.map((contact) => ({ ...contact,
+        fullName: contact.fullName.trim(), relationshipName: contact.relationshipName.trim() || null,
+        phone: contact.phone.trim() })),
+    }, patient.rowVersion),
+    onSuccess: () => void client.invalidateQueries({ queryKey: ['patient-detail', branchPublicId, patient.publicId] }),
+  })
+  const removeContact = (index: number) => setContacts((current) => {
+    const next = current.filter((_, position) => position !== index)
+    return next.length && !next.some((contact) => contact.isPrimary)
+      ? next.map((contact, position) => ({ ...contact, isPrimary: position === 0 })) : next
   })
   const exportPatient = () => downloadExcelCsv<PatientDetail>(`ho-so-${patient.code}`, [
     { header: 'Mã bệnh nhân', value: 'code' },
@@ -146,12 +165,45 @@ function EditForm({ branchPublicId, patient }: { branchPublicId: string; patient
           queryKey: ['patient-detail', branchPublicId, patient.publicId],
         })}>Tải lại hồ sơ</button>}
       {update.isSuccess && <div className="form-success" role="status">Đã lưu hồ sơ.</div>}
-      <button type="submit" disabled={update.isPending}>{update.isPending ? 'Đang lưu…' : 'Lưu thay đổi'}</button>
+      <button type="submit" disabled={update.isPending || saveContacts.isPending}>
+        {update.isPending ? 'Đang lưu…' : 'Lưu thay đổi'}</button>
     </form>
+    <section className="patient-emergency-contacts"><h3>Liên hệ khẩn cấp</h3>
+      <p>Tối đa 5 người; chọn một người liên hệ chính. Thay đổi chỉ được lưu khi bấm nút bên dưới.</p>
+      {contacts.map((contact, index) => <div className="form-grid" key={index}>
+        <label>Họ tên<input required minLength={2} maxLength={200} value={contact.fullName}
+          onChange={(event) => setContacts((current) => current.map((item, position) =>
+            position === index ? { ...item, fullName: event.target.value } : item))} /></label>
+        <label>Quan hệ<input maxLength={80} value={contact.relationshipName}
+          onChange={(event) => setContacts((current) => current.map((item, position) =>
+            position === index ? { ...item, relationshipName: event.target.value } : item))} /></label>
+        <label>Số điện thoại<input required minLength={7} maxLength={20} pattern="[0-9+(). -]+"
+          value={contact.phone} onChange={(event) => setContacts((current) => current.map((item, position) =>
+            position === index ? { ...item, phone: event.target.value } : item))} /></label>
+        <label className="checkbox-label"><input type="radio" name={`primary-contact-${patient.publicId}`}
+          checked={contact.isPrimary} onChange={() => setContacts((current) => current.map((item, position) =>
+            ({ ...item, isPrimary: position === index })))} />Liên hệ chính</label>
+        <button type="button" className="secondary" onClick={() => removeContact(index)}>Bỏ khỏi danh sách</button>
+      </div>)}
+      <div className="action-row"><button type="button" className="secondary" disabled={contacts.length >= 5}
+        onClick={() => setContacts((current) => [...current, {
+          fullName: '', relationshipName: '', phone: '', isPrimary: current.length === 0,
+        }])}>+ Thêm liên hệ</button>
+        <button type="button" disabled={saveContacts.isPending || update.isPending || contacts.length > 5 ||
+          contacts.filter((contact) => contact.isPrimary).length !== (contacts.length ? 1 : 0) ||
+          contacts.some((contact) => contact.fullName.trim().length < 2 ||
+            !/^[0-9+(). -]{7,20}$/.test(contact.phone.trim()))}
+          onClick={() => saveContacts.mutate()}>{saveContacts.isPending ? 'Đang lưu…' : 'Lưu liên hệ khẩn cấp'}</button></div>
+      {saveContacts.error && <div className="form-error" role="alert">{message(saveContacts.error)}</div>}
+      {saveContacts.isSuccess && <div className="form-success" role="status">Đã lưu liên hệ khẩn cấp.</div>}
+    </section>
   </section>
 }
 
 export function PatientsPage() {
+  const { user } = useAuth()
+  const canMerge = Boolean(user?.roles.some((role) => role.code === 'ADMIN' && role.branchId === null))
+  const client = useQueryClient()
   const references = useQuery({ queryKey: ['patient-references'], queryFn: () => apiClient.patients.references().then((result) => result.data) })
   const [selectedBranch, setSelectedBranch] = useState('')
   const branchPublicId = selectedBranch || references.data?.branches[0]?.publicId || ''
@@ -200,9 +252,16 @@ export function PatientsPage() {
       <div>
         {selectedId ? (detail.isLoading ? <div className="page-state">Đang tải hồ sơ…</div>
           : detail.error ? <div className="page-state error-state">{message(detail.error)}</div>
-            : detail.data && <EditForm key={`${detail.data.publicId}:${detail.data.rowVersion}`}
-              branchPublicId={branchPublicId} patient={detail.data} />)
-          : <CreateForm branchPublicId={branchPublicId} onCreated={setSelectedId} />}
+            : detail.data && <><EditForm key={`${detail.data.publicId}:${detail.data.rowVersion}`}
+              branchPublicId={branchPublicId} patient={detail.data} />
+              {canMerge && <PatientMergePanel key={`merge-${detail.data.publicId}`} source={detail.data}
+                branches={references.data.branches} onMerged={(targetId, targetBranchId) => {
+                  void client.invalidateQueries({ queryKey: ['patients-search'] })
+                  void client.invalidateQueries({ queryKey: ['patient-detail'] })
+                  void client.invalidateQueries({ queryKey: ['patient-merge-history'] })
+                  setSelectedBranch(targetBranchId); setSelectedId(targetId)
+                }} />}</>)
+          : <CreateForm key={branchPublicId} branchPublicId={branchPublicId} onCreated={setSelectedId} />}
         {selectedId && <button type="button" className="secondary" onClick={() => setSelectedId('')}>+ Thêm hồ sơ mới</button>}
       </div>
     </div>

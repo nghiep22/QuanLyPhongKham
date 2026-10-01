@@ -382,7 +382,9 @@ export function StaffPage() {
   const { user } = useAuth()
   const [branchPublicId, setBranchPublicId] = useState('')
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [createdStaff, setCreatedStaff] = useState<Staff | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const isGlobalAdmin = user?.roles.some((role) => role.code === 'ADMIN' && role.branchId === null)
   const referencesQuery = useQuery({
@@ -395,17 +397,19 @@ export function StaffPage() {
     || (!isGlobalAdmin ? references?.branches[0]?.publicId ?? '' : '')
 
   const listQuery = useQuery({
-    queryKey: ['staff', effectiveBranchPublicId, search],
+    queryKey: ['staff', effectiveBranchPublicId, search, page],
     queryFn: () => apiClient.staff.list({
       branchPublicId: effectiveBranchPublicId || undefined,
       query: search || undefined,
-      page: 1,
+      page,
       pageSize: 50,
     }),
     enabled: Boolean(references && (isGlobalAdmin || effectiveBranchPublicId)),
   })
   const staff = listQuery.data?.data ?? []
-  const selected = staff.find((item) => item.publicId === selectedId) ?? null
+  const selected = staff.find((item) => item.publicId === selectedId)
+    ?? (createdStaff?.publicId === selectedId ? createdStaff : null)
+  const total = listQuery.data?.meta.total ?? 0
 
   if (referencesQuery.isPending) return <div className="page-state">Đang tải phạm vi nhân sự…</div>
   if (referencesQuery.isError) {
@@ -418,7 +422,7 @@ export function StaffPage() {
   return (
     <div className="staff-page">
       <header>
-        <div><span className="eyebrow">WORKFORCE & RBAC</span><h1>Nhân sự và tài khoản</h1>
+        <div><span className="eyebrow">QUẢN LÝ NHÂN SỰ</span><h1>Nhân sự và tài khoản</h1>
           <p>Tạo account, quản lý hồ sơ và phân quyền đúng phạm vi chi nhánh.</p></div>
         <button type="button" onClick={() => setShowCreate((value) => !value)}>
           {showCreate ? 'Đóng biểu mẫu' : '+ Thêm nhân viên'}
@@ -427,14 +431,15 @@ export function StaffPage() {
       {showCreate &&
         <section className="panel"><h2>Tạo nhân viên</h2>
           <CreateStaffForm references={references} onCreated={(created) => {
-            setShowCreate(false); setSelectedId(created.publicId)
+            setShowCreate(false); setCreatedStaff(created); setSelectedId(created.publicId)
+            setBranchPublicId(created.branch.publicId); setSearch(created.employeeCode); setPage(1)
           }} />
         </section>}
       <section className="staff-toolbar">
         <input aria-label="Tìm nhân viên" value={search}
-          onChange={(event) => setSearch(event.target.value)} placeholder="Tìm theo tên, mã hoặc username…" />
+          onChange={(event) => { setSearch(event.target.value); setPage(1); setSelectedId(null) }} placeholder="Tìm theo tên, mã hoặc username…" />
         <select aria-label="Chi nhánh" value={effectiveBranchPublicId}
-          onChange={(event) => { setBranchPublicId(event.target.value); setSelectedId(null) }}>
+          onChange={(event) => { setBranchPublicId(event.target.value); setPage(1); setSelectedId(null) }}>
           {isGlobalAdmin && <option value="">Tất cả chi nhánh</option>}
           {references.branches.map((branch) =>
             <option key={branch.publicId} value={branch.publicId}>{branch.name}</option>)}
@@ -457,6 +462,13 @@ export function StaffPage() {
                 <span className={`status status-${item.accountStatus.toLowerCase()}`}>{item.accountStatus}</span>
               </button>
             ))}
+            {total > 0 && <nav className="action-row" aria-label="Phân trang nhân sự">
+              <button type="button" className="secondary" disabled={listQuery.isFetching || page <= 1}
+                onClick={() => { setPage(page - 1); setSelectedId(null) }}>Trang trước</button>
+              <span>Trang {page}/{Math.ceil(total / 50)} · {total} nhân viên</span>
+              <button type="button" className="secondary" disabled={listQuery.isFetching || page * 50 >= total}
+                onClick={() => { setPage(page + 1); setSelectedId(null) }}>Trang sau</button>
+            </nav>}
           </div>
           {selected
             ? <StaffDetail key={selected.publicId} staff={selected} references={references}

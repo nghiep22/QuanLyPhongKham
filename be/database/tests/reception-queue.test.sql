@@ -13,7 +13,8 @@ BEGIN TRY
         SELECT required.object_name FROM (VALUES
           (N'sp_clinic_reception_branches'),(N'sp_clinic_get_reception'),(N'sp_clinic_search_reception_patients'),
           (N'sp_clinic_check_in_appointment'),(N'sp_clinic_create_walk_in_encounter'),
-          (N'sp_clinic_call_next_queue_ticket'),(N'sp_clinic_cancel_encounter')
+          (N'sp_clinic_call_next_queue_ticket'),(N'sp_clinic_change_queue_ticket_status'),
+          (N'sp_clinic_cancel_encounter')
         ) required(object_name)
         WHERE NOT EXISTS(SELECT 1 FROM sys.database_permissions dp
           WHERE dp.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'clinic_api_executor')
@@ -31,12 +32,25 @@ BEGIN TRY
 
     BEGIN TRANSACTION;
     DECLARE @suffix varchar(36)=CONVERT(varchar(36),NEWID()),@request_id uniqueidentifier=NEWID();
-    DECLARE @branch_id bigint=(SELECT branch_id FROM dbo.branches WHERE branch_code='MAIN'),
+    DECLARE @branch_id bigint,
             @category_id bigint=(SELECT service_category_id FROM dbo.service_categories WHERE category_code='CONSULTATION'),
             @specialty_id bigint=(SELECT specialty_id FROM dbo.specialties WHERE specialty_code='GENERAL');
-    IF @branch_id IS NULL OR @category_id IS NULL OR @specialty_id IS NULL
+    IF @category_id IS NULL OR @specialty_id IS NULL
         THROW 55802,N'Thiếu dữ liệu seed cho regression reception/queue.',1;
-    UPDATE dbo.branches SET check_in_early_minutes=720,check_in_late_minutes=1440 WHERE branch_id=@branch_id;
+    /* Chọn múi giờ để ca test luôn diễn ra buổi sáng, kể cả CI chạy gần nửa đêm. */
+    DECLARE @timezone sysname;
+    SELECT TOP (1) @timezone=name
+    FROM sys.time_zone_info
+    WHERE DATEPART(HOUR,DATEADD(MINUTE,
+        (CASE LEFT(current_utc_offset,1) WHEN '-' THEN -1 ELSE 1 END) *
+        (CONVERT(int,SUBSTRING(current_utc_offset,2,2))*60+CONVERT(int,SUBSTRING(current_utc_offset,5,2))),
+        SYSUTCDATETIME())) BETWEEN 9 AND 10;
+    IF @timezone IS NULL THROW 55830,N'Không tìm được múi giờ cho ca kiểm thử.',1;
+    INSERT dbo.branches(branch_code,branch_name,address_line,timezone_name,
+        check_in_early_minutes,check_in_late_minutes,walk_in_max_wait_minutes)
+    VALUES(CONCAT('RQ',LEFT(@suffix,16)),N'Chi nhánh reception test',N'Địa chỉ kiểm thử',@timezone,
+        720,1440,45);
+    SET @branch_id=SCOPE_IDENTITY();
     DECLARE @branch_public_id uniqueidentifier=(SELECT public_id FROM dbo.branches WHERE branch_id=@branch_id);
 
     INSERT dbo.users(username,password_hash,display_name,status)
@@ -48,7 +62,7 @@ BEGIN TRY
     EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=@admin_id;
     EXEC sys.sp_set_session_context @key=N'branch_id',@value=@branch_id;
 
-    DECLARE @business_date date,@timezone sysname=(SELECT timezone_name FROM dbo.branches WHERE branch_id=@branch_id);
+    DECLARE @business_date date;
     EXEC dbo.sp_get_branch_business_date @branch_id,NULL,@business_date OUTPUT;
     DECLARE @weekday tinyint=((DATEDIFF(DAY,CONVERT(date,'19000101'),@business_date)%7)+1);
 
@@ -62,7 +76,7 @@ BEGIN TRY
             @service_code varchar(30)=CONCAT('RQ',LEFT(@suffix,20));
     EXEC dbo.sp_create_service @actor_user_id=@admin_id,@branch_id=NULL,@service_category_id=@category_id,
       @specialty_id=@specialty_id,@service_code=@service_code,@service_name=N'Khám reception test',
-      @service_type='CONSULTATION',@default_duration_min=30,@current_price=111000,@requires_doctor=1,
+      @service_type='CONSULTATION',@default_duration_min=5,@current_price=111000,@requires_doctor=1,
       @service_id=@service_id OUTPUT;
     SELECT @service_public_id=public_id FROM dbo.services WHERE service_id=@service_id;
     EXEC dbo.sp_set_branch_service_price @actor_user_id=@admin_id,@branch_id=@branch_id,@service_id=@service_id,
@@ -80,12 +94,18 @@ BEGIN TRY
       @specialty_id=@specialty_id,@user_id=@doctor_user_id OUTPUT,@employee_id=@employee_id OUTPUT,@doctor_id=@doctor_id OUTPUT;
     SELECT @doctor_public_id=public_id FROM dbo.doctors WHERE doctor_id=@doctor_id;
     EXEC dbo.sp_assign_doctor_service @actor_user_id=@admin_id,@branch_id=@branch_id,
-      @doctor_id=@doctor_id,@service_id=@service_id,@custom_duration_min=30;
+      @doctor_id=@doctor_id,@service_id=@service_id,@custom_duration_min=5;
     DECLARE @schedule_id bigint,@schedule_public_id uniqueidentifier;
     EXEC dbo.sp_create_doctor_working_schedule @actor_user_id=@admin_id,@doctor_id=@doctor_id,
       @branch_id=@branch_id,@room_id=@room_id,@weekday_iso=@weekday,@local_start_time='00:00',
       @local_end_time='23:59',@slot_duration_min=30,@effective_from=@business_date,@effective_to=@business_date,
       @booking_horizon_days=1,@working_schedule_id=@schedule_id OUTPUT,@working_schedule_public_id=@schedule_public_id OUTPUT;
+    EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=@doctor_user_id;
+    EXEC dbo.sp_clinic_decide_working_schedule @actor_user_id=@doctor_user_id,
+      @working_schedule_public_id=@schedule_public_id,@decision='CONFIRM';
+    EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=@admin_id;
+    EXEC dbo.sp_clinic_publish_working_schedule @actor_user_id=@admin_id,
+      @working_schedule_public_id=@schedule_public_id;
 
     DECLARE @local_start datetime2(3)=CONVERT(datetime2(3),CONCAT(CONVERT(char(10),@business_date,126),'T12:00:00')),
             @local_end datetime2(3)=CONVERT(datetime2(3),CONCAT(CONVERT(char(10),@business_date,126),'T12:30:00')),
@@ -97,6 +117,23 @@ BEGIN TRY
     VALUES(@schedule_id,@doctor_id,@branch_id,@room_id,@business_date,'12:00','12:30',@starts_at_utc,@ends_at_utc,
       DATEADD(DAY,-1,@starts_at_utc),DATEADD(MINUTE,-1,@starts_at_utc),'OPEN');
     DECLARE @slot_id bigint=SCOPE_IDENTITY();
+
+    DECLARE @walk_slot_number int=0,@walk_start_utc datetime2(3),@walk_end_utc datetime2(3),
+            @walk_start_local datetime2(3),@walk_end_local datetime2(3);
+    WHILE @walk_slot_number<3
+    BEGIN
+        SET @walk_start_utc=DATEADD(MINUTE,1+@walk_slot_number*5,
+            DATEADD(SECOND,-DATEPART(SECOND,SYSUTCDATETIME()),CONVERT(datetime2(3),SYSUTCDATETIME())));
+        SET @walk_end_utc=DATEADD(MINUTE,5,@walk_start_utc);
+        SET @walk_start_local=CONVERT(datetime2(3),(@walk_start_utc AT TIME ZONE 'UTC') AT TIME ZONE @timezone);
+        SET @walk_end_local=CONVERT(datetime2(3),(@walk_end_utc AT TIME ZONE 'UTC') AT TIME ZONE @timezone);
+        INSERT dbo.appointment_slots(working_schedule_id,doctor_id,branch_id,room_id,service_date_local,
+          start_time_local,end_time_local,starts_at_utc,ends_at_utc,booking_opens_at_utc,booking_closes_at_utc,status)
+        VALUES(@schedule_id,@doctor_id,@branch_id,@room_id,@business_date,
+          CONVERT(time(0),@walk_start_local),CONVERT(time(0),@walk_end_local),@walk_start_utc,@walk_end_utc,
+          DATEADD(DAY,-1,@walk_start_utc),DATEADD(SECOND,-1,@walk_start_utc),'OPEN');
+        SET @walk_slot_number+=1;
+    END;
 
     DECLARE @patient_id bigint,@patient_public_id uniqueidentifier;
     EXEC dbo.sp_create_patient @actor_user_id=@admin_id,@branch_id=@branch_id,@full_name=N'Bệnh nhân Reception',
@@ -181,6 +218,10 @@ BEGIN TRY
       @encounter_public_id=@walk2_encounter OUTPUT,@queue_ticket_public_id=@walk2_ticket OUTPUT,@display_number=@walk2_display OUTPUT;
     IF EXISTS(SELECT 1 FROM dbo.encounters WHERE public_id IN(@walk1_encounter,@walk2_encounter) AND appointment_id IS NOT NULL)
       THROW 55807,N'Walk-in đã tạo lịch hẹn giả.',1;
+    IF (SELECT COUNT(*) FROM dbo.appointment_slots s JOIN dbo.encounters e ON e.encounter_id=s.walk_in_encounter_id
+        WHERE e.public_id IN(@walk1_encounter,@walk2_encounter))<>2
+      THROW 55831,N'Hai lượt walk-in chưa giữ hai slot riêng.',1;
+    EXEC dbo.sp_clinic_get_reception @actor_user_id=@admin_id,@branch_public_id=@branch_public_id;
     IF (SELECT MIN(queue_number) FROM dbo.queue_tickets WHERE public_id IN(@ticket_public_id,@walk1_ticket,@walk2_ticket))
        >=(SELECT MAX(queue_number) FROM dbo.queue_tickets WHERE public_id IN(@ticket_public_id,@walk1_ticket,@walk2_ticket))
       THROW 55808,N'Bộ cấp số không tăng đơn điệu.',1;
@@ -194,6 +235,23 @@ BEGIN TRY
     IF NOT EXISTS(SELECT 1 FROM dbo.outbox_events WHERE aggregate_id=CONVERT(varchar(36),@called_ticket) AND event_type='QUEUE_TICKET_CALLED')
       THROW 55810,N'Call-next không ghi outbox bằng public ID.',1;
 
+    EXEC dbo.sp_clinic_change_queue_ticket_status @actor_user_id=@admin_id,
+      @queue_ticket_public_id=@called_ticket,@action='SKIP',
+      @reason=N'Bệnh nhân tạm thời chưa có mặt tại cửa phòng khám.';
+    IF NOT EXISTS(SELECT 1 FROM dbo.queue_tickets WHERE public_id=@called_ticket AND status='SKIPPED')
+      OR NOT EXISTS(SELECT 1 FROM dbo.encounters WHERE public_id=@called_encounter AND status='WAITING')
+      OR NOT EXISTS(SELECT 1 FROM dbo.audit_logs WHERE entity_id=CONVERT(varchar(36),@called_ticket)
+          AND action_code='QUEUE_TICKET_SKIPPED'
+          AND JSON_VALUE(new_values_json,'$.reason')=N'Bệnh nhân tạm thời chưa có mặt tại cửa phòng khám.')
+      THROW 55818,N'Bỏ qua số không giữ lượt khám WAITING hoặc thiếu audit lý do.',1;
+    EXEC dbo.sp_clinic_change_queue_ticket_status @actor_user_id=@admin_id,
+      @queue_ticket_public_id=@called_ticket,@action='RECALL',
+      @reason=N'Bệnh nhân đã quay lại và có mặt tại cửa phòng khám.';
+    IF NOT EXISTS(SELECT 1 FROM dbo.queue_tickets WHERE public_id=@called_ticket AND status='CALLED')
+      OR NOT EXISTS(SELECT 1 FROM dbo.outbox_events WHERE aggregate_id=CONVERT(varchar(36),@called_ticket)
+          AND event_type='QUEUE_TICKET_RECALLED')
+      THROW 55819,N'Gọi lại số đã bỏ qua không thành công hoặc thiếu outbox.',1;
+
     EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=@doctor_user_id;
     DECLARE @called_encounter_id bigint=(SELECT encounter_id FROM dbo.encounters WHERE public_id=@called_encounter);
     EXEC dbo.sp_start_encounter @actor_user_id=@doctor_user_id,
@@ -205,8 +263,36 @@ BEGIN TRY
       OR NOT EXISTS(SELECT 1 FROM dbo.outbox_events WHERE aggregate_id=CONVERT(varchar(36),@walk1_encounter) AND event_type='WALK_IN_ENCOUNTER_CREATED')
       THROW 55812,N'Check-in/walk-in thiếu outbox public ID.',1;
 
+    EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=@admin_id;
+    DECLARE @walk3_encounter uniqueidentifier,@walk3_ticket uniqueidentifier,
+            @walk3_display varchar(20),@walk3_key uniqueidentifier=NEWID();
+    EXEC dbo.sp_clinic_create_walk_in_encounter @actor_user_id=@admin_id,@branch_public_id=@branch_public_id,
+      @patient_public_id=@patient_public_id,@doctor_public_id=@doctor_public_id,@room_public_id=@room_public_id,
+      @service_public_id=@service_public_id,@priority_level=0,@idempotency_key=@walk3_key,
+      @encounter_public_id=@walk3_encounter OUTPUT,@queue_ticket_public_id=@walk3_ticket OUTPUT,@display_number=@walk3_display OUTPUT;
+    IF (SELECT COUNT(*) FROM dbo.appointment_slots s JOIN dbo.encounters e ON e.encounter_id=s.walk_in_encounter_id
+        WHERE e.public_id IN(@walk1_encounter,@walk2_encounter,@walk3_encounter))<>3
+      OR EXISTS(SELECT 1 FROM dbo.appointment_slots s JOIN dbo.appointments a ON a.slot_id=s.slot_id
+                WHERE s.walk_in_encounter_id IS NOT NULL AND a.occupies_slot=1)
+      THROW 55832,N'Walk-in không giữ đủ công suất hoặc chồng lịch hẹn.',1;
+    EXEC dbo.sp_clinic_call_next_queue_ticket @actor_user_id=@admin_id,
+      @branch_public_id=@branch_public_id,@queue_type='GENERAL',
+      @queue_ticket_public_id=@called_ticket OUTPUT,@encounter_public_id=@called_encounter OUTPUT,@display_number=@called_display OUTPUT;
+    IF @called_ticket<>@walk2_ticket THROW 55820,N'Gọi tiếp không chọn số đang chờ lâu nhất.',1;
+    EXEC dbo.sp_clinic_change_queue_ticket_status @actor_user_id=@admin_id,
+      @queue_ticket_public_id=@called_ticket,@action='SKIP',
+      @reason=N'Bệnh nhân chưa tới cửa phòng khám sau khi gọi số.';
+    EXEC dbo.sp_clinic_cancel_encounter @actor_user_id=@admin_id,
+      @encounter_public_id=@walk2_encounter,@reason=N'Bệnh nhân rời phòng khám trước khi được phục vụ.';
+    IF NOT EXISTS(SELECT 1 FROM dbo.queue_tickets WHERE public_id=@walk2_ticket AND status='CANCELLED')
+      OR NOT EXISTS(SELECT 1 FROM dbo.encounters WHERE public_id=@walk2_encounter AND status='CANCELLED')
+      OR EXISTS(SELECT 1 FROM dbo.appointment_slots s JOIN dbo.encounters e ON e.encounter_id=s.walk_in_encounter_id
+                WHERE e.public_id=@walk2_encounter)
+      THROW 55821,N'Hủy lượt không đóng số đã bỏ qua.',1;
+
     -- Negative case chạy cuối: procedure rollback transaction test khi ticket chưa CALLED.
-    DECLARE @start_error int=NULL,@uncalled_encounter_id bigint=(SELECT encounter_id FROM dbo.encounters WHERE public_id=@walk2_encounter);
+    DECLARE @start_error int=NULL,@uncalled_encounter_id bigint=(SELECT encounter_id FROM dbo.encounters WHERE public_id=@walk3_encounter);
+    EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=@doctor_user_id;
     BEGIN TRY
       EXEC dbo.sp_start_encounter @actor_user_id=@doctor_user_id,
         @encounter_id=@uncalled_encounter_id,@room_id=@room_id;

@@ -5,36 +5,38 @@ import { HttpError } from '../../shared/http/errors.js';
 import type { PrincipalAuthenticator } from '../identity/index.js';
 import { PharmacyService } from './pharmacy.service.js';
 
-const uuid = z.string().uuid();
+// SQL Server public IDs include GUIDs whose version nibble is outside RFC 9562 UUID versions.
+const guid = z.guid();
+const uuid = z.uuid();
 const money = z.number().min(0).max(999_999_999_999).refine((value) => Number.isInteger(value * 100));
 const quantity = z.number().positive().max(999_999_999).refine((value) => Number.isInteger(value * 1000));
 const reason = z.string().trim().min(5).max(500);
-const branchQuery = z.object({ branchPublicId: uuid }).strict();
+const branchQuery = z.object({ branchPublicId: guid }).strict();
 const medicine = z.object({ code: z.string().trim().min(1).max(30), genericName: z.string().trim().min(2).max(250),
   activeIngredient: z.string().trim().min(2).max(500), strength: z.string().trim().min(1).max(100),
   dosageForm: z.string().trim().min(1).max(100), route: z.string().trim().min(1).max(100),
   baseUnit: z.string().trim().min(1).max(30), salePrice: money,
   allergenNames: z.array(z.string().trim().min(2).max(200)).min(1).max(20) }).strict();
-const batch = z.object({ branchPublicId: uuid, medicinePublicId: uuid, batchNumber: z.string().trim().min(1).max(80),
+const batch = z.object({ branchPublicId: guid, medicinePublicId: guid, batchNumber: z.string().trim().min(1).max(80),
   expiryDate: z.iso.date(), purchasePrice: money, salePrice: money }).strict();
-const location = z.object({ branchPublicId: uuid, code: z.string().trim().min(1).max(30),
+const location = z.object({ branchPublicId: guid, code: z.string().trim().min(1).max(30),
   name: z.string().trim().min(2).max(150), type: z.enum(['WAREHOUSE', 'PHARMACY', 'CABINET', 'QUARANTINE']),
   isDispensing: z.boolean() }).strict();
 const prescription = z.object({ validDays: z.number().int().min(1).max(90).default(7),
   clinicalNotes: z.string().trim().max(1000).nullable().optional(),
   generalInstructions: z.string().trim().max(1000).nullable().optional() }).strict();
-const item = z.object({ medicinePublicId: uuid, prescribedQuantity: quantity,
+const item = z.object({ medicinePublicId: guid, prescribedQuantity: quantity,
   dose: z.string().trim().min(1).max(100), frequency: z.string().trim().min(1).max(100),
   durationDays: z.number().int().min(1).max(365).nullable().optional(),
   timingInstruction: z.string().trim().max(200).nullable().optional(),
   usageInstruction: z.string().trim().min(1).max(1000), sortOrder: z.number().int().min(0).max(1000).optional(),
   allergyOverrideReason: z.string().trim().max(500).nullable().optional() }).strict();
-const stock = z.object({ locationPublicId: uuid, batchPublicId: uuid, quantity,
+const stock = z.object({ locationPublicId: guid, batchPublicId: guid, quantity,
   reason: z.string().trim().max(500).nullable().optional() }).strict();
-const open = z.object({ locationPublicId: uuid }).strict();
-const dispense = z.object({ prescriptionItemPublicId: uuid, batchPublicId: uuid, quantity,
+const open = z.object({ locationPublicId: guid }).strict();
+const dispense = z.object({ prescriptionItemPublicId: guid, batchPublicId: guid, quantity,
   allergyOverrideReason: z.string().trim().max(500).nullable().optional() }).strict();
-const reverse = z.object({ returnLocationPublicId: uuid, disposition: z.enum(['SELLABLE', 'QUARANTINE']),
+const reverse = z.object({ returnLocationPublicId: guid, disposition: z.enum(['SELLABLE', 'QUARANTINE']),
   reason, sellableInspectionConfirmed: z.boolean().default(false) }).strict()
   .superRefine((value, context) => {
     if (value.disposition === 'SELLABLE' && !value.sellableInspectionConfirmed) {
@@ -82,7 +84,7 @@ export function createPharmacyRouter(auth: PrincipalAuthenticator, service: Phar
     success(res, await service.run(() => db.reconcile(current, branchPublicId, res.locals.requestId)));
   }));
   router.get('/prescriptions/:prescriptionId', route(async (req, res) => {
-    const current = await actor(req, auth); const id = validate(uuid, req.params.prescriptionId);
+    const current = await actor(req, auth); const id = validate(guid, req.params.prescriptionId);
     success(res, await service.run(() => db.get(current, id, res.locals.requestId)));
   }));
   router.post('/pharmacy/medicines', route(async (req, res) => {
@@ -103,23 +105,23 @@ export function createPharmacyRouter(auth: PrincipalAuthenticator, service: Phar
   router.post('/encounters/:encounterId/prescriptions', route(async (req, res) => {
     const input = validate(prescription, req.body ?? {}); const current = await actor(req, auth);
     const publicId = await service.run(() => db.createPrescription(current,
-      validate(uuid, req.params.encounterId), input, res.locals.requestId));
+      validate(guid, req.params.encounterId), input, res.locals.requestId));
     success(res, await service.run(() => db.get(current, publicId, res.locals.requestId)), 201);
   }));
   router.post('/prescriptions/:prescriptionId/items', route(async (req, res) => {
     const input = validate(item, req.body); const current = await actor(req, auth);
-    const prescriptionId = validate(uuid, req.params.prescriptionId);
+    const prescriptionId = validate(guid, req.params.prescriptionId);
     await service.run(() => db.addItem(current, prescriptionId, input, res.locals.requestId));
     success(res, await service.run(() => db.get(current, prescriptionId, res.locals.requestId)), 201);
   }));
   router.post('/prescriptions/:prescriptionId/issue', route(async (req, res) => {
-    const current = await actor(req, auth); const id = validate(uuid, req.params.prescriptionId);
+    const current = await actor(req, auth); const id = validate(guid, req.params.prescriptionId);
     await service.run(() => db.issue(current, id, res.locals.requestId));
     success(res, await service.run(() => db.get(current, id, res.locals.requestId)));
   }));
   router.post('/prescriptions/:prescriptionId/cancel', route(async (req, res) => {
     const { reason: why } = validate(reasonBody, req.body); const current = await actor(req, auth);
-    const id = validate(uuid, req.params.prescriptionId);
+    const id = validate(guid, req.params.prescriptionId);
     await service.run(() => db.cancelPrescription(current, id, why, res.locals.requestId));
     success(res, await service.run(() => db.get(current, id, res.locals.requestId)));
   }));
@@ -132,31 +134,31 @@ export function createPharmacyRouter(auth: PrincipalAuthenticator, service: Phar
   }));
   router.post('/prescriptions/:prescriptionId/dispensations', route(async (req, res) => {
     const input = validate(open, req.body); const current = await actor(req, auth);
-    const id = validate(uuid, req.params.prescriptionId);
+    const id = validate(guid, req.params.prescriptionId);
     const publicId = await service.run(() => db.openDispensation(current, id, input.locationPublicId, res.locals.requestId));
     success(res, { publicId }, 201);
   }));
   router.post('/dispensations/:dispensationId/items', route(async (req, res) => {
     const input = validate(dispense, req.body); const current = await actor(req, auth);
     const key = validate(uuid, req.header('idempotency-key'));
-    const publicId = await service.run(() => db.dispense(current, validate(uuid, req.params.dispensationId),
+    const publicId = await service.run(() => db.dispense(current, validate(guid, req.params.dispensationId),
       input.prescriptionItemPublicId, input.batchPublicId, input.quantity,
       input.allergyOverrideReason ?? null, key, res.locals.requestId));
     success(res, { publicId }, 201);
   }));
   router.post('/dispensations/:dispensationId/complete', route(async (req, res) => {
     const current = await actor(req, auth); await service.run(() => db.completeDispensation(current,
-      validate(uuid, req.params.dispensationId), res.locals.requestId));
+      validate(guid, req.params.dispensationId), res.locals.requestId));
     success(res, { status: 'COMPLETED' });
   }));
   router.post('/dispensations/:dispensationId/cancel', route(async (req, res) => {
     const { reason: why } = validate(reasonBody, req.body); const current = await actor(req, auth);
-    await service.run(() => db.cancelDispensation(current, validate(uuid, req.params.dispensationId), why, res.locals.requestId));
+    await service.run(() => db.cancelDispensation(current, validate(guid, req.params.dispensationId), why, res.locals.requestId));
     success(res, { status: 'CANCELLED' });
   }));
   router.post('/pharmacy/dispensation-items/:itemId/reverse', route(async (req, res) => {
     const input = validate(reverse, req.body); const current = await actor(req, auth);
-    const publicId = await service.run(() => db.reverse(current, validate(uuid, req.params.itemId),
+    const publicId = await service.run(() => db.reverse(current, validate(guid, req.params.itemId),
       input.returnLocationPublicId, input.disposition, input.reason, input.sellableInspectionConfirmed,
       res.locals.requestId));
     success(res, { publicId });

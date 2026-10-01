@@ -19,6 +19,8 @@ import { firstValidationMessage, type PatientRegistrationForm } from './registra
 export type RootStackParamList = {
   Welcome: undefined;
   Login: { identifier?: string; notice?: string } | undefined;
+  ForgotPassword: undefined;
+  ResetPassword: { token?: string } | undefined;
   Register: undefined;
   GuestExplore: undefined;
   PatientHome: undefined;
@@ -90,6 +92,9 @@ export function LoginScreen({ navigation, route, onAuthenticated }:
       <Field label="Mật khẩu" value={password} onChangeText={setPassword} secureTextEntry />
       {error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
       <SubmitButton label="Đăng nhập" loading={submitting} onPress={submit} />
+      <Pressable onPress={() => navigation.navigate('ForgotPassword')}>
+        <Text style={styles.link}>Quên mật khẩu?</Text>
+      </Pressable>
       <Pressable onPress={() => navigation.navigate('Register')}>
         <Text style={styles.link}>Chưa có tài khoản? Đăng ký ngay</Text>
       </Pressable>

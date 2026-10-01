@@ -13,6 +13,9 @@ function errorNumber(error: unknown): number | undefined {
 
 function mapError(error: unknown): never {
   const code = errorNumber(error);
+  if (code === 53930) {
+    throw new HttpError(409, 'CLINICAL_VERSION_CONFLICT', 'Nội dung khám đã được cập nhật ở phiên khác. Tải lại để đối chiếu.');
+  }
   if (code === 53256) {
     throw new HttpError(409, 'CLINICAL_QUEUE_NOT_CALLED', 'Số hàng đợi chưa được gọi. Hãy gọi số trước khi bắt đầu khám.');
   }
@@ -21,6 +24,9 @@ function mapError(error: unknown): never {
   }
   if (code === 53266) {
     throw new HttpError(409, 'CLINICAL_QUEUE_ORDER_CONFLICT', 'Còn lượt ưu tiên hoặc FIFO đứng trước trong hàng đợi.');
+  }
+  if (code === 53270) {
+    throw new HttpError(409, 'CLINICAL_QUEUE_TOO_EARLY', 'Chưa đến giờ gọi số của lượt khám.');
   }
   if (code === 53267) {
     throw new HttpError(400, 'CLINICAL_RESULT_SCHEMA_MISMATCH', 'Kết quả không khớp schema của dịch vụ khi được chỉ định.');
@@ -60,8 +66,10 @@ export class ClinicalService {
     try { await this.repository.start(actor, encounterPublicId, roomPublicId, queueBypassReason, requestId); }
     catch (error) { mapError(error); }
   }
-  async updateNotes(actor: ClinicPrincipal, encounterPublicId: string, input: ClinicalNotesInput, requestId: string) {
-    try { await this.repository.updateNotes(actor, encounterPublicId, input, requestId); } catch (error) { mapError(error); }
+  async updateNotes(actor: ClinicPrincipal, encounterPublicId: string, input: ClinicalNotesInput,
+    expectedRowVersion: string, requestId: string) {
+    try { await this.repository.updateNotes(actor, encounterPublicId, input, expectedRowVersion, requestId); }
+    catch (error) { mapError(error); }
   }
   async addVitalSigns(actor: ClinicPrincipal, encounterPublicId: string, input: VitalSignsInput, requestId: string) {
     try { return await this.repository.addVitalSigns(actor, encounterPublicId, input, requestId); } catch (error) { mapError(error); }

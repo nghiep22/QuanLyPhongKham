@@ -41,6 +41,24 @@ export type PublicBranch = Omit<BranchReference, 'id'> & {
 
 export type PublicSpecialty = Omit<SpecialtyReference, 'id'> & { description: string | null };
 
+export type OrganizationBranch = PublicBranch & {
+  id: number; medicalLicenseNo: string | null; checkInEarlyMinutes: number;
+  checkInLateMinutes: number; walkInMaxWaitMinutes: number; isActive: boolean; rowVersion: string;
+};
+export type OrganizationSpecialty = SpecialtyReference & {
+  description: string | null; isActive: boolean; rowVersion: string;
+};
+export type OrganizationCategory = CategoryReference & {
+  displayOrder: number; isActive: boolean; rowVersion: string;
+};
+export type BranchFields = Omit<OrganizationBranch, 'id' | 'publicId' | 'code' | 'rowVersion'>;
+export type CreateBranchInput = BranchFields & { code: string };
+export type UpdateBranchInput = BranchFields;
+export type CreateSpecialtyInput = { code: string; name: string; description: string | null };
+export type UpdateSpecialtyInput = Omit<CreateSpecialtyInput, 'code'> & { isActive: boolean };
+export type CreateCategoryInput = { code: string; name: string; displayOrder: number };
+export type UpdateCategoryInput = Omit<CreateCategoryInput, 'code'> & { isActive: boolean };
+
 export type PublicService = {
   publicId: string;
   code: string;
@@ -134,6 +152,15 @@ export type SetBranchPriceInput = {
 };
 
 export interface CatalogRepository {
+  listOrganizationBranches(): Promise<OrganizationBranch[]>;
+  listOrganizationSpecialties(): Promise<OrganizationSpecialty[]>;
+  listOrganizationCategories(): Promise<OrganizationCategory[]>;
+  createBranch(actor: ClinicPrincipal, input: CreateBranchInput, requestId: string): Promise<string>;
+  updateBranch(actor: ClinicPrincipal, branchId: number, input: UpdateBranchInput, expectedVersion: string, requestId: string): Promise<void>;
+  createSpecialty(actor: ClinicPrincipal, input: CreateSpecialtyInput, requestId: string): Promise<string>;
+  updateSpecialty(actor: ClinicPrincipal, specialtyId: number, input: UpdateSpecialtyInput, expectedVersion: string, requestId: string): Promise<void>;
+  createCategory(actor: ClinicPrincipal, input: CreateCategoryInput, requestId: string): Promise<string>;
+  updateCategory(actor: ClinicPrincipal, categoryId: number, input: UpdateCategoryInput, expectedVersion: string, requestId: string): Promise<void>;
   listPublicBranches(): Promise<PublicBranch[]>;
   listPublicSpecialties(): Promise<PublicSpecialty[]>;
   listPublicServices(branchPublicId: string, specialtyPublicId?: string, query?: string): Promise<PublicService[]>;

@@ -1,6 +1,6 @@
 import { ApiClientError } from '@clinic/generated-api-client'
 import type { BranchReference, PatientLinkRequestStatus, StaffPatientLinkRequest } from '@clinic/generated-api-types'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { apiClient } from '../../shared/api/client'
 
 const statusLabels: Record<PatientLinkRequestStatus, string> = {
@@ -25,6 +25,9 @@ export function PatientLinksPage() {
   const [branchPublicId, setBranchPublicId] = useState('')
   const [status, setStatus] = useState<PatientLinkRequestStatus | ''>('PENDING')
   const [items, setItems] = useState<StaffPatientLinkRequest[]>([])
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
+  const requestSequence = useRef(0)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [reason, setReason] = useState('')
   const [loading, setLoading] = useState(true)
@@ -32,19 +35,22 @@ export function PatientLinksPage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
-  const loadRequests = useCallback(async (branchId: string, requestStatus: PatientLinkRequestStatus | '') => {
+  const loadRequests = useCallback(async (branchId: string, requestStatus: PatientLinkRequestStatus | '', requestedPage: number) => {
     if (!branchId) return
+    const sequence = ++requestSequence.current
     setLoading(true)
     setError(null)
     try {
       const response = await apiClient.patientLinkAdmin.list({
-        branchPublicId: branchId, ...(requestStatus ? { status: requestStatus } : {}), page: 1, pageSize: 50,
+        branchPublicId: branchId, ...(requestStatus ? { status: requestStatus } : {}), page: requestedPage, pageSize: 50,
       })
+      if (sequence !== requestSequence.current) return
       setItems(response.data)
+      setTotal(response.meta.total)
     } catch (cause) {
-      setError(errorMessage(cause))
+      if (sequence === requestSequence.current) setError(errorMessage(cause))
     } finally {
-      setLoading(false)
+      if (sequence === requestSequence.current) setLoading(false)
     }
   }, [])
 
@@ -55,7 +61,7 @@ export function PatientLinksPage() {
       setBranches(response.data.branches)
       const initialBranch = response.data.branches[0]?.publicId ?? ''
       setBranchPublicId(initialBranch)
-      if (initialBranch) void loadRequests(initialBranch, 'PENDING')
+      if (initialBranch) void loadRequests(initialBranch, 'PENDING', 1)
       else setLoading(false)
     }).catch((cause: unknown) => {
       if (active) { setError(errorMessage(cause)); setLoading(false) }
@@ -76,11 +82,11 @@ export function PatientLinksPage() {
       setSelectedId(null)
       setReason('')
       setSuccess(decision === 'APPROVE' ? 'Đã duyệt và kích hoạt quyền truy cập.' : 'Đã từ chối yêu cầu.')
-      await loadRequests(branchPublicId, status)
+      await loadRequests(branchPublicId, status, page)
     } catch (cause) {
       setError(errorMessage(cause))
       if (cause instanceof ApiClientError && ['PATIENT_LINK_VERSION_CONFLICT', 'PATIENT_LINK_STATE_CONFLICT'].includes(cause.code)) {
-        await loadRequests(branchPublicId, status)
+        await loadRequests(branchPublicId, status, page)
       }
     } finally {
       setSubmitting(false)
@@ -97,8 +103,8 @@ export function PatientLinksPage() {
     <section className="patient-link-toolbar panel">
       <label>Chi nhánh
         <select value={branchPublicId} onChange={(event) => {
-          setBranchPublicId(event.target.value)
-          void loadRequests(event.target.value, status)
+          setBranchPublicId(event.target.value); setPage(1); setSelectedId(null); setReason('')
+          void loadRequests(event.target.value, status, 1)
         }}>
           {branches.map((branch) => <option key={branch.publicId} value={branch.publicId}>{branch.name}</option>)}
         </select>
@@ -106,15 +112,15 @@ export function PatientLinksPage() {
       <label>Trạng thái
         <select value={status} onChange={(event) => {
           const nextStatus = event.target.value as PatientLinkRequestStatus | ''
-          setStatus(nextStatus)
-          void loadRequests(branchPublicId, nextStatus)
+          setStatus(nextStatus); setPage(1); setSelectedId(null); setReason('')
+          void loadRequests(branchPublicId, nextStatus, 1)
         }}>
           <option value="">Tất cả</option>
           {Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </select>
       </label>
       <button className="secondary" type="button" disabled={loading || !branchPublicId}
-        onClick={() => void loadRequests(branchPublicId, status)}>Tải lại</button>
+        onClick={() => void loadRequests(branchPublicId, status, page)}>Tải lại</button>
     </section>
 
     {error && <div className="form-error" role="alert">{error}</div>}
@@ -156,5 +162,16 @@ export function PatientLinksPage() {
                 : <button type="button" onClick={() => { setSelectedId(item.publicId); setReason('') }}>Xử lý yêu cầu</button>)}
             </article>)}
           </section>}
+    {total > 0 && <nav className="action-row" aria-label="Phân trang yêu cầu liên kết">
+      <button type="button" className="secondary" disabled={loading || page <= 1} onClick={() => {
+        const next = page - 1; setPage(next); setSelectedId(null); setReason('')
+        void loadRequests(branchPublicId, status, next)
+      }}>Trang trước</button>
+      <span>Trang {page}/{Math.ceil(total / 50)} · {total} yêu cầu</span>
+      <button type="button" className="secondary" disabled={loading || page * 50 >= total} onClick={() => {
+        const next = page + 1; setPage(next); setSelectedId(null); setReason('')
+        void loadRequests(branchPublicId, status, next)
+      }}>Trang sau</button>
+    </nav>}
   </>
 }

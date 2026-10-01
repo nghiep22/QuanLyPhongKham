@@ -5,7 +5,8 @@ export type ReportBranch = { publicId: string; code: string; name: string; timez
 export type ReportRange = { from: string; to: string };
 export type OperationsReport = {
   summary: { appointmentCount: number; confirmedCount: number; cancelledCount: number; noShowCount: number;
-    encounterCount: number; completedEncounterCount: number; averageWaitMinutes: number | null };
+    encounterCount: number; completedEncounterCount: number; averageWaitMinutes: number | null;
+    p90WaitMinutes: number | null; walkInEncounterCount: number };
   daily: Array<{ date: string; appointmentCount: number; arrivedCount: number; completedCount: number;
     cancelledCount: number; noShowCount: number }>;
 };

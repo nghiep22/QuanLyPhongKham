@@ -31,6 +31,10 @@ const changeSchema = newPasswordSchema.and(z.object({
 }))
 type ChangeValues = z.infer<typeof changeSchema>
 
+function AuthBrand() {
+  return <div className="auth-brand"><span className="brand-mark" aria-hidden="true">✚</span><span>Phòng khám <strong>AN TÂM</strong></span></div>
+}
+
 function PasswordFields({ register, errors }: {
   register: ReturnType<typeof useForm<NewPasswordValues>>['register']
   errors: ReturnType<typeof useForm<NewPasswordValues>>['formState']['errors']
@@ -63,6 +67,7 @@ export function ForgotPasswordPage() {
     }
   })
   return <main className="auth-shell"><section className="auth-card">
+    <AuthBrand />
     <span className="eyebrow">KHÔI PHỤC TÀI KHOẢN</span>
     <h1>Quên mật khẩu</h1>
     {accepted ? <div className="form-success" role="status">
@@ -92,6 +97,7 @@ export function ResetPasswordPage() {
     if (token) window.history.replaceState(null, '', '/reset-password')
   }, [token])
   if (!token) return <main className="auth-shell"><section className="auth-card">
+    <AuthBrand />
     <h1>Liên kết không hợp lệ</h1><p>Liên kết đặt lại mật khẩu bị thiếu mã xác nhận.</p>
     <div className="auth-links"><Link to="/forgot-password">Yêu cầu liên kết mới</Link></div>
   </section></main>
@@ -112,6 +118,7 @@ export function ResetPasswordPage() {
   })
   if (completed) return <Navigate to="/login?passwordReset=1" replace />
   return <main className="auth-shell"><section className="auth-card">
+    <AuthBrand />
     <span className="eyebrow">BẢO MẬT TÀI KHOẢN</span><h1>Đặt lại mật khẩu</h1>
     <p>Mật khẩu mới sẽ vô hiệu hóa mọi phiên đang đăng nhập trên các thiết bị.</p>
     <form onSubmit={submit} noValidate>

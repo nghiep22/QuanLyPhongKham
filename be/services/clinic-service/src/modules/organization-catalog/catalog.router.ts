@@ -19,6 +19,30 @@ const publicDoctorQuery = z.object({
   servicePublicId: uuid.optional(), query: z.string().trim().max(100).optional(),
 });
 const branchQuery = z.object({ branchPublicId: uuid });
+const code = z.string().trim().toUpperCase().regex(/^[A-Z0-9_-]{2,30}$/);
+const branchFields = z.object({
+  name: z.string().trim().min(2).max(200),
+  addressLine: z.string().trim().min(2).max(300),
+  ward: z.string().trim().max(100).nullable(), district: z.string().trim().max(100).nullable(),
+  province: z.string().trim().max(100).nullable(),
+  phone: z.string().trim().max(20).nullable(), email: z.email().max(254).nullable(),
+  medicalLicenseNo: z.string().trim().max(100).nullable(),
+  timezoneName: z.string().trim().min(1).max(128),
+  bookingHorizonDays: z.number().int().min(1).max(365),
+  onlineHoldMinutes: z.number().int().min(1).max(120),
+  cancellationDeadlineMinutes: z.number().int().min(0).max(525600),
+  checkInEarlyMinutes: z.number().int().min(0).max(720),
+  checkInLateMinutes: z.number().int().min(0).max(1440),
+  walkInMaxWaitMinutes: z.number().int().min(15).max(180),
+  isActive: z.boolean(),
+}).strict();
+const createBranchSchema = branchFields.omit({ isActive: true }).extend({ code: code.max(20) });
+const specialtyFields = z.object({ name: z.string().trim().min(2).max(150),
+  description: z.string().trim().max(1000).nullable(), isActive: z.boolean() }).strict();
+const createSpecialtySchema = specialtyFields.omit({ isActive: true }).extend({ code }).strict();
+const categoryFields = z.object({ name: z.string().trim().min(2).max(150),
+  displayOrder: z.number().int().min(0).max(1000000), isActive: z.boolean() }).strict();
+const createCategorySchema = categoryFields.omit({ isActive: true }).extend({ code }).strict();
 const createRoomSchema = z.object({
   branchPublicId: uuid, code: z.string().trim().min(1).max(30),
   name: z.string().trim().min(2).max(150), type: z.enum(roomTypes),
@@ -142,6 +166,37 @@ export function createPublicCatalogRouter(catalog: CatalogService) {
 
 export function createAdminCatalogRouter(auth: PrincipalAuthenticator, catalog: CatalogService) {
   const router = Router();
+  router.get('/organization', asyncRoute(async (request, response) => {
+    success(response, await catalog.organization(await actor(request, auth)));
+  }));
+  router.post('/branches', asyncRoute(async (request, response) => {
+    const input = validate(createBranchSchema, request.body);
+    const item = await catalog.createBranch(await actor(request, auth), { ...input, isActive: true }, response.locals.requestId);
+    response.status(201); setEtag(response, item); success(response, item);
+  }));
+  router.put('/branches/:branchId', asyncRoute(async (request, response) => {
+    const item = await catalog.updateBranch(await actor(request, auth), validate(uuid, request.params.branchId),
+      validate(branchFields, request.body), version(request), response.locals.requestId);
+    setEtag(response, item); success(response, item);
+  }));
+  router.post('/specialties', asyncRoute(async (request, response) => {
+    const item = await catalog.createSpecialty(await actor(request, auth), validate(createSpecialtySchema, request.body), response.locals.requestId);
+    response.status(201); setEtag(response, item); success(response, item);
+  }));
+  router.put('/specialties/:specialtyId', asyncRoute(async (request, response) => {
+    const item = await catalog.updateSpecialty(await actor(request, auth), validate(uuid, request.params.specialtyId),
+      validate(specialtyFields, request.body), version(request), response.locals.requestId);
+    setEtag(response, item); success(response, item);
+  }));
+  router.post('/categories', asyncRoute(async (request, response) => {
+    const item = await catalog.createCategory(await actor(request, auth), validate(createCategorySchema, request.body), response.locals.requestId);
+    response.status(201); setEtag(response, item); success(response, item);
+  }));
+  router.put('/categories/:categoryId', asyncRoute(async (request, response) => {
+    const item = await catalog.updateCategory(await actor(request, auth), validate(uuid, request.params.categoryId),
+      validate(categoryFields, request.body), version(request), response.locals.requestId);
+    setEtag(response, item); success(response, item);
+  }));
   router.get('/reference-data', asyncRoute(async (request, response) => {
     success(response, await catalog.references(await actor(request, auth)));
   }));

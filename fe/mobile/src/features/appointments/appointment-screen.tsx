@@ -45,6 +45,7 @@ export function AppointmentScreen({ bookingIntent, onBookingIntentHandled }: {
   const [branches, setBranches] = useState<PublicBranch[]>([]);
   const [services, setServices] = useState<PublicService[]>([]);
   const [slots, setSlots] = useState<AvailabilitySlot[]>([]);
+  const [slotsFor, setSlotsFor] = useState('');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [profileId, setProfileId] = useState('');
   const [branchId, setBranchId] = useState(bookingIntent?.branchPublicId ?? '');
@@ -60,8 +61,15 @@ export function AppointmentScreen({ bookingIntent, onBookingIntentHandled }: {
   const [error, setError] = useState<string | null>(null); const [notice, setNotice] = useState<string | null>(null);
   const [serviceError, setServiceError] = useState<string | null>(null);
   const retry = useRef<{ payload: string; key: string } | null>(null);
+  const loadRequest = useRef(0);
+  const slotRequest = useRef(0);
+  const slotFilter = JSON.stringify([branchId, serviceId, date, doctorFilter?.publicId ?? '']);
+  const slotFilterRef = useRef(slotFilter);
+  slotFilterRef.current = slotFilter;
+  const visibleSlots = slotsFor === slotFilter ? slots : [];
 
   const load = useCallback(async (refresh = false) => {
+    const requestNumber = ++loadRequest.current;
     if (refresh) setRefreshing(true);
     else setLoading(true);
     setError(null);
@@ -69,14 +77,19 @@ export function AppointmentScreen({ bookingIntent, onBookingIntentHandled }: {
       const [access, branchResponse, appointmentResponse] = await Promise.all([
         apiClient.patientAccess.get(), apiClient.publicCatalog.branches(), apiClient.appointments.list(),
       ]);
+      if (requestNumber !== loadRequest.current) return;
       const allowed = access.data.links.filter((item) => item.bookingAllowed);
       setProfiles(allowed); setBranches(branchResponse.data); setAppointments(appointmentResponse.data);
-      setProfileId((current) => current || allowed[0]?.patient.publicId || '');
+      setProfileId((current) => allowed.some((item) => item.patient.publicId === current)
+        ? current : allowed[0]?.patient.publicId || '');
       setBranchId((current) => current || branchResponse.data[0]?.publicId || '');
-    } catch (cause) { setError(message(cause)); }
-    finally { setLoading(false); setRefreshing(false); }
+    } catch (cause) { if (requestNumber === loadRequest.current) setError(message(cause)); }
+    finally { if (requestNumber === loadRequest.current) { setLoading(false); setRefreshing(false); } }
   }, []);
-  useFocusEffect(useCallback(() => { void load(); }, [load]));
+  useFocusEffect(useCallback(() => {
+    void load();
+    return () => { loadRequest.current++; };
+  }, [load]));
 
   useEffect(() => {
     if (!bookingIntent) return;
@@ -86,7 +99,7 @@ export function AppointmentScreen({ bookingIntent, onBookingIntentHandled }: {
       publicId: bookingIntent.doctorPublicId,
       name: bookingIntent.doctorName ?? 'bác sĩ đã chọn',
     } : null);
-    setSlots([]);
+    slotRequest.current++; setSearching(false); setSlots([]); setSlotsFor('');
     onBookingIntentHandled?.();
   }, [bookingIntent, onBookingIntentHandled]);
 
@@ -96,7 +109,8 @@ export function AppointmentScreen({ bookingIntent, onBookingIntentHandled }: {
       return;
     }
     let active = true;
-    setServices([]); setSlots([]); setServiceError(null); setServicesLoading(true);
+    slotRequest.current++; setSearching(false); setServices([]); setSlots([]); setSlotsFor('');
+    setServiceError(null); setServicesLoading(true);
     void apiClient.publicCatalog.services({ branchPublicId: branchId }).then((response) => {
       if (!active) return;
       setServices(response.data);
@@ -113,16 +127,28 @@ export function AppointmentScreen({ bookingIntent, onBookingIntentHandled }: {
     if (!branchId || !serviceId || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       setError('Chọn chi nhánh, dịch vụ và nhập ngày theo YYYY-MM-DD.'); return;
     }
-    setSearching(true); setError(null); setNotice(null);
+    const requestNumber = ++slotRequest.current;
+    const requestedFilter = slotFilter;
+    setSearching(true); setSlots([]); setSlotsFor(''); setError(null); setNotice(null);
     try {
       const response = await apiClient.publicCatalog.availability({ branchPublicId: branchId, servicePublicId: serviceId,
         ...(doctorFilter ? { doctorPublicId: doctorFilter.publicId } : {}), fromDate: date, toDate: date });
-      setSlots(response.data);
-    } catch (cause) { setError(message(cause)); }
-    finally { setSearching(false); }
+      if (requestNumber === slotRequest.current && requestedFilter === slotFilterRef.current) {
+        setSlots(response.data); setSlotsFor(requestedFilter);
+      }
+    } catch (cause) { if (requestNumber === slotRequest.current) setError(message(cause)); }
+    finally { if (requestNumber === slotRequest.current) setSearching(false); }
   };
 
   const chooseSlot = async (slot: AvailabilitySlot) => {
+    if (slotsFor !== slotFilter || !visibleSlots.some((item) => item.publicId === slot.publicId)
+      || slot.serviceDateLocal !== date || slot.branch.publicId !== branchId
+      || slot.service.publicId !== serviceId || (doctorFilter && slot.doctor.publicId !== doctorFilter.publicId)) {
+      setError('Khung giờ không còn khớp lựa chọn hiện tại. Hãy tìm lại.'); return;
+    }
+    if (!rescheduling && !profiles.some((item) => item.patient.publicId === profileId)) {
+      setError('Hồ sơ không còn quyền đặt lịch. Hãy tải lại danh sách hồ sơ.'); return;
+    }
     if (!profileId && !rescheduling) { setError('Chọn hồ sơ bệnh nhân trước khi đặt lịch.'); return; }
     const body = rescheduling
       ? { newSlotPublicId: slot.publicId, newServicePublicId: serviceId, reason: 'Bệnh nhân chủ động đổi lịch trên ứng dụng' }
@@ -136,7 +162,7 @@ export function AppointmentScreen({ bookingIntent, onBookingIntentHandled }: {
         newSlotPublicId: string; newServicePublicId: string; reason: string }, retry.current.key);
       else await apiClient.appointments.book(body as {
         patientPublicId: string; slotPublicId: string; servicePublicId: string; chiefComplaint?: string }, retry.current.key);
-      retry.current = null; setSlots([]); setComplaint(''); setRescheduling(null);
+      retry.current = null; setSlots([]); setSlotsFor(''); setComplaint(''); setRescheduling(null);
       setNotice(rescheduling ? 'Đã chuyển lịch sang khung giờ mới.' : 'Đã giữ chỗ. Phòng khám sẽ xác nhận trước khi hết hạn.');
       await queryClient.invalidateQueries({ queryKey: ['mobile', 'appointments'] });
       await load(true);
@@ -167,9 +193,11 @@ export function AppointmentScreen({ bookingIntent, onBookingIntentHandled }: {
     {error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
     {notice && <Text accessibilityRole="alert" style={styles.success}>{notice}</Text>}
     {rescheduling && <View style={styles.banner}><Text style={styles.cardTitle}>Đang đổi lịch {rescheduling.code}</Text>
-      <Pressable onPress={() => { setRescheduling(null); setSlots([]); }}><Text style={styles.link}>Thoát</Text></Pressable></View>}
+      <Pressable onPress={() => { slotRequest.current++; setSearching(false); setRescheduling(null);
+        setSlots([]); setSlotsFor(''); }}><Text style={styles.link}>Thoát</Text></Pressable></View>}
     {doctorFilter && !rescheduling && <View style={styles.banner}><Text style={styles.cardTitle}>Ưu tiên lịch của {doctorFilter.name}</Text>
-      <Pressable onPress={() => { setDoctorFilter(null); setSlots([]); }}><Text style={styles.link}>Bỏ lọc</Text></Pressable></View>}
+      <Pressable onPress={() => { slotRequest.current++; setSearching(false); setDoctorFilter(null);
+        setSlots([]); setSlotsFor(''); }}><Text style={styles.link}>Bỏ lọc</Text></Pressable></View>}
 
     {!rescheduling && <><Text style={styles.label}>Hồ sơ đi khám</Text><View style={styles.wrap}>{profiles.map((item) =>
       <Chip key={item.patient.publicId} label={`${item.patient.fullName} · ${item.patient.code}`}
@@ -177,7 +205,8 @@ export function AppointmentScreen({ bookingIntent, onBookingIntentHandled }: {
       {!profiles.length && <Text style={styles.empty}>Chưa có hồ sơ được phép đặt lịch.</Text>}</>}
     <Text style={styles.label}>Chi nhánh</Text><View style={styles.wrap}>{branches.map((item) =>
       <Chip key={item.publicId} label={item.name} active={branchId === item.publicId} onPress={() => {
-        setBranchId(item.publicId); setServiceId(''); setServices([]); setSlots([]);
+        slotRequest.current++; setSearching(false); setBranchId(item.publicId); setServiceId('');
+        setServices([]); setSlots([]); setSlotsFor('');
         setServiceError(null); setDoctorFilter(null);
       }} />)}</View>
     <Text style={styles.label}>Dịch vụ</Text>
@@ -187,10 +216,13 @@ export function AppointmentScreen({ bookingIntent, onBookingIntentHandled }: {
         <Pressable onPress={() => setServiceReload((value) => value + 1)}><Text style={styles.link}>Thử lại</Text></Pressable></View>
       : services.length ? <><View style={styles.wrap}>{services.map((item) =>
         <Chip key={item.publicId} label={`${item.name} · ${money(item.price.amount)}`} active={serviceId === item.publicId}
-          onPress={() => { setServiceId(item.publicId); setDoctorFilter(null); setSlots([]); setError(null); setNotice(null); }} />)}</View>
+          onPress={() => { slotRequest.current++; setSearching(false); setServiceId(item.publicId); setDoctorFilter(null);
+            setSlots([]); setSlotsFor(''); setError(null); setNotice(null); }} />)}</View>
         {serviceId && <Text style={styles.selectedService}>✓ Đã chọn: {services.find((item) => item.publicId === serviceId)?.name}</Text>}</>
         : <Text style={styles.empty}>Chi nhánh này chưa có dịch vụ đang mở đặt lịch.</Text>}
-    <Text style={styles.label}>Ngày khám</Text><TextInput style={styles.input} value={date} onChangeText={setDate}
+    <Text style={styles.label}>Ngày khám</Text><TextInput style={styles.input} value={date} onChangeText={(value) => {
+      slotRequest.current++; setSearching(false); setDate(value); setSlots([]); setSlotsFor('');
+    }}
       keyboardType="numbers-and-punctuation" placeholder="YYYY-MM-DD" />
     {!rescheduling && <><Text style={styles.label}>Lý do khám (không bắt buộc)</Text><TextInput style={[styles.input, styles.multiline]}
       value={complaint} onChangeText={setComplaint} multiline maxLength={1000} /></>}
@@ -199,13 +231,14 @@ export function AppointmentScreen({ bookingIntent, onBookingIntentHandled }: {
       {searching ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>Tìm khung giờ trống</Text>}
     </Pressable>
 
-    <View style={styles.slotList}>{slots.map((item) => <View key={item.publicId} style={styles.slotCard}>
-      <View><Text style={styles.cardTitle}>{item.startTimeLocal} – {item.endTimeLocal}</Text>
+    <View style={styles.slotList}>{visibleSlots.map((item) => <View key={item.publicId} style={styles.slotCard}>
+      <View><Text style={styles.cardTitle}>{item.serviceDateLocal} · {item.startTimeLocal} – {item.endTimeLocal}</Text>
+        <Text style={styles.muted}>{item.branch.name} · {item.service.name}</Text>
         <Text style={styles.muted}>{item.doctor.name} · {item.room.name}</Text></View>
       <Pressable disabled={submitting} style={styles.slotButton} onPress={() => void chooseSlot(item)}>
         <Text style={styles.buttonText}>{rescheduling ? 'Chuyển lịch' : 'Giữ chỗ'}</Text></Pressable>
     </View>)}</View>
-    {slots.length === 0 && !searching && <Text style={styles.empty}>Tìm lịch để xem các khung giờ đang trống.</Text>}
+    {visibleSlots.length === 0 && !searching && <Text style={styles.empty}>Tìm lịch để xem các khung giờ đang trống.</Text>}
 
     <Text style={styles.sectionTitle}>Lịch của bạn</Text>
     {appointments.length ? appointments.map((item) => <View style={styles.appointmentCard} key={item.publicId}>
@@ -215,7 +248,8 @@ export function AppointmentScreen({ bookingIntent, onBookingIntentHandled }: {
       {item.holdExpiresAtUtc && <Text style={styles.warning}>Giữ chỗ đến {new Date(item.holdExpiresAtUtc).toLocaleString('vi-VN')}</Text>}
       {(['PENDING', 'CONFIRMED'] as Appointment['status'][]).includes(item.status) && <View style={styles.actions}>
         <Pressable style={styles.secondary} onPress={() => { setRescheduling(item); setBranchId(item.branch.publicId);
-          setServiceId(item.service.publicId); setDoctorFilter(null); setDate(item.serviceDateLocal); setSlots([]); }}><Text style={styles.secondaryText}>Đổi lịch</Text></Pressable>
+          slotRequest.current++; setSearching(false); setServiceId(item.service.publicId); setDoctorFilter(null);
+          setDate(item.serviceDateLocal); setSlots([]); setSlotsFor(''); }}><Text style={styles.secondaryText}>Đổi lịch</Text></Pressable>
         <Pressable style={styles.danger} onPress={() => cancel(item)}><Text style={styles.dangerText}>Hủy lịch</Text></Pressable>
       </View>}
     </View>) : <Text style={styles.empty}>Bạn chưa có lịch hẹn.</Text>}

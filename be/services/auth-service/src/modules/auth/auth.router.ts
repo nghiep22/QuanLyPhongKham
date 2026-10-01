@@ -167,7 +167,8 @@ export function createAuthRouter(auth: AuthService) {
 
   router.post('/password/forgot', asyncRoute(async (request, response) => {
     const body = validate(forgotPasswordSchema, request.body);
-    await auth.requestPasswordReset(body.identifier, metadata(request).ipAddress, response.locals.requestId);
+    await auth.requestPasswordReset(body.identifier, metadata(request).ipAddress,
+      response.locals.requestId, request.get('origin'));
     response.status(202);
     success(response, { accepted: true });
   }));

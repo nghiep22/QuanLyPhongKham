@@ -24,13 +24,19 @@ const reason = z.object({ reason: z.string().trim().min(3).max(500) }).strict();
 const optionalReason = z.object({ reason: z.string().trim().min(3).max(500).optional() }).strict();
 const adminList = z.object({ branchPublicId: uuid, serviceDate: dateOnly,
   status: z.enum(appointmentStatuses).optional(), query: z.string().trim().max(100).optional() }).strict();
+const adminAvailabilityQuery = z.object({ branchPublicId: uuid, servicePublicId: uuid,
+  serviceDate: dateOnly }).strict();
 const createSchedule = z.object({ branchPublicId: uuid, doctorPublicId: uuid, roomPublicId: uuid,
   weekdayIso: z.number().int().min(1).max(7), localStartTime: timeOnly, localEndTime: timeOnly,
-  slotDurationMinutes: z.number().int().min(5).max(240), effectiveFrom: dateOnly,
+  slotDurationMinutes: z.number().int().min(5).max(480), effectiveFrom: dateOnly,
   effectiveTo: dateOnly.nullable().optional(), bookingHorizonDays: z.number().int().min(1).max(365).nullable().optional(),
   breaks: z.array(z.object({ localStartTime: timeOnly, localEndTime: timeOnly,
     breakName: z.string().trim().max(100).nullable().optional() }).strict()).max(10).default([]) }).strict();
 const generate = z.object({ fromDate: dateOnly, toDate: dateOnly }).strict();
+const timeOffRequest = z.object({ branchPublicId: uuid, serviceDate: dateOnly,
+  localStartTime: timeOnly, localEndTime: timeOnly, reason: z.string().trim().min(3).max(500) }).strict()
+  .refine((value) => value.localStartTime < value.localEndTime,
+    { message: 'Giờ kết thúc phải sau giờ bắt đầu.', path: ['localEndTime'] });
 
 function validate<T>(schema: z.ZodType<T>, value: unknown): T {
   const result = schema.safeParse(value);
@@ -91,6 +97,11 @@ export function createPatientAppointmentRouter(auth: PrincipalAuthenticator, ser
 
 export function createAdminAppointmentRouter(auth: PrincipalAuthenticator, service: AppointmentService) {
   const router = Router();
+  router.get('/availability', asyncRoute(async (request, response) => {
+    const query = validate(adminAvailabilityQuery, request.query);
+    success(response, await service.adminAvailability(await actor(request, auth), query.branchPublicId,
+      query.servicePublicId, query.serviceDate, response.locals.requestId));
+  }));
   router.get('/', asyncRoute(async (request, response) => {
     const query = validate(adminList, request.query);
     success(response, await service.listAdmin(await actor(request, auth), query.branchPublicId,
@@ -123,6 +134,32 @@ export function createAdminAppointmentRouter(auth: PrincipalAuthenticator, servi
 
 export function createSchedulingRouter(auth: PrincipalAuthenticator, service: AppointmentService) {
   const router = Router();
+  router.get('/time-off', asyncRoute(async (request, response) => {
+    const query = validate(z.object({ branchPublicId: uuid.optional() }).strict(), request.query);
+    success(response, await service.listTimeOff(await actor(request, auth), query.branchPublicId ?? null,
+      response.locals.requestId));
+  }));
+  router.post('/time-off', asyncRoute(async (request, response) => {
+    const input = validate(timeOffRequest, request.body);
+    const created = await service.requestTimeOff(await actor(request, auth), input, response.locals.requestId);
+    response.status(201); success(response, created);
+  }));
+  router.post('/time-off/:timeOffId/approve', asyncRoute(async (request, response) => {
+    success(response, await service.decideTimeOff(await actor(request, auth),
+      validate(uuid, request.params.timeOffId), 'APPROVE', null, response.locals.requestId));
+  }));
+  router.post('/time-off/:timeOffId/reject', asyncRoute(async (request, response) => {
+    const input = validate(reason, request.body);
+    success(response, await service.decideTimeOff(await actor(request, auth),
+      validate(uuid, request.params.timeOffId), 'REJECT', input.reason, response.locals.requestId));
+  }));
+  router.post('/time-off/:timeOffId/cancel', asyncRoute(async (request, response) => {
+    success(response, await service.decideTimeOff(await actor(request, auth),
+      validate(uuid, request.params.timeOffId), 'CANCEL', null, response.locals.requestId));
+  }));
+  router.get('/mine', asyncRoute(async (request, response) => {
+    success(response, await service.listMySchedules(await actor(request, auth), response.locals.requestId));
+  }));
   router.get('/', asyncRoute(async (request, response) => {
     const query = validate(z.object({ branchPublicId: uuid }).strict(), request.query);
     success(response, await service.scheduling(await actor(request, auth), query.branchPublicId, response.locals.requestId));
@@ -131,6 +168,19 @@ export function createSchedulingRouter(auth: PrincipalAuthenticator, service: Ap
     const created = await service.createSchedule(await actor(request, auth), validate(createSchedule, request.body),
       response.locals.requestId);
     response.status(201); success(response, created);
+  }));
+  router.post('/:scheduleId/confirm', asyncRoute(async (request, response) => {
+    success(response, await service.decideSchedule(await actor(request, auth),
+      validate(uuid, request.params.scheduleId), 'CONFIRM', null, response.locals.requestId));
+  }));
+  router.post('/:scheduleId/reject', asyncRoute(async (request, response) => {
+    const input = validate(reason, request.body);
+    success(response, await service.decideSchedule(await actor(request, auth),
+      validate(uuid, request.params.scheduleId), 'REJECT', input.reason, response.locals.requestId));
+  }));
+  router.post('/:scheduleId/publish', asyncRoute(async (request, response) => {
+    success(response, await service.publishSchedule(await actor(request, auth),
+      validate(uuid, request.params.scheduleId), response.locals.requestId));
   }));
   router.post('/:scheduleId/generate-slots', asyncRoute(async (request, response) => {
     const input = validate(generate, request.body);

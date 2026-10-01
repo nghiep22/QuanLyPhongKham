@@ -36,6 +36,7 @@ function detail(result: Awaited<ReturnType<typeof executeCommand<Row>>>): Clinic
     isVerified: Boolean(base.signatureIsVerified) };
   return {
     ...summary(base), signedAtUtc: nullableUtc(base.signedAtUtc), signature,
+    rowVersion: Buffer.from(base.rowVersion as Buffer).toString('base64'),
     patientRelease: base.patientReleasedAtUtc == null ? null : {
       releasedAtUtc: utc(base.patientReleasedAtUtc), releasedBy: String(base.patientReleasedBy),
     },
@@ -148,8 +149,10 @@ export class SqlClinicalRepository implements ClinicalRepository {
       { name: 'room_public_id', type: sql.UniqueIdentifier, value: roomPublicId },
       { name: 'queue_bypass_reason', type: sql.NVarChar(500), value: queueBypassReason }], context(actor, requestId));
   }
-  async updateNotes(actor: ClinicPrincipal, encounterPublicId: string, input: ClinicalNotesInput, requestId: string) {
+  async updateNotes(actor: ClinicPrincipal, encounterPublicId: string, input: ClinicalNotesInput,
+    expectedRowVersion: string, requestId: string) {
     await executeCommand('dbo.sp_clinic_update_encounter_clinical_notes', [actorParam(actor), encounterParam(encounterPublicId),
+      { name: 'expected_row_ver', type: sql.VarBinary(8), value: Buffer.from(expectedRowVersion, 'base64') },
       { name: 'history_of_present_illness', type: sql.NVarChar(sql.MAX), value: input.historyOfPresentIllness ?? null },
       { name: 'physical_examination', type: sql.NVarChar(sql.MAX), value: input.physicalExamination ?? null },
       { name: 'clinical_assessment', type: sql.NVarChar(sql.MAX), value: input.clinicalAssessment ?? null },

@@ -2,6 +2,8 @@
 
 File SQL hiện tại nằm ở thư mục gốc: `../../quan_ly_phong_kham.sql`.
 
+Danh sách 74 bảng theo luồng và số lượng dữ liệu minh họa nằm trong [TABLE_USAGE.md](TABLE_USAGE.md).
+
 Đây là baseline cần xử lý các mục P0 trong `PROJECT_PLAN.md` trước khi đóng băng
 thành migration `V001`. Không sửa trực tiếp database production; mọi thay đổi sau
 baseline phải là migration tăng dần và có script rollback phù hợp.
@@ -18,6 +20,7 @@ sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\tests\patient-regis
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\tests\patient-link.test.sql
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\tests\catalog-directory.test.sql
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\tests\patient-registry.test.sql
+sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\tests\patient-merge.test.sql
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\tests\scheduling-appointments.test.sql
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\tests\reception-queue.test.sql
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\tests\clinical-core.test.sql

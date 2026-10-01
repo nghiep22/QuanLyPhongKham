@@ -196,6 +196,10 @@ export function createApiClient(options: ApiClientOptions) {
         ),
     },
     appointmentAdmin: {
+      availability: (branchPublicId: string, servicePublicId: string, serviceDate: string) =>
+        request<import('@clinic/generated-api-types').AvailabilityListResponse>(
+          `/api/v1/admin/appointments/availability?${new URLSearchParams({ branchPublicId, servicePublicId, serviceDate })}`,
+        ),
       list: (query: { branchPublicId: string; serviceDate: string;
         status?: import('@clinic/generated-api-types').AppointmentStatus; query?: string }) => {
         const search = new URLSearchParams();
@@ -228,6 +232,26 @@ export function createApiClient(options: ApiClientOptions) {
         ),
     },
     scheduling: {
+      timeOff: (branchPublicId?: string) => request<import('@clinic/generated-api-types').DoctorTimeOffListResponse>(
+        `/api/v1/schedules/time-off${branchPublicId ? `?${new URLSearchParams({ branchPublicId }).toString()}` : ''}`,
+      ),
+      requestTimeOff: (body: import('@clinic/generated-api-types').RequestDoctorTimeOff) =>
+        request<import('@clinic/generated-api-types').CreatedScheduleResponse>('/api/v1/schedules/time-off',
+          { method: 'POST', body: JSON.stringify(body) }),
+      approveTimeOff: (timeOffId: string) => request<import('@clinic/generated-api-types').CreatedScheduleResponse>(
+        `/api/v1/schedules/time-off/${encodeURIComponent(timeOffId)}/approve`, { method: 'POST' },
+      ),
+      rejectTimeOff: (timeOffId: string, reason: string) =>
+        request<import('@clinic/generated-api-types').CreatedScheduleResponse>(
+          `/api/v1/schedules/time-off/${encodeURIComponent(timeOffId)}/reject`,
+          { method: 'POST', body: JSON.stringify({ reason }) },
+        ),
+      cancelTimeOff: (timeOffId: string) => request<import('@clinic/generated-api-types').CreatedScheduleResponse>(
+        `/api/v1/schedules/time-off/${encodeURIComponent(timeOffId)}/cancel`, { method: 'POST' },
+      ),
+      mine: () => request<import('@clinic/generated-api-types').DoctorWorkingSchedulesResponse>(
+        '/api/v1/schedules/mine',
+      ),
       get: (branchPublicId: string) => request<import('@clinic/generated-api-types').SchedulingResponse>(
         `/api/v1/schedules?${new URLSearchParams({ branchPublicId }).toString()}`,
       ),
@@ -235,6 +259,16 @@ export function createApiClient(options: ApiClientOptions) {
         request<import('@clinic/generated-api-types').CreatedScheduleResponse>('/api/v1/schedules', {
           method: 'POST', body: JSON.stringify(body),
         }),
+      confirm: (scheduleId: string) => request<import('@clinic/generated-api-types').CreatedScheduleResponse>(
+        `/api/v1/schedules/${encodeURIComponent(scheduleId)}/confirm`, { method: 'POST' },
+      ),
+      reject: (scheduleId: string, reason: string) => request<import('@clinic/generated-api-types').CreatedScheduleResponse>(
+        `/api/v1/schedules/${encodeURIComponent(scheduleId)}/reject`,
+        { method: 'POST', body: JSON.stringify({ reason }) },
+      ),
+      publish: (scheduleId: string) => request<import('@clinic/generated-api-types').CreatedScheduleResponse>(
+        `/api/v1/schedules/${encodeURIComponent(scheduleId)}/publish`, { method: 'POST' },
+      ),
       generateSlots: (scheduleId: string, body: import('@clinic/generated-api-types').GenerateSlotsRequest) =>
         request<import('@clinic/generated-api-types').GeneratedSlotsResponse>(
           `/api/v1/schedules/${encodeURIComponent(scheduleId)}/generate-slots`,
@@ -265,6 +299,12 @@ export function createApiClient(options: ApiClientOptions) {
         request<import('@clinic/generated-api-types').NullableQueueCommandResponse>('/api/v1/queues/call-next', {
           method: 'POST', body: JSON.stringify(body),
         }),
+      skip: (ticketId: string, body: import('@clinic/generated-api-types').QueueActionRequest) =>
+        request<import('@clinic/generated-api-types').QueueActionResponse>(
+          `/api/v1/queues/${encodeURIComponent(ticketId)}/skip`, { method: 'POST', body: JSON.stringify(body) }),
+      recall: (ticketId: string, body: import('@clinic/generated-api-types').QueueActionRequest) =>
+        request<import('@clinic/generated-api-types').QueueActionResponse>(
+          `/api/v1/queues/${encodeURIComponent(ticketId)}/recall`, { method: 'POST', body: JSON.stringify(body) }),
       cancelEncounter: (encounterId: string, body: import('@clinic/generated-api-types').EncounterCancellationRequest) =>
         request<import('@clinic/generated-api-types').EncounterCancellationResponse>(
           `/api/v1/encounters/${encodeURIComponent(encounterId)}/cancel`,
@@ -392,10 +432,11 @@ export function createApiClient(options: ApiClientOptions) {
           `/api/v1/encounters/${encodeURIComponent(encounterId)}/start`,
           { method: 'POST', body: JSON.stringify(body) },
         ),
-      updateNotes: (encounterId: string, body: import('@clinic/generated-api-types').ClinicalNotesRequest) =>
+      updateNotes: (encounterId: string, body: import('@clinic/generated-api-types').ClinicalNotesRequest,
+        rowVersion: string) =>
         request<import('@clinic/generated-api-types').ClinicalEncounterResponse>(
           `/api/v1/encounters/${encodeURIComponent(encounterId)}/clinical-notes`,
-          { method: 'PATCH', body: JSON.stringify(body) },
+          { method: 'PATCH', headers: { 'if-match': `"${rowVersion}"` }, body: JSON.stringify(body) },
         ),
       addVitalSigns: (encounterId: string, body: import('@clinic/generated-api-types').ClinicalVitalSignsRequest) =>
         request<import('@clinic/generated-api-types').ClinicalCommandResponse>(
@@ -442,6 +483,32 @@ export function createApiClient(options: ApiClientOptions) {
         ),
     },
     patients: {
+      previewMerge: (sourcePatientId: string,
+        body: import('@clinic/generated-api-types').PatientMergePreviewRequest) =>
+        request<import('@clinic/generated-api-types').PatientMergePreviewResponse>(
+          `/api/v1/admin/patients/${encodeURIComponent(sourcePatientId)}/merge-preview`,
+          { method: 'POST', body: JSON.stringify(body) },
+        ),
+      merge: (sourcePatientId: string, body: import('@clinic/generated-api-types').PatientMergeRequest,
+        sourceRowVersion: string) =>
+        request<import('@clinic/generated-api-types').PatientMergeResultResponse>(
+          `/api/v1/admin/patients/${encodeURIComponent(sourcePatientId)}/merge`,
+          { method: 'POST', headers: { 'if-match': `"${sourceRowVersion}"` }, body: JSON.stringify(body) },
+        ),
+      mergeHistory: (targetPatientId: string) =>
+        request<import('@clinic/generated-api-types').PatientMergeHistoryResponse>(
+          `/api/v1/admin/patients/${encodeURIComponent(targetPatientId)}/merge-history`,
+        ),
+      myEmergencyContacts: (patientId: string) =>
+        request<import('@clinic/generated-api-types').MyEmergencyContactsResponse>(
+          `/api/v1/patients/${encodeURIComponent(patientId)}/my-emergency-contacts`,
+        ),
+      replaceMyEmergencyContacts: (patientId: string,
+        body: import('@clinic/generated-api-types').PatientEmergencyContactsRequest, rowVersion: string) =>
+        request<import('@clinic/generated-api-types').MyEmergencyContactsResponse>(
+          `/api/v1/patients/${encodeURIComponent(patientId)}/my-emergency-contacts`,
+          { method: 'PUT', headers: { 'if-match': `"${rowVersion}"` }, body: JSON.stringify(body) },
+        ),
       references: () => request<import('@clinic/generated-api-types').PatientReferenceResponse>(
         '/api/v1/admin/patients/reference-data',
       ),
@@ -467,12 +534,64 @@ export function createApiClient(options: ApiClientOptions) {
           `/api/v1/admin/patients/${encodeURIComponent(patientId)}?${new URLSearchParams({ branchPublicId })}`,
           { method: 'PUT', headers: { 'if-match': `"${rowVersion}"` }, body: JSON.stringify(body) },
         ),
+      replaceEmergencyContacts: (patientId: string, branchPublicId: string,
+        body: import('@clinic/generated-api-types').PatientEmergencyContactsRequest, rowVersion: string) =>
+        request<import('@clinic/generated-api-types').PatientDetailResponse>(
+          `/api/v1/admin/patients/${encodeURIComponent(patientId)}/emergency-contacts?${new URLSearchParams({ branchPublicId })}`,
+          { method: 'PUT', headers: { 'if-match': `"${rowVersion}"` }, body: JSON.stringify(body) },
+        ),
       clinicalSummary: (patientId: string, branchPublicId: string) =>
         request<import('@clinic/generated-api-types').PatientClinicalSummaryResponse>(
           `/api/v1/patients/${encodeURIComponent(patientId)}/clinical-summary?${new URLSearchParams({ branchPublicId })}`,
         ),
+      addAllergy: (patientId: string, branchPublicId: string,
+        body: import('@clinic/generated-api-types').PatientAllergyRequest) =>
+        request<import('@clinic/generated-api-types').PatientHealthRecordActionResponse>(
+          `/api/v1/patients/${encodeURIComponent(patientId)}/allergies?${new URLSearchParams({ branchPublicId })}`,
+          { method: 'POST', body: JSON.stringify(body) },
+        ),
+      deactivateAllergy: (patientId: string, branchPublicId: string, allergyId: string, reason: string) =>
+        request<import('@clinic/generated-api-types').PatientHealthRecordActionResponse>(
+          `/api/v1/patients/${encodeURIComponent(patientId)}/allergies/${encodeURIComponent(allergyId)}/deactivate?${new URLSearchParams({ branchPublicId })}`,
+          { method: 'POST', body: JSON.stringify({ reason }) },
+        ),
+      addCondition: (patientId: string, branchPublicId: string,
+        body: import('@clinic/generated-api-types').PatientConditionRequest) =>
+        request<import('@clinic/generated-api-types').PatientHealthRecordActionResponse>(
+          `/api/v1/patients/${encodeURIComponent(patientId)}/conditions?${new URLSearchParams({ branchPublicId })}`,
+          { method: 'POST', body: JSON.stringify(body) },
+        ),
+      resolveCondition: (patientId: string, branchPublicId: string, conditionId: string, reason: string) =>
+        request<import('@clinic/generated-api-types').PatientHealthRecordActionResponse>(
+          `/api/v1/patients/${encodeURIComponent(patientId)}/conditions/${encodeURIComponent(conditionId)}/resolve?${new URLSearchParams({ branchPublicId })}`,
+          { method: 'POST', body: JSON.stringify({ reason }) },
+        ),
     },
     catalog: {
+      organization: () => request<import('@clinic/generated-api-types').OrganizationCatalogResponse>(
+        '/api/v1/admin/catalog/organization',
+      ),
+      createBranch: (body: import('@clinic/generated-api-types').CreateOrganizationBranchRequest) =>
+        request<import('@clinic/generated-api-types').OrganizationBranchResponse>('/api/v1/admin/catalog/branches',
+          { method: 'POST', body: JSON.stringify(body) }),
+      updateBranch: (branchId: string, body: import('@clinic/generated-api-types').UpdateOrganizationBranchRequest,
+        rowVersion: string) => request<import('@clinic/generated-api-types').OrganizationBranchResponse>(
+          `/api/v1/admin/catalog/branches/${encodeURIComponent(branchId)}`,
+          { method: 'PUT', headers: { 'if-match': `"${rowVersion}"` }, body: JSON.stringify(body) }),
+      createSpecialty: (body: import('@clinic/generated-api-types').CreateOrganizationSpecialtyRequest) =>
+        request<import('@clinic/generated-api-types').OrganizationSpecialtyResponse>('/api/v1/admin/catalog/specialties',
+          { method: 'POST', body: JSON.stringify(body) }),
+      updateSpecialty: (specialtyId: string, body: import('@clinic/generated-api-types').UpdateOrganizationSpecialtyRequest,
+        rowVersion: string) => request<import('@clinic/generated-api-types').OrganizationSpecialtyResponse>(
+          `/api/v1/admin/catalog/specialties/${encodeURIComponent(specialtyId)}`,
+          { method: 'PUT', headers: { 'if-match': `"${rowVersion}"` }, body: JSON.stringify(body) }),
+      createCategory: (body: import('@clinic/generated-api-types').CreateOrganizationCategoryRequest) =>
+        request<import('@clinic/generated-api-types').OrganizationCategoryResponse>('/api/v1/admin/catalog/categories',
+          { method: 'POST', body: JSON.stringify(body) }),
+      updateCategory: (categoryId: string, body: import('@clinic/generated-api-types').UpdateOrganizationCategoryRequest,
+        rowVersion: string) => request<import('@clinic/generated-api-types').OrganizationCategoryResponse>(
+          `/api/v1/admin/catalog/categories/${encodeURIComponent(categoryId)}`,
+          { method: 'PUT', headers: { 'if-match': `"${rowVersion}"` }, body: JSON.stringify(body) }),
       references: () => request<import('@clinic/generated-api-types').CatalogReferenceResponse>(
         '/api/v1/admin/catalog/reference-data',
       ),

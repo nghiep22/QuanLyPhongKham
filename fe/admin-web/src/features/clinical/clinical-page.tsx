@@ -1,7 +1,7 @@
 import { ApiClientError } from '@clinic/generated-api-client'
-import type { ClinicalEncounterDetail, ClinicalEncounterStatus, ClinicalNotesRequest, ReceptionBranch } from '@clinic/generated-api-types'
+import type { ClinicalEncounterDetail, ClinicalEncounterStatus, ClinicalNotesRequest, PatientAllergyRequest, PatientConditionRequest, ReceptionBranch } from '@clinic/generated-api-types'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState, type FormEvent } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { apiClient } from '../../shared/api/client'
 import { clinicalReportPrintDocument, openPrintDocument } from '../../shared/printing'
@@ -18,6 +18,7 @@ function errorMessage(error: unknown) {
   if (error.code === 'CLINICAL_QUEUE_NOT_CALLED') return 'Quầy cần gọi số trước khi bắt đầu khám.'
   if (error.code === 'CLINICAL_QUEUE_BYPASS_REASON_REQUIRED') return 'Ngoại lệ cần lý do tối thiểu 10 ký tự.'
   if (error.code === 'CLINICAL_QUEUE_ORDER_CONFLICT') return 'Còn lượt ưu tiên hoặc FIFO đứng trước. Không thể bắt đầu ngoại lệ.'
+  if (error.code === 'CLINICAL_VERSION_CONFLICT') return 'Nội dung khám đã đổi ở phiên khác. Đối chiếu bản mới trước khi lưu.'
   if (error.status === 409) return 'Trạng thái hồ sơ vừa thay đổi hoặc còn công việc chưa hoàn tất. Hãy tải lại.'
   return error.message
 }
@@ -59,10 +60,12 @@ export function ClinicalPage() {
 
   if (branches.isLoading) return <div className="page-state">Đang tải phạm vi khám bệnh…</div>
   if (branches.error) return <div className="page-state error-state">{errorMessage(branches.error)}</div>
-  if (!branches.data?.data.length) return <div className="page-state panel">Tài khoản chưa có chi nhánh lâm sàng được phân công.</div>
+  if (!branches.data?.data.length) return <div className="page-state panel">
+    Tài khoản chưa có chi nhánh lâm sàng được phân công. Liên hệ quản trị để kiểm tra hồ sơ bác sĩ và phân công chi nhánh.
+  </div>
 
   return <>
-    <header><div><span className="eyebrow">CLINICAL WORKSPACE</span><h1>Khám bệnh</h1>
+    <header><div><span className="eyebrow">HỒ SƠ KHÁM BỆNH</span><h1>Khám bệnh</h1>
       <p>Lượt khám của bác sĩ phụ trách, từ số đã gọi đến hồ sơ ký.</p></div></header>
     <section className="panel clinical-toolbar">
       <label>Chi nhánh<select value={selectedBranchId} onChange={(event) => { setBranchId(event.target.value); setEncounterId('') }}>
@@ -101,17 +104,135 @@ export function ClinicalPage() {
   </>
 }
 
+function PatientSafetyProfile({ patientId, branchId, busy, run }: {
+  patientId: string; branchId: string; busy: string; run: Action;
+}) {
+  const client = useQueryClient()
+  const key = ['patient-clinical-summary', branchId, patientId]
+  const profile = useQuery({ queryKey: key,
+    queryFn: () => apiClient.patients.clinicalSummary(patientId, branchId).then((result) => result.data),
+    retry: false })
+  const [allergenName, setAllergenName] = useState('')
+  const [allergyType, setAllergyType] = useState<PatientAllergyRequest['type']>('DRUG')
+  const [severity, setSeverity] = useState<PatientAllergyRequest['severity']>('UNKNOWN')
+  const [reaction, setReaction] = useState('')
+  const [notedAt, setNotedAt] = useState('')
+  const [conditionName, setConditionName] = useState('')
+  const [conditionCode, setConditionCode] = useState('')
+  const [conditionStatus, setConditionStatus] = useState<PatientConditionRequest['status']>('ACTIVE')
+  const [diagnosedDate, setDiagnosedDate] = useState('')
+  const [conditionNotes, setConditionNotes] = useState('')
+  const [reasonError, setReasonError] = useState('')
+  const addAllergy = async (event: FormEvent) => {
+    event.preventDefault()
+    if (await run('Ghi dị ứng', () => apiClient.patients.addAllergy(patientId, branchId, {
+      allergenName: allergenName.trim(), type: allergyType, severity,
+      reaction: reaction.trim() || null, notedAt: notedAt || null,
+    }))) {
+      setAllergenName(''); setReaction(''); setNotedAt('')
+      void client.invalidateQueries({ queryKey: key })
+    }
+  }
+  const addCondition = async (event: FormEvent) => {
+    event.preventDefault()
+    if (await run('Ghi bệnh nền', () => apiClient.patients.addCondition(patientId, branchId, {
+      code: conditionCode.trim() || null, name: conditionName.trim(), status: conditionStatus,
+      diagnosedDate: diagnosedDate || null, notes: conditionNotes.trim() || null,
+    }))) {
+      setConditionName(''); setConditionCode(''); setDiagnosedDate(''); setConditionNotes('')
+      void client.invalidateQueries({ queryKey: key })
+    }
+  }
+  const closeRecord = async (kind: 'allergy' | 'condition', id: string) => {
+    const reason = window.prompt(kind === 'allergy'
+      ? 'Lý do ngừng hiệu lực dị ứng (tối thiểu 10 ký tự):'
+      : 'Lý do đánh dấu bệnh nền đã giải quyết (tối thiểu 10 ký tự):')
+    if (reason == null) return
+    if (reason.trim().length < 10) { setReasonError('Cần nhập lý do tối thiểu 10 ký tự.'); return }
+    setReasonError('')
+    const action = kind === 'allergy'
+      ? () => apiClient.patients.deactivateAllergy(patientId, branchId, id, reason.trim())
+      : () => apiClient.patients.resolveCondition(patientId, branchId, id, reason.trim())
+    if (await run(kind === 'allergy' ? 'Ngừng hiệu lực dị ứng' : 'Giải quyết bệnh nền', action))
+      void client.invalidateQueries({ queryKey: key })
+  }
+  return <section className="panel"><h2>Dị ứng và bệnh nền</h2>
+    <p>Chỉ nhân viên đang trực tiếp chăm sóc người bệnh mới xem và ghi thông tin này.</p>
+    {profile.isLoading && <p>Đang tải thông tin sức khỏe…</p>}
+    {profile.error && <div className="form-error" role="alert">{errorMessage(profile.error)}
+      {' '}<button type="button" className="secondary" onClick={() => void profile.refetch()}>Thử lại</button></div>}
+    {reasonError && <div className="form-error" role="alert">{reasonError}</div>}
+    {profile.data && <>
+      <h3>Dị ứng đang hiệu lực</h3>
+      {!profile.data.allergies.length && <p>Chưa ghi nhận dị ứng.</p>}
+      {profile.data.allergies.map((allergy) => <p className="clinical-record" key={allergy.publicId}>
+        <strong>{allergy.allergenName}</strong> · {allergy.type} · {allergy.severity}
+        {allergy.reaction && <> · {allergy.reaction}</>}
+        {' '}<button type="button" className="secondary" disabled={Boolean(busy)}
+          onClick={() => void closeRecord('allergy', allergy.publicId)}>Ngừng hiệu lực</button>
+      </p>)}
+      <form className="clinical-form-grid" onSubmit={(event) => void addAllergy(event)}>
+        <label>Dị nguyên<input required minLength={2} maxLength={200} value={allergenName}
+          onChange={(event) => setAllergenName(event.target.value)} /></label>
+        <label>Loại<select value={allergyType} onChange={(event) => setAllergyType(event.target.value as PatientAllergyRequest['type'])}>
+          <option value="DRUG">Thuốc</option><option value="FOOD">Thức ăn</option>
+          <option value="ENVIRONMENT">Môi trường</option><option value="OTHER">Khác</option></select></label>
+        <label>Mức độ<select value={severity} onChange={(event) => setSeverity(event.target.value as PatientAllergyRequest['severity'])}>
+          <option value="UNKNOWN">Chưa rõ</option><option value="MILD">Nhẹ</option>
+          <option value="MODERATE">Vừa</option><option value="SEVERE">Nặng</option></select></label>
+        <label>Phản ứng<input maxLength={500} value={reaction} onChange={(event) => setReaction(event.target.value)} /></label>
+        <label>Ngày ghi nhận<input type="date" value={notedAt} onChange={(event) => setNotedAt(event.target.value)} /></label>
+        <button type="submit" disabled={Boolean(busy)}>Ghi dị ứng</button>
+      </form>
+      <h3>Bệnh nền đang theo dõi</h3>
+      {!profile.data.conditions.length && <p>Chưa ghi nhận bệnh nền.</p>}
+      {profile.data.conditions.map((condition) => <p className="clinical-record" key={condition.publicId}>
+        <strong>{condition.name}</strong> · {condition.status}
+        {condition.notes && <> · {condition.notes}</>}
+        {' '}<button type="button" className="secondary" disabled={Boolean(busy)}
+          onClick={() => void closeRecord('condition', condition.publicId)}>Đã giải quyết</button>
+      </p>)}
+      <form className="clinical-form-grid" onSubmit={(event) => void addCondition(event)}>
+        <label>Tên bệnh nền<input required minLength={2} maxLength={200} value={conditionName}
+          onChange={(event) => setConditionName(event.target.value)} /></label>
+        <label>Mã bệnh<input maxLength={30} value={conditionCode} onChange={(event) => setConditionCode(event.target.value)} /></label>
+        <label>Trạng thái<select value={conditionStatus}
+          onChange={(event) => setConditionStatus(event.target.value as PatientConditionRequest['status'])}>
+          <option value="ACTIVE">Đang mắc</option><option value="CONTROLLED">Đã kiểm soát</option></select></label>
+        <label>Ngày chẩn đoán<input type="date" value={diagnosedDate}
+          onChange={(event) => setDiagnosedDate(event.target.value)} /></label>
+        <label>Ghi chú<input maxLength={1000} value={conditionNotes}
+          onChange={(event) => setConditionNotes(event.target.value)} /></label>
+        <button type="submit" disabled={Boolean(busy)}>Ghi bệnh nền</button>
+      </form>
+    </>}
+  </section>
+}
+
 function EncounterEditor({ item, branch, printedBy, busy, run, canBypassQueue }: {
   item: ClinicalEncounterDetail; branch: ReceptionBranch; printedBy: string | null;
   busy: string; run: Action; canBypassQueue: boolean
 }) {
+  const queryClient = useQueryClient()
   const open = item.status === 'IN_PROGRESS'
-  const [notes, setNotes] = useState<ClinicalNotesRequest>({
+  const serverNotes: ClinicalNotesRequest = useMemo(() => ({
     historyOfPresentIllness: item.historyOfPresentIllness ?? '',
     physicalExamination: item.physicalExamination ?? '', clinicalAssessment: item.clinicalAssessment ?? '',
     treatmentPlan: item.treatmentPlan ?? '', followUpInstructions: item.followUpInstructions ?? '',
     followUpDate: item.followUpDate ?? null,
-  })
+  }), [item.historyOfPresentIllness, item.physicalExamination, item.clinicalAssessment,
+    item.treatmentPlan, item.followUpInstructions, item.followUpDate])
+  const [notesDraft, setNotesDraft] = useState({ notes: serverNotes, originalNotes: serverNotes,
+    notesVersion: item.rowVersion, lastSeenVersion: item.rowVersion, notesConflict: false })
+  if (item.rowVersion !== notesDraft.lastSeenVersion) {
+    const dirty = JSON.stringify(notesDraft.notes) !== JSON.stringify(notesDraft.originalNotes)
+    setNotesDraft(dirty && JSON.stringify(serverNotes) !== JSON.stringify(notesDraft.originalNotes)
+      ? { ...notesDraft, lastSeenVersion: item.rowVersion, notesConflict: true }
+      : { notes: dirty ? notesDraft.notes : serverNotes, originalNotes: serverNotes,
+        notesVersion: item.rowVersion, lastSeenVersion: item.rowVersion, notesConflict: false })
+  }
+  const { notes, originalNotes, notesVersion, notesConflict } = notesDraft
+  const notesDirty = JSON.stringify(notes) !== JSON.stringify(originalNotes)
   const [temperature, setTemperature] = useState(''); const [pulse, setPulse] = useState('')
   const [systolic, setSystolic] = useState(''); const [diastolic, setDiastolic] = useState('')
   const [spo2, setSpo2] = useState(''); const [height, setHeight] = useState(''); const [weight, setWeight] = useState('')
@@ -120,8 +241,17 @@ function EncounterEditor({ item, branch, printedBy, busy, run, canBypassQueue }:
   const [isPrimary, setIsPrimary] = useState(false)
   const [serviceId, setServiceId] = useState(''); const [quantity, setQuantity] = useState('1')
   const [amendReason, setAmendReason] = useState(''); const [amendContent, setAmendContent] = useState('')
-  const saveNotes = (event: FormEvent) => { event.preventDefault(); void run('Lưu nội dung khám',
-    () => apiClient.clinical.updateNotes(item.publicId, notes)) }
+  const saveNotes = async (event: FormEvent) => {
+    event.preventDefault()
+    if (!notesDirty || notesConflict) return
+    let saved: ClinicalEncounterDetail | null = null
+    if (await run('Lưu nội dung khám', async () => {
+      saved = (await apiClient.clinical.updateNotes(item.publicId, notes, notesVersion)).data
+    })) {
+      setNotesDraft((current) => ({ ...current, originalNotes: notes,
+        notesVersion: (saved as ClinicalEncounterDetail | null)?.rowVersion ?? notesVersion, notesConflict: false }))
+    } else await queryClient.invalidateQueries({ queryKey: ['clinical-encounter', item.publicId] })
+  }
   const addVitals = async (event: FormEvent) => {
     event.preventDefault()
     const values = { temperatureC: temperature ? Number(temperature) : undefined, pulseBpm: pulse ? Number(pulse) : undefined,
@@ -158,7 +288,7 @@ function EncounterEditor({ item, branch, printedBy, busy, run, canBypassQueue }:
     }))
   }
   const setNote = (field: keyof ClinicalNotesRequest, value: string | null) =>
-    setNotes((current) => ({ ...current, [field]: value }))
+    setNotesDraft((current) => ({ ...current, notes: { ...current.notes, [field]: value } }))
 
   return <>
     <section className="panel"><div className="detail-heading"><div><span className={`status status-${item.status.toLowerCase()}`}>
@@ -193,6 +323,8 @@ function EncounterEditor({ item, branch, printedBy, busy, run, canBypassQueue }:
       {item.patientRelease && <p className="form-success">Đã công bố cho bệnh nhân lúc {utc(item.patientRelease.releasedAtUtc)}
         {' '}bởi {item.patientRelease.releasedBy}.</p>}
     </section>
+    {(item.status === 'WAITING' || item.status === 'IN_PROGRESS') &&
+      <PatientSafetyProfile patientId={item.patient.publicId} branchId={branch.publicId} busy={busy} run={run} />}
     <section className="panel"><h2>Sinh hiệu</h2>
       {item.vitalSigns.map((vital) => <p className="clinical-record" key={vital.publicId}>
         {utc(vital.measuredAtUtc)} · {vital.measuredBy}: {vital.temperatureC ?? '—'} °C,
@@ -212,7 +344,18 @@ function EncounterEditor({ item, branch, printedBy, busy, run, canBypassQueue }:
           Ghi lần đo</button></form>}
     </section>
     <section className="panel"><h2>Nội dung khám</h2>
-      <form className="clinical-notes" onSubmit={saveNotes}>
+      {notesConflict && <div className="form-error" role="alert"><p>Nội dung trên máy chủ đã thay đổi. Bản bạn đang nhập vẫn được giữ để đối chiếu.</p>
+        <dl>{([
+          ['historyOfPresentIllness', 'Bệnh sử'], ['physicalExamination', 'Khám thực thể'],
+          ['clinicalAssessment', 'Nhận định'], ['treatmentPlan', 'Kế hoạch điều trị'],
+          ['followUpInstructions', 'Dặn dò tái khám'], ['followUpDate', 'Ngày tái khám'],
+        ] as const).map(([field, label]) => <div key={field}><dt>{label} trên máy chủ</dt>
+          <dd>{serverNotes[field] || '—'}</dd></div>)}</dl>
+        <button type="button" className="secondary" onClick={() => {
+          setNotesDraft({ notes: serverNotes, originalNotes: serverNotes, notesVersion: item.rowVersion,
+            lastSeenVersion: item.rowVersion, notesConflict: false })
+        }}>Dùng bản trên máy chủ</button></div>}
+      <form className="clinical-notes" onSubmit={(event) => void saveNotes(event)}>
         {([
           ['historyOfPresentIllness', 'Bệnh sử'], ['physicalExamination', 'Khám thực thể'],
           ['clinicalAssessment', 'Nhận định'], ['treatmentPlan', 'Kế hoạch điều trị'],
@@ -221,7 +364,7 @@ function EncounterEditor({ item, branch, printedBy, busy, run, canBypassQueue }:
           disabled={!open} value={notes[field] ?? ''} onChange={(event) => setNote(field, event.target.value)} /></label>)}
         <label>Ngày tái khám<input type="date" disabled={!open} value={notes.followUpDate ?? ''}
           onChange={(event) => setNote('followUpDate', event.target.value || null)} /></label>
-        {open && <button type="submit" disabled={Boolean(busy)}>Lưu nội dung khám</button>}
+        {open && <button type="submit" disabled={Boolean(busy) || !notesDirty || notesConflict}>Lưu nội dung khám</button>}
       </form></section>
     <section className="panel"><h2>Chẩn đoán</h2>
       {item.diagnoses.map((diagnosis) => <p className="clinical-record" key={diagnosis.publicId}>

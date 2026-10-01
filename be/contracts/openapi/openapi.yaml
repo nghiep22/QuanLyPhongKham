@@ -984,6 +984,244 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '428': { $ref: '#/components/responses/PreconditionRequired' }
+  /api/v1/admin/patients/{patientId}/merge-preview:
+    post:
+      operationId: previewPatientMerge
+      summary: Preview a duplicate merge for a global administrator
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/PatientId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PatientMergePreviewRequest' }
+      responses:
+        '200':
+          description: Source, target and impacted record counts.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PatientMergePreviewResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/admin/patients/{patientId}/merge:
+    post:
+      operationId: mergePatients
+      summary: Merge a duplicate into a canonical patient while preserving immutable history
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/PatientId'
+        - $ref: '#/components/parameters/CatalogIfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PatientMergeRequest' }
+      responses:
+        '200':
+          description: Merge completed and audited.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PatientMergeResultResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /api/v1/admin/patients/{patientId}/merge-history:
+    get:
+      operationId: listPatientMergeHistory
+      summary: Read audited merge history for a canonical patient
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/PatientId'
+      responses:
+        '200':
+          description: Merge events ordered from newest to oldest.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PatientMergeHistoryResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/admin/patients/{patientId}/emergency-contacts:
+    put:
+      operationId: replacePatientEmergencyContacts
+      summary: Replace active emergency contacts with optimistic concurrency and audit
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/PatientId'
+        - $ref: '#/components/parameters/BranchPublicIdQuery'
+        - $ref: '#/components/parameters/CatalogIfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PatientEmergencyContactsRequest' }
+      responses:
+        '200':
+          description: Active emergency contacts replaced.
+          headers:
+            ETag: { $ref: '#/components/headers/CatalogEtag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PatientDetailResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+  /api/v1/patients/{patientId}/my-emergency-contacts:
+    get:
+      operationId: getMyEmergencyContacts
+      summary: Read emergency contacts for a verified self-linked patient
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/PatientId'
+      responses:
+        '200':
+          description: Current emergency contacts and patient version.
+          headers:
+            ETag: { $ref: '#/components/headers/CatalogEtag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MyEmergencyContactsResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      operationId: replaceMyEmergencyContacts
+      summary: Replace own emergency contacts with optimistic concurrency
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/PatientId'
+        - $ref: '#/components/parameters/CatalogIfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PatientEmergencyContactsRequest' }
+      responses:
+        '200':
+          description: Emergency contacts replaced.
+          headers:
+            ETag: { $ref: '#/components/headers/CatalogEtag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MyEmergencyContactsResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+  /api/v1/patients/{patientId}/allergies:
+    post:
+      operationId: addPatientAllergy
+      summary: Record an allergy during an active care relationship
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/PatientId'
+        - $ref: '#/components/parameters/BranchPublicIdQuery'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PatientAllergyRequest' }
+      responses:
+        '201':
+          description: Allergy recorded.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PatientHealthRecordActionResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/patients/{patientId}/allergies/{allergyId}/deactivate:
+    post:
+      operationId: deactivatePatientAllergy
+      summary: Deactivate an allergy with an audited reason
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/PatientId'
+        - $ref: '#/components/parameters/BranchPublicIdQuery'
+        - name: allergyId
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[0-9A-Fa-f]{8}-(?:[0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}$' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PatientHealthReasonRequest' }
+      responses:
+        '200':
+          description: Allergy deactivated.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PatientHealthRecordActionResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/patients/{patientId}/conditions:
+    post:
+      operationId: addPatientCondition
+      summary: Record a chronic condition during an active care relationship
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/PatientId'
+        - $ref: '#/components/parameters/BranchPublicIdQuery'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PatientConditionRequest' }
+      responses:
+        '201':
+          description: Condition recorded.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PatientHealthRecordActionResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/patients/{patientId}/conditions/{conditionId}/resolve:
+    post:
+      operationId: resolvePatientCondition
+      summary: Resolve a condition with an audited reason
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/PatientId'
+        - $ref: '#/components/parameters/BranchPublicIdQuery'
+        - name: conditionId
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[0-9A-Fa-f]{8}-(?:[0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}$' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PatientHealthReasonRequest' }
+      responses:
+        '200':
+          description: Condition resolved.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PatientHealthRecordActionResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /api/v1/patients/{patientId}/clinical-summary:
     get:
       operationId: getPatientClinicalSummary
@@ -1019,6 +1257,171 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+  /api/v1/admin/catalog/organization:
+    get:
+      operationId: getOrganizationCatalog
+      summary: List branches, specialties and categories for global catalog management
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Organization catalog including inactive records.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationCatalogResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/admin/catalog/branches:
+    post:
+      operationId: createOrganizationBranch
+      summary: Create a branch
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateOrganizationBranchRequest' }
+      responses:
+        '201':
+          description: Created branch.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrganizationBranchResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/admin/catalog/branches/{branchId}:
+    put:
+      operationId: updateOrganizationBranch
+      summary: Update branch policies or activity
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: branchId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateOrganizationBranchRequest' }
+      responses:
+        '200':
+          description: Updated branch.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrganizationBranchResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+  /api/v1/admin/catalog/specialties:
+    post:
+      operationId: createOrganizationSpecialty
+      summary: Create specialty
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateOrganizationSpecialtyRequest' }
+      responses:
+        '201':
+          description: Created specialty.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrganizationSpecialtyResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/admin/catalog/specialties/{specialtyId}:
+    put:
+      operationId: updateOrganizationSpecialty
+      summary: Update specialty
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: specialtyId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateOrganizationSpecialtyRequest' }
+      responses:
+        '200':
+          description: Updated specialty.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrganizationSpecialtyResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+  /api/v1/admin/catalog/categories:
+    post:
+      operationId: createOrganizationCategory
+      summary: Create service category
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateOrganizationCategoryRequest' }
+      responses:
+        '201':
+          description: Created category.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrganizationCategoryResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/admin/catalog/categories/{categoryId}:
+    put:
+      operationId: updateOrganizationCategory
+      summary: Update service category
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: categoryId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateOrganizationCategoryRequest' }
+      responses:
+        '200':
+          description: Updated category.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrganizationCategoryResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
   /api/v1/admin/catalog/rooms:
     get:
       operationId: listCatalogRooms
@@ -1401,6 +1804,30 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/admin/appointments/availability:
+    get:
+      operationId: listAdminAppointmentAvailability
+      summary: List branch scoped staff booking slots, including doctors unavailable for online booking
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/BranchPublicIdQuery'
+        - name: servicePublicId
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+        - name: serviceDate
+          in: query
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Available staff booking slots.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AvailabilityListResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /api/v1/admin/appointments/{appointmentId}/confirm:
     post:
       operationId: confirmAppointment
@@ -1501,7 +1928,7 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
     post:
       operationId: createWorkingSchedule
-      summary: Create a non-overlapping recurring doctor and room schedule
+      summary: Propose a recurring doctor and room schedule for doctor confirmation
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
@@ -1510,13 +1937,170 @@ paths:
             schema: { $ref: '#/components/schemas/CreateWorkingScheduleRequest' }
       responses:
         '201':
-          description: Working schedule created.
+          description: Working schedule proposal created.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/CreatedScheduleResponse' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/schedules/mine:
+    get:
+      operationId: listMyWorkingSchedules
+      summary: List recurring schedules for the authenticated doctor
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Doctor's own schedule proposals and published schedules.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DoctorWorkingSchedulesResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/schedules/time-off:
+    get:
+      operationId: listDoctorTimeOff
+      summary: List own time-off requests or branch requests for a schedule manager
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: branchPublicId
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Time-off requests and current appointment conflicts.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DoctorTimeOffListResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: requestDoctorTimeOff
+      summary: Doctor requests time off at a branch for a future local date and time
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RequestDoctorTimeOff' }
+      responses:
+        '201':
+          description: Time-off request created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreatedScheduleResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/schedules/time-off/{timeOffId}/approve:
+    post:
+      operationId: approveDoctorTimeOff
+      summary: Approve time off after resolving conflicting appointments and block open slots
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/TimeOffId' }]
+      responses:
+        '200':
+          description: Time off approved.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreatedScheduleResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/schedules/time-off/{timeOffId}/reject:
+    post:
+      operationId: rejectDoctorTimeOff
+      summary: Reject a doctor's time-off request with reason
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/TimeOffId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AppointmentReasonRequest' }
+      responses:
+        '200':
+          description: Time off rejected.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreatedScheduleResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/schedules/time-off/{timeOffId}/cancel:
+    post:
+      operationId: cancelMyDoctorTimeOff
+      summary: Doctor cancels own pending time-off request
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/TimeOffId' }]
+      responses:
+        '200':
+          description: Pending time-off request cancelled.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreatedScheduleResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/schedules/{scheduleId}/confirm:
+    post:
+      operationId: confirmWorkingSchedule
+      summary: Confirm own proposed working schedule
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/WorkingScheduleId' }]
+      responses:
+        '200':
+          description: Schedule confirmed by doctor, awaiting publication.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreatedScheduleResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/schedules/{scheduleId}/reject:
+    post:
+      operationId: rejectWorkingSchedule
+      summary: Reject own proposed working schedule with reason
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/WorkingScheduleId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AppointmentReasonRequest' }
+      responses:
+        '200':
+          description: Schedule rejected by doctor.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreatedScheduleResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/schedules/{scheduleId}/publish:
+    post:
+      operationId: publishWorkingSchedule
+      summary: Publish a doctor-confirmed schedule and allow slot generation
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/WorkingScheduleId' }]
+      responses:
+        '200':
+          description: Schedule published.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreatedScheduleResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
   /api/v1/schedules/{scheduleId}/generate-slots:
     post:
@@ -1657,6 +2241,58 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/queues/{ticketId}/skip:
+    post:
+      operationId: skipQueueTicket
+      summary: Skip a called ticket with a recorded reason
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/QueueActionRequest' }
+      responses:
+        '200':
+          description: Ticket skipped.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/QueueActionResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/queues/{ticketId}/recall:
+    post:
+      operationId: recallQueueTicket
+      summary: Recall a skipped ticket with a recorded reason
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/QueueActionRequest' }
+      responses:
+        '200':
+          description: Ticket called again.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/QueueActionResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /api/v1/encounters/{encounterId}/cancel:
     post:
       operationId: cancelEncounter
@@ -1753,7 +2389,9 @@ paths:
       operationId: updateClinicalNotes
       summary: Replace clinical notes on an in-progress encounter
       security: [{ bearerAuth: [] }]
-      parameters: [{ $ref: '#/components/parameters/EncounterId' }]
+      parameters:
+        - $ref: '#/components/parameters/EncounterId'
+        - $ref: '#/components/parameters/ClinicalIfMatch'
       requestBody:
         required: true
         content:
@@ -1769,6 +2407,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
   /api/v1/encounters/{encounterId}/vital-signs:
     post:
       operationId: addClinicalVitalSigns
@@ -2519,6 +3158,16 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
 components:
   parameters:
+    WorkingScheduleId:
+      name: scheduleId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    TimeOffId:
+      name: timeOffId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
     InvoiceId:
       name: invoiceId
       in: path
@@ -2586,6 +3235,14 @@ components:
       in: header
       required: true
       description: Strong ETag containing the Base64 rowversion of a catalog resource.
+      schema:
+        type: string
+        pattern: '^"[A-Za-z0-9+/]{11}="$'
+    ClinicalIfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Strong ETag containing the Base64 encounter rowversion.
       schema:
         type: string
         pattern: '^"[A-Za-z0-9+/]{11}="$'
@@ -2760,6 +3417,187 @@ components:
           properties:
             duplicateOverride: { type: boolean, default: false }
             duplicateReason: { type: string, minLength: 10, maxLength: 500 }
+    PatientMergePreviewRequest:
+      type: object
+      additionalProperties: false
+      required: [targetPatientId]
+      properties:
+        targetPatientId: { type: string, pattern: '^[0-9A-Fa-f]{8}-(?:[0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}$' }
+    PatientMergeRequest:
+      type: object
+      additionalProperties: false
+      required: [targetPatientId, targetRowVersion, reason]
+      properties:
+        targetPatientId: { type: string, pattern: '^[0-9A-Fa-f]{8}-(?:[0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}$' }
+        targetRowVersion: { type: string, pattern: '^[A-Za-z0-9+/]{11}=$' }
+        reason: { type: string, minLength: 20, maxLength: 500 }
+    PatientMergePreview:
+      type: object
+      additionalProperties: false
+      required: [sourcePublicId, sourceCode, sourceName, sourceDateOfBirth, sourceGender, sourceBranchPublicId,
+        sourceBranchName, sourceNationalIdLast4, sourceRowVersion, targetPublicId, targetCode,
+        targetName, targetDateOfBirth, targetGender, targetBranchPublicId, targetBranchName, targetNationalIdLast4,
+        targetRowVersion, sourceAppointments, sourceSignedEncounters, sourceInvoices, sourceActiveLinks,
+        sourceActiveAllergies, sourceOpenConditions, sourceActiveContacts, identityCompatible, hasOpenWork,
+        hasInboundMerge, hasLinkConflict, hasContactConflict]
+      properties:
+        sourcePublicId: { type: string }
+        sourceCode: { type: string }
+        sourceName: { type: string }
+        sourceDateOfBirth: { type: string, format: date }
+        sourceGender: { type: string, enum: [MALE, FEMALE, OTHER] }
+        sourceBranchPublicId: { type: [string, 'null'] }
+        sourceBranchName: { type: [string, 'null'] }
+        sourceNationalIdLast4: { type: [string, 'null'] }
+        sourceRowVersion: { type: string }
+        targetPublicId: { type: string }
+        targetCode: { type: string }
+        targetName: { type: string }
+        targetDateOfBirth: { type: string, format: date }
+        targetGender: { type: string, enum: [MALE, FEMALE, OTHER] }
+        targetBranchPublicId: { type: [string, 'null'] }
+        targetBranchName: { type: [string, 'null'] }
+        targetNationalIdLast4: { type: [string, 'null'] }
+        targetRowVersion: { type: string }
+        sourceAppointments: { type: integer }
+        sourceSignedEncounters: { type: integer }
+        sourceInvoices: { type: integer }
+        sourceActiveLinks: { type: integer }
+        sourceActiveAllergies: { type: integer }
+        sourceOpenConditions: { type: integer }
+        sourceActiveContacts: { type: integer }
+        identityCompatible: { type: boolean }
+        hasOpenWork: { type: boolean }
+        hasInboundMerge: { type: boolean }
+        hasLinkConflict: { type: boolean }
+        hasContactConflict: { type: boolean }
+    PatientMergePreviewResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data: { $ref: '#/components/schemas/PatientMergePreview' }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    PatientMergeResult:
+      type: object
+      additionalProperties: false
+      required: [sourcePublicId, sourceCode, targetPublicId, targetCode, mergedAtUtc]
+      properties:
+        sourcePublicId: { type: string }
+        sourceCode: { type: string }
+        targetPublicId: { type: string }
+        targetCode: { type: string }
+        mergedAtUtc: { type: string, format: date-time }
+    PatientMergeResultResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data: { $ref: '#/components/schemas/PatientMergeResult' }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    PatientMergeHistoryItem:
+      type: object
+      additionalProperties: false
+      required: [sourcePublicId, sourceCode, sourceName, targetPublicId, targetCode,
+        reason, mergedAtUtc, performedByPublicId, performedByName]
+      properties:
+        sourcePublicId: { type: string }
+        sourceCode: { type: string }
+        sourceName: { type: string }
+        targetPublicId: { type: string }
+        targetCode: { type: string }
+        reason: { type: string }
+        mergedAtUtc: { type: string, format: date-time }
+        performedByPublicId: { type: string }
+        performedByName: { type: string }
+    PatientMergeHistoryResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/PatientMergeHistoryItem' }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    PatientEmergencyContact:
+      type: object
+      additionalProperties: false
+      required: [fullName, relationshipName, phone, isPrimary]
+      properties:
+        fullName: { type: string, minLength: 2, maxLength: 200 }
+        relationshipName: { type: [string, 'null'], maxLength: 80 }
+        phone: { type: string, minLength: 7, maxLength: 20, pattern: '^[0-9+(). -]+$' }
+        isPrimary: { type: boolean }
+    PatientEmergencyContactsRequest:
+      type: object
+      additionalProperties: false
+      required: [contacts]
+      properties:
+        contacts:
+          type: array
+          maxItems: 5
+          items: { $ref: '#/components/schemas/PatientEmergencyContact' }
+    MyEmergencyContacts:
+      type: object
+      additionalProperties: false
+      required: [patientPublicId, rowVersion, contacts]
+      properties:
+        patientPublicId: { type: string, format: uuid }
+        rowVersion: { type: string }
+        contacts:
+          type: array
+          maxItems: 5
+          items: { $ref: '#/components/schemas/PatientEmergencyContact' }
+    MyEmergencyContactsResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data: { $ref: '#/components/schemas/MyEmergencyContacts' }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    PatientAllergyRequest:
+      type: object
+      additionalProperties: false
+      required: [allergenName, type, severity]
+      properties:
+        allergenName: { type: string, minLength: 2, maxLength: 200 }
+        type: { type: string, enum: [DRUG, FOOD, ENVIRONMENT, OTHER] }
+        severity: { type: string, enum: [MILD, MODERATE, SEVERE, UNKNOWN] }
+        reaction: { type: [string, 'null'], maxLength: 500 }
+        notedAt: { type: [string, 'null'], format: date }
+    PatientConditionRequest:
+      type: object
+      additionalProperties: false
+      required: [name, status]
+      properties:
+        code: { type: [string, 'null'], maxLength: 30 }
+        name: { type: string, minLength: 2, maxLength: 200 }
+        diagnosedDate: { type: [string, 'null'], format: date }
+        status: { type: string, enum: [ACTIVE, CONTROLLED] }
+        notes: { type: [string, 'null'], maxLength: 1000 }
+    PatientHealthReasonRequest:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 10, maxLength: 500 }
+    PatientHealthRecordActionResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [publicId]
+          properties:
+            publicId: { type: string, pattern: '^[0-9A-Fa-f]{8}-(?:[0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}$' }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
     PatientSummary:
       type: object
       required: [publicId, code, fullName, dateOfBirth, gender, phone, status, nationalIdLast4, rowVersion]
@@ -2777,7 +3615,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/PatientSummary'
         - type: object
-          required: [branch, nationalId, healthInsuranceNo, email, addressLine, province]
+          required: [branch, nationalId, healthInsuranceNo, email, addressLine, province, emergencyContacts]
           properties:
             branch: { $ref: '#/components/schemas/PatientBranch' }
             nationalId: { type: [string, 'null'] }
@@ -2785,6 +3623,9 @@ components:
             email: { type: [string, 'null'] }
             addressLine: { type: [string, 'null'] }
             province: { type: [string, 'null'] }
+            emergencyContacts:
+              type: array
+              items: { $ref: '#/components/schemas/PatientEmergencyContact' }
     PatientSummaryListResponse:
       type: object
       additionalProperties: false
@@ -2823,8 +3664,9 @@ components:
           items:
             type: object
             additionalProperties: false
-            required: [allergenName, type, severity, reaction, notedAt]
+            required: [publicId, allergenName, type, severity, reaction, notedAt]
             properties:
+              publicId: { type: string, pattern: '^[0-9A-Fa-f]{8}-(?:[0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}$' }
               allergenName: { type: string }
               type: { type: string }
               severity: { type: string }
@@ -2835,8 +3677,9 @@ components:
           items:
             type: object
             additionalProperties: false
-            required: [code, name, diagnosedDate, status, notes]
+            required: [publicId, code, name, diagnosedDate, status, notes]
             properties:
+              publicId: { type: string, pattern: '^[0-9A-Fa-f]{8}-(?:[0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}$' }
               code: { type: [string, 'null'] }
               name: { type: string }
               diagnosedDate: { type: [string, 'null'], format: date }
@@ -4258,6 +5101,149 @@ components:
           $ref: '#/components/schemas/ResponseMeta'
         requestId:
           $ref: '#/components/schemas/RequestId'
+    OrganizationBranchFields:
+      type: object
+      additionalProperties: false
+      required: [name, addressLine, ward, district, province, phone, email, medicalLicenseNo, timezoneName, bookingHorizonDays, onlineHoldMinutes, cancellationDeadlineMinutes, checkInEarlyMinutes, checkInLateMinutes, walkInMaxWaitMinutes]
+      properties:
+        name: { type: string, minLength: 2, maxLength: 200 }
+        addressLine: { type: string, minLength: 2, maxLength: 300 }
+        ward: { type: [string, 'null'], maxLength: 100 }
+        district: { type: [string, 'null'], maxLength: 100 }
+        province: { type: [string, 'null'], maxLength: 100 }
+        phone: { type: [string, 'null'], maxLength: 20 }
+        email: { type: [string, 'null'], format: email, maxLength: 254 }
+        medicalLicenseNo: { type: [string, 'null'], maxLength: 100 }
+        timezoneName: { type: string, minLength: 1, maxLength: 128 }
+        bookingHorizonDays: { type: integer, minimum: 1, maximum: 365 }
+        onlineHoldMinutes: { type: integer, minimum: 1, maximum: 120 }
+        cancellationDeadlineMinutes: { type: integer, minimum: 0, maximum: 525600 }
+        checkInEarlyMinutes: { type: integer, minimum: 0, maximum: 720 }
+        checkInLateMinutes: { type: integer, minimum: 0, maximum: 1440 }
+        walkInMaxWaitMinutes: { type: integer, minimum: 15, maximum: 180 }
+    CreateOrganizationBranchRequest:
+      allOf:
+        - $ref: '#/components/schemas/OrganizationBranchFields'
+        - type: object
+          required: [code]
+          properties:
+            code: { type: string, pattern: '^[A-Z0-9_-]{2,20}$' }
+    UpdateOrganizationBranchRequest:
+      allOf:
+        - $ref: '#/components/schemas/OrganizationBranchFields'
+        - type: object
+          required: [isActive]
+          properties:
+            isActive: { type: boolean }
+    OrganizationBranch:
+      allOf:
+        - $ref: '#/components/schemas/OrganizationBranchFields'
+        - type: object
+          required: [publicId, code, isActive, rowVersion]
+          properties:
+            publicId: { type: string, format: uuid }
+            code: { type: string }
+            isActive: { type: boolean }
+            rowVersion: { type: string }
+    OrganizationSpecialty:
+      type: object
+      additionalProperties: false
+      required: [publicId, code, name, description, isActive, rowVersion]
+      properties:
+        publicId: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+        description: { type: [string, 'null'] }
+        isActive: { type: boolean }
+        rowVersion: { type: string }
+    OrganizationCategory:
+      type: object
+      additionalProperties: false
+      required: [publicId, code, name, displayOrder, isActive, rowVersion]
+      properties:
+        publicId: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+        displayOrder: { type: integer }
+        isActive: { type: boolean }
+        rowVersion: { type: string }
+    CreateOrganizationSpecialtyRequest:
+      type: object
+      additionalProperties: false
+      required: [code, name, description]
+      properties:
+        code: { type: string, pattern: '^[A-Z0-9_-]{2,30}$' }
+        name: { type: string, minLength: 2, maxLength: 150 }
+        description: { type: [string, 'null'], maxLength: 1000 }
+    UpdateOrganizationSpecialtyRequest:
+      type: object
+      additionalProperties: false
+      required: [name, description, isActive]
+      properties:
+        name: { type: string, minLength: 2, maxLength: 150 }
+        description: { type: [string, 'null'], maxLength: 1000 }
+        isActive: { type: boolean }
+    CreateOrganizationCategoryRequest:
+      type: object
+      additionalProperties: false
+      required: [code, name, displayOrder]
+      properties:
+        code: { type: string, pattern: '^[A-Z0-9_-]{2,30}$' }
+        name: { type: string, minLength: 2, maxLength: 150 }
+        displayOrder: { type: integer, minimum: 0, maximum: 1000000 }
+    UpdateOrganizationCategoryRequest:
+      type: object
+      additionalProperties: false
+      required: [name, displayOrder, isActive]
+      properties:
+        name: { type: string, minLength: 2, maxLength: 150 }
+        displayOrder: { type: integer, minimum: 0, maximum: 1000000 }
+        isActive: { type: boolean }
+    OrganizationCatalogResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [branches, specialties, categories]
+          properties:
+            branches:
+              type: array
+              items: { $ref: '#/components/schemas/OrganizationBranch' }
+            specialties:
+              type: array
+              items: { $ref: '#/components/schemas/OrganizationSpecialty' }
+            categories:
+              type: array
+              items: { $ref: '#/components/schemas/OrganizationCategory' }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    OrganizationBranchResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data: { $ref: '#/components/schemas/OrganizationBranch' }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    OrganizationSpecialtyResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data: { $ref: '#/components/schemas/OrganizationSpecialty' }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    OrganizationCategoryResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data: { $ref: '#/components/schemas/OrganizationCategory' }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
     CatalogReferenceData:
       type: object
       additionalProperties: false
@@ -4780,6 +5766,73 @@ components:
         localStartTime: { type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$' }
         localEndTime: { type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$' }
         breakName: { type: [string, 'null'], maxLength: 100 }
+    ScheduleWorkflowStatus:
+      type: string
+      enum: [PROPOSED, DOCTOR_CONFIRMED, REJECTED, PUBLISHED]
+    DoctorWorkingSchedule:
+      type: object
+      additionalProperties: false
+      required: [publicId, branchPublicId, branchName, timezoneName, roomName, weekdayIso,
+        localStartTime, localEndTime, slotDurationMinutes, effectiveFrom, effectiveTo,
+        workflowStatus, decisionNote, breaks]
+      properties:
+        publicId: { type: string, format: uuid }
+        branchPublicId: { type: string, format: uuid }
+        branchName: { type: string }
+        timezoneName: { type: string }
+        roomName: { type: string }
+        weekdayIso: { type: integer, minimum: 1, maximum: 7 }
+        localStartTime: { type: string }
+        localEndTime: { type: string }
+        slotDurationMinutes: { type: integer }
+        effectiveFrom: { type: string, format: date }
+        effectiveTo: { type: [string, 'null'], format: date }
+        workflowStatus: { $ref: '#/components/schemas/ScheduleWorkflowStatus' }
+        decisionNote: { type: [string, 'null'] }
+        breaks: { type: array, items: { $ref: '#/components/schemas/ScheduleBreak' } }
+    DoctorWorkingSchedulesResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/DoctorWorkingSchedule' } }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+    RequestDoctorTimeOff:
+      type: object
+      additionalProperties: false
+      required: [branchPublicId, serviceDate, localStartTime, localEndTime, reason]
+      properties:
+        branchPublicId: { type: string, format: uuid }
+        serviceDate: { type: string, format: date }
+        localStartTime: { type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$' }
+        localEndTime: { type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$' }
+        reason: { type: string, minLength: 3, maxLength: 500 }
+    DoctorTimeOff:
+      type: object
+      additionalProperties: false
+      required: [publicId, branchPublicId, branchName, doctorName, serviceDate, localStartTime,
+        localEndTime, reason, decisionNote, status, appointmentConflictCount]
+      properties:
+        publicId: { type: string, format: uuid }
+        branchPublicId: { type: string, format: uuid }
+        branchName: { type: string }
+        doctorName: { type: string }
+        serviceDate: { type: string, format: date }
+        localStartTime: { type: string }
+        localEndTime: { type: string }
+        reason: { type: string }
+        decisionNote: { type: [string, 'null'] }
+        status: { type: string, enum: [PENDING, APPROVED, REJECTED, CANCELLED] }
+        appointmentConflictCount: { type: integer, minimum: 0 }
+    DoctorTimeOffListResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/DoctorTimeOff' } }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
     CreateWorkingScheduleRequest:
       type: object
       additionalProperties: false
@@ -4792,7 +5845,7 @@ components:
         weekdayIso: { type: integer, minimum: 1, maximum: 7 }
         localStartTime: { type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$' }
         localEndTime: { type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$' }
-        slotDurationMinutes: { type: integer, minimum: 5, maximum: 240 }
+        slotDurationMinutes: { type: integer, minimum: 5, maximum: 480 }
         effectiveFrom: { type: string, format: date }
         effectiveTo: { type: [string, 'null'], format: date }
         bookingHorizonDays: { type: [integer, 'null'], minimum: 1, maximum: 365 }
@@ -4840,7 +5893,8 @@ components:
             type: object
             additionalProperties: false
             required: [publicId, doctorPublicId, doctorName, roomPublicId, roomName, weekdayIso, localStartTime,
-              localEndTime, slotDurationMinutes, bookingHorizonDays, effectiveFrom, effectiveTo, isActive, breaks, slotCount, rowVersion]
+              localEndTime, slotDurationMinutes, bookingHorizonDays, effectiveFrom, effectiveTo, isActive,
+              workflowStatus, decisionNote, breaks, slotCount, rowVersion]
             properties:
               publicId: { type: string, format: uuid }
               doctorPublicId: { type: string, format: uuid }
@@ -4855,6 +5909,8 @@ components:
               effectiveFrom: { type: string, format: date }
               effectiveTo: { type: [string, 'null'], format: date }
               isActive: { type: boolean }
+              workflowStatus: { $ref: '#/components/schemas/ScheduleWorkflowStatus' }
+              decisionNote: { type: [string, 'null'] }
               breaks: { type: array, items: { $ref: '#/components/schemas/ScheduleBreak' } }
               slotCount: { type: integer, minimum: 0 }
               rowVersion: { type: string }
@@ -4923,12 +5979,13 @@ components:
         requestId: { $ref: '#/components/schemas/RequestId' }
     QueueStatus:
       type: string
-      enum: [WAITING, CALLED, SERVING]
+      enum: [WAITING, CALLED, SERVING, SKIPPED]
     QueueTicket:
       type: object
       additionalProperties: false
       required: [publicId, encounterPublicId, displayNumber, priorityLevel, status, issuedAtUtc, calledAtUtc,
-        serviceStartedAtUtc, encounterCode, encounterSource, bookingChannel, patient, doctor, room, initialService]
+        plannedStartUtc, plannedStartTimeLocal, eligibleToCall, estimatedWaitMinutes, serviceStartedAtUtc, encounterCode, encounterSource,
+        bookingChannel, patient, doctor, room, initialService]
       properties:
         publicId: { type: string, format: uuid }
         encounterPublicId: { type: string, format: uuid }
@@ -4937,6 +5994,10 @@ components:
         status: { $ref: '#/components/schemas/QueueStatus' }
         issuedAtUtc: { type: string, format: date-time }
         calledAtUtc: { type: [string, 'null'], format: date-time }
+        plannedStartUtc: { type: [string, 'null'], format: date-time }
+        plannedStartTimeLocal: { type: [string, 'null'], pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$' }
+        eligibleToCall: { type: boolean }
+        estimatedWaitMinutes: { type: [integer, 'null'], minimum: 0 }
         serviceStartedAtUtc: { type: [string, 'null'], format: date-time }
         encounterCode: { type: string }
         encounterSource: { type: string, enum: [APPOINTMENT, WALK_IN] }
@@ -5046,13 +6107,13 @@ components:
     ReceptionWorkspace:
       type: object
       additionalProperties: false
-      required: [branch, queue, appointments, doctors, rooms, services, doctorServices]
+      required: [branch, queue, appointments, doctors, rooms, services, doctorServices, walkInSlots]
       properties:
         branch:
           type: object
           additionalProperties: false
           required: [publicId, code, name, timezoneName, medicalLicenseNo, phone, email, addressLine, ward, district,
-            province, businessDate, checkInEarlyMinutes, checkInLateMinutes]
+            province, businessDate, checkInEarlyMinutes, checkInLateMinutes, walkInMaxWaitMinutes]
           properties:
             publicId: { type: string, format: uuid }
             code: { type: string }
@@ -5068,7 +6129,20 @@ components:
             businessDate: { type: string, format: date }
             checkInEarlyMinutes: { type: integer, minimum: 0, maximum: 720 }
             checkInLateMinutes: { type: integer, minimum: 0, maximum: 1440 }
+            walkInMaxWaitMinutes: { type: integer, minimum: 15, maximum: 180 }
         queue: { type: array, items: { $ref: '#/components/schemas/QueueTicket' } }
+        walkInSlots:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [doctorPublicId, roomPublicId, servicePublicId, startsAtUtc, startTimeLocal]
+            properties:
+              doctorPublicId: { type: string, format: uuid }
+              roomPublicId: { type: string, format: uuid }
+              servicePublicId: { type: string, format: uuid }
+              startsAtUtc: { type: string, format: date-time }
+              startTimeLocal: { type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$' }
         appointments: { type: array, items: { $ref: '#/components/schemas/CheckInCandidate' } }
         doctors:
           type: array
@@ -5141,6 +6215,29 @@ components:
       required: [branchPublicId]
       properties:
         branchPublicId: { type: string, format: uuid }
+    QueueActionRequest:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 10, maxLength: 500 }
+    QueueActionResult:
+      type: object
+      additionalProperties: false
+      required: [queueTicketPublicId, encounterPublicId, displayNumber, status]
+      properties:
+        queueTicketPublicId: { type: string, format: uuid }
+        encounterPublicId: { type: string, format: uuid }
+        displayNumber: { type: string }
+        status: { type: string, enum: [SKIPPED, CALLED] }
+    QueueActionResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta, requestId]
+      properties:
+        data: { $ref: '#/components/schemas/QueueActionResult' }
+        meta: { $ref: '#/components/schemas/ResponseMeta' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
     QueueCommandResult:
       type: object
       additionalProperties: false
@@ -5319,10 +6416,11 @@ components:
       allOf:
         - $ref: '#/components/schemas/ClinicalEncounterSummary'
         - type: object
-          required: [signedAtUtc, signature, historyOfPresentIllness, physicalExamination,
+          required: [rowVersion, signedAtUtc, signature, historyOfPresentIllness, physicalExamination,
             clinicalAssessment, treatmentPlan, followUpInstructions, followUpDate,
             patientRelease, vitalSigns, diagnoses, services, amendments, availableServices]
           properties:
+            rowVersion: { type: string, pattern: '^[A-Za-z0-9+/]{11}=$' }
             signedAtUtc: { type: [string, 'null'], format: date-time }
             patientRelease:
               oneOf:
@@ -6167,7 +7265,7 @@ components:
     OperationsReportSummary:
       type: object
       additionalProperties: false
-      required: [appointmentCount, confirmedCount, cancelledCount, noShowCount, encounterCount, completedEncounterCount, averageWaitMinutes]
+      required: [appointmentCount, confirmedCount, cancelledCount, noShowCount, encounterCount, completedEncounterCount, averageWaitMinutes, p90WaitMinutes, walkInEncounterCount]
       properties:
         appointmentCount: { type: integer, minimum: 0 }
         confirmedCount: { type: integer, minimum: 0 }
@@ -6176,6 +7274,8 @@ components:
         encounterCount: { type: integer, minimum: 0 }
         completedEncounterCount: { type: integer, minimum: 0 }
         averageWaitMinutes: { type: [number, 'null'], minimum: 0 }
+        p90WaitMinutes: { type: [number, 'null'], minimum: 0 }
+        walkInEncounterCount: { type: integer, minimum: 0 }
     OperationsReportDay:
       type: object
       additionalProperties: false

@@ -8,7 +8,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddJsonFile("ocelot.json", optional: false, reloadOnChange: true);
 builder.Services.AddHttpClient("readiness", client => client.Timeout = TimeSpan.FromSeconds(3));
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
-    ?? ["http://localhost:5173"];
+    ?? ["http://localhost:5173", "http://localhost:5174", "http://127.0.0.1:5173", "http://127.0.0.1:5174"];
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy => policy

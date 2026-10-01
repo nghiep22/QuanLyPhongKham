@@ -9,6 +9,9 @@ import type {
   CategoryReference, CreateRoomInput, CreateServiceInput, PublicBranch, PublicDoctor,
   PublicService, PublicSpecialty, Room, SetBranchPriceInput, SpecialtyReference,
   UpdateRoomInput, UpdateServiceInput,
+  OrganizationBranch, OrganizationSpecialty, OrganizationCategory,
+  CreateBranchInput, UpdateBranchInput, CreateSpecialtyInput, UpdateSpecialtyInput,
+  CreateCategoryInput, UpdateCategoryInput,
 } from '../src/modules/organization-catalog/catalog.types.js';
 
 const branchA: BranchReference = { id: 10, publicId: randomUUID(), code: 'MAIN', name: 'Chi nhánh chính' };
@@ -31,6 +34,46 @@ class FakeAuthenticator implements PrincipalAuthenticator {
 }
 
 class MemoryCatalogRepository implements CatalogRepository {
+  orgBranch: OrganizationBranch = {
+    ...branchA, phone: null, email: null, addressLine: 'Quận 1', ward: null,
+    district: null, province: 'TP.HCM', medicalLicenseNo: null,
+    timezoneName: 'SE Asia Standard Time', bookingHorizonDays: 60,
+    onlineHoldMinutes: 15, cancellationDeadlineMinutes: 120,
+    checkInEarlyMinutes: 120, checkInLateMinutes: 180, walkInMaxWaitMinutes: 45,
+    isActive: true, rowVersion: 'AAAAAAAAAAE=',
+  };
+  orgSpecialty: OrganizationSpecialty = { ...specialty, description: null, isActive: true, rowVersion: 'AAAAAAAAAAE=' };
+  orgCategory: OrganizationCategory = { ...category, displayOrder: 0, isActive: true, rowVersion: 'AAAAAAAAAAE=' };
+  listOrganizationBranches() { return Promise.resolve([this.orgBranch]); }
+  listOrganizationSpecialties() { return Promise.resolve([this.orgSpecialty]); }
+  listOrganizationCategories() { return Promise.resolve([this.orgCategory]); }
+  createBranch(_actor: ClinicPrincipal, input: CreateBranchInput) {
+    this.orgBranch = { ...this.orgBranch, ...input, id: 80, publicId: randomUUID() };
+    return Promise.resolve(this.orgBranch.publicId);
+  }
+  updateBranch(_actor: ClinicPrincipal, _branchId: number, input: UpdateBranchInput, expectedVersion: string) {
+    if (expectedVersion !== this.orgBranch.rowVersion) return Promise.reject({ number: 53622 });
+    this.orgBranch = { ...this.orgBranch, ...input, rowVersion: 'AAAAAAAAAAI=' };
+    return Promise.resolve();
+  }
+  createSpecialty(_actor: ClinicPrincipal, input: CreateSpecialtyInput) {
+    this.orgSpecialty = { ...this.orgSpecialty, ...input, id: 81, publicId: randomUUID() };
+    return Promise.resolve(this.orgSpecialty.publicId);
+  }
+  updateSpecialty(_actor: ClinicPrincipal, _id: number, input: UpdateSpecialtyInput, expectedVersion: string) {
+    if (expectedVersion !== this.orgSpecialty.rowVersion) return Promise.reject({ number: 53626 });
+    this.orgSpecialty = { ...this.orgSpecialty, ...input, rowVersion: 'AAAAAAAAAAI=' };
+    return Promise.resolve();
+  }
+  createCategory(_actor: ClinicPrincipal, input: CreateCategoryInput) {
+    this.orgCategory = { ...this.orgCategory, ...input, id: 82, publicId: randomUUID() };
+    return Promise.resolve(this.orgCategory.publicId);
+  }
+  updateCategory(_actor: ClinicPrincipal, _id: number, input: UpdateCategoryInput, expectedVersion: string) {
+    if (expectedVersion !== this.orgCategory.rowVersion) return Promise.reject({ number: 53629 });
+    this.orgCategory = { ...this.orgCategory, ...input, rowVersion: 'AAAAAAAAAAI=' };
+    return Promise.resolve();
+  }
   room: Room = {
     id: 50, publicId: randomUUID(), branchId: branchA.id,
     branch: { publicId: branchA.publicId, code: branchA.code, name: branchA.name },
@@ -225,5 +268,53 @@ describe('organization catalog and public directory vertical slice', () => {
     expect(created.body.data.branchPrices[0].amount).toBe('250000.00');
     expect(duplicate.status).toBe(409);
     expect(duplicate.body.error.code).toBe('PRICE_PERIOD_CONFLICT');
+  });
+
+  it('restricts organization master data to global Admin and validates branch policy', async () => {
+    const denied = await request(app(repository)).get('/api/v1/admin/catalog/organization')
+      .set(authorization('manager'));
+    const deniedCreate = await request(app(repository)).post('/api/v1/admin/catalog/categories')
+      .set(authorization('manager')).send({ code: 'OTHER_NEW', name: 'Nhóm mới', displayOrder: 1 });
+    const list = await request(app(repository)).get('/api/v1/admin/catalog/organization')
+      .set(authorization('admin'));
+    const badTimezone = await request(app(repository)).post('/api/v1/admin/catalog/branches')
+      .set(authorization('admin')).send({ ...repository.orgBranch, code: 'NEW_BRANCH',
+        timezoneName: '', publicId: undefined, id: undefined, rowVersion: undefined });
+    expect(denied.status).toBe(403);
+    expect(deniedCreate.status).toBe(403);
+    expect(list.status).toBe(200);
+    expect(list.body.data.branches[0]).not.toHaveProperty('id');
+    expect(badTimezone.status).toBe(400);
+  });
+
+  it('creates and version-checks organization categories and specialties', async () => {
+    const specialtyCreate = await request(app(repository)).post('/api/v1/admin/catalog/specialties')
+      .set(authorization('admin')).send({ code: 'NEW_SPEC', name: 'Chuyên khoa mới', description: null });
+    const categoryCreate = await request(app(repository)).post('/api/v1/admin/catalog/categories')
+      .set(authorization('admin')).send({ code: 'NEW_CAT', name: 'Nhóm mới', displayOrder: 1 });
+    const stale = await request(app(repository)).put(`/api/v1/admin/catalog/categories/${repository.orgCategory.publicId}`)
+      .set(authorization('admin')).set('if-match', '"AAAAAAAAAAI="')
+      .send({ name: 'Nhóm sửa', displayOrder: 2, isActive: true });
+    const missingVersion = await request(app(repository)).put(`/api/v1/admin/catalog/specialties/${repository.orgSpecialty.publicId}`)
+      .set(authorization('admin')).send({ name: 'Chuyên khoa sửa', description: null, isActive: true });
+    expect(specialtyCreate.status).toBe(201);
+    expect(categoryCreate.status).toBe(201);
+    expect(stale.status).toBe(409);
+    expect(stale.body.error.code).toBe('CATALOG_VERSION_CONFLICT');
+    expect(missingVersion.status).toBe(428);
+  });
+
+  it('creates and updates branch policy using If-Match', async () => {
+    const { id: _id, publicId: _publicId, rowVersion: _rowVersion, isActive: _isActive, ...body } = repository.orgBranch;
+    const created = await request(app(repository)).post('/api/v1/admin/catalog/branches')
+      .set(authorization('admin')).send({ ...body, code: 'NEW_BRANCH' });
+    const { code: _code, ...fields } = body;
+    const updated = await request(app(repository)).put(`/api/v1/admin/catalog/branches/${repository.orgBranch.publicId}`)
+      .set(authorization('admin')).set('if-match', '"AAAAAAAAAAE="')
+      .send({ ...fields, bookingHorizonDays: 90, isActive: false });
+    expect(created.status).toBe(201);
+    expect(updated.status).toBe(200);
+    expect(updated.body.data.bookingHorizonDays).toBe(90);
+    expect(updated.body.data.isActive).toBe(false);
   });
 });

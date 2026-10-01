@@ -5,6 +5,7 @@ import type {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { apiClient } from '../../shared/api/client'
+import { OrganizationCatalog } from './organization-catalog'
 
 const roomLabels: Record<CatalogRoomType, string> = {
   CONSULTATION: 'Phòng khám', PROCEDURE: 'Phòng thủ thuật', LAB: 'Xét nghiệm',
@@ -65,6 +66,36 @@ function RoomForm({ references, branchPublicId }: { references: CatalogReference
   </form>
 }
 
+function RoomEditForm({ room, branchPublicId }: { room: CatalogRoom; branchPublicId: string }) {
+  const client = useQueryClient()
+  const [editing, setEditing] = useState(false)
+  const [name, setName] = useState(room.name)
+  const [type, setType] = useState<CatalogRoomType>(room.type)
+  const [floorNo, setFloorNo] = useState(room.floorNo === null ? '' : String(room.floorNo))
+  const [capacity, setCapacity] = useState(String(room.capacity))
+  const mutation = useMutation({
+    mutationFn: () => apiClient.catalog.updateRoom(room.publicId, {
+      name: name.trim(), type, ...(floorNo ? { floorNo: Number(floorNo) } : {}),
+      capacity: Number(capacity), isActive: room.isActive,
+    }, room.rowVersion),
+    onSuccess: () => { setEditing(false); void client.invalidateQueries({ queryKey: ['catalog-rooms', branchPublicId] }) },
+    onError: () => void client.invalidateQueries({ queryKey: ['catalog-rooms', branchPublicId] }),
+  })
+  if (!editing) return <button type="button" className="secondary" onClick={() => setEditing(true)}>Sửa phòng</button>
+  return <form className="catalog-form" onSubmit={(event) => { event.preventDefault(); mutation.mutate() }}>
+    <div className="form-grid">
+      <label>Tên phòng<input required minLength={2} maxLength={150} value={name} onChange={(event) => setName(event.target.value)} /></label>
+      <label>Loại phòng<select value={type} onChange={(event) => setType(event.target.value as CatalogRoomType)}>
+        {Object.entries(roomLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+      <label>Tầng<input type="number" min={-5} max={200} value={floorNo} onChange={(event) => setFloorNo(event.target.value)} /></label>
+      <label>Sức chứa<input required type="number" min={1} max={500} value={capacity} onChange={(event) => setCapacity(event.target.value)} /></label>
+    </div>
+    {mutation.error && <div className="form-error" role="alert">{message(mutation.error)}</div>}
+    <div className="action-row"><button type="submit" disabled={mutation.isPending}>Lưu phòng</button>
+      <button type="button" className="secondary" disabled={mutation.isPending} onClick={() => setEditing(false)}>Đóng</button></div>
+  </form>
+}
+
 function ServiceForm({ references, branchPublicId }: { references: CatalogReferenceData; branchPublicId: string }) {
   const client = useQueryClient()
   const [code, setCode] = useState('')
@@ -121,6 +152,48 @@ function ServiceForm({ references, branchPublicId }: { references: CatalogRefere
     {schemaError && <div className="form-error" role="alert">{schemaError}</div>}
     {mutation.error && <div className="form-error" role="alert">{message(mutation.error)}</div>}
     <button disabled={mutation.isPending} type="submit">{mutation.isPending ? 'Đang tạo…' : 'Tạo dịch vụ'}</button>
+  </form>
+}
+
+function ServiceEditForm({ service, references, branchPublicId }: {
+  service: CatalogService; references: CatalogReferenceData; branchPublicId: string
+}) {
+  const client = useQueryClient()
+  const [editing, setEditing] = useState(false)
+  const [name, setName] = useState(service.name)
+  const [type, setType] = useState<CatalogServiceType>(service.type)
+  const [categoryId, setCategoryId] = useState(service.category.publicId)
+  const [specialtyId, setSpecialtyId] = useState(service.specialty?.publicId ?? '')
+  const [duration, setDuration] = useState(String(service.durationMinutes))
+  const [requiresDoctor, setRequiresDoctor] = useState(service.requiresDoctor)
+  const mutation = useMutation({
+    mutationFn: () => apiClient.catalog.updateService(service.publicId, branchPublicId, {
+      categoryPublicId: categoryId, ...(specialtyId ? { specialtyPublicId: specialtyId } : {}),
+      name: name.trim(), type, durationMinutes: Number(duration), requiresDoctor,
+      basePrice: service.basePrice, resultSchema: service.resultSchema, isActive: service.isActive,
+    }, service.rowVersion),
+    onSuccess: () => { setEditing(false); void client.invalidateQueries({ queryKey: ['catalog-services', branchPublicId] }) },
+    onError: () => void client.invalidateQueries({ queryKey: ['catalog-services', branchPublicId] }),
+  })
+  if (!editing) return <button type="button" className="secondary" onClick={() => setEditing(true)}>Sửa dịch vụ</button>
+  return <form className="catalog-form" onSubmit={(event) => { event.preventDefault(); mutation.mutate() }}>
+    <div className="form-grid">
+      <label>Tên dịch vụ<input required minLength={2} maxLength={200} value={name} onChange={(event) => setName(event.target.value)} /></label>
+      <label>Nhóm<select value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
+        {references.categories.map((item) => <option key={item.publicId} value={item.publicId}>{item.name}</option>)}</select></label>
+      <label>Chuyên khoa<select value={specialtyId} onChange={(event) => setSpecialtyId(event.target.value)}>
+        <option value="">Không giới hạn</option>{references.specialties.map((item) =>
+          <option key={item.publicId} value={item.publicId}>{item.name}</option>)}</select></label>
+      <label>Loại dịch vụ<select value={type} onChange={(event) => setType(event.target.value as CatalogServiceType)}>
+        {Object.entries(serviceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+      <label>Thời lượng (phút)<input required type="number" min={5} max={480} value={duration}
+        onChange={(event) => setDuration(event.target.value)} /></label>
+      <label className="checkbox"><input type="checkbox" checked={requiresDoctor}
+        onChange={(event) => setRequiresDoctor(event.target.checked)} /> Yêu cầu bác sĩ</label>
+    </div>
+    {mutation.error && <div className="form-error" role="alert">{message(mutation.error)}</div>}
+    <div className="action-row"><button type="submit" disabled={mutation.isPending}>Lưu dịch vụ</button>
+      <button type="button" className="secondary" disabled={mutation.isPending} onClick={() => setEditing(false)}>Đóng</button></div>
   </form>
 }
 
@@ -210,11 +283,14 @@ export function CatalogPage() {
   return <>
     <header><div><span className="eyebrow">DANH MỤC VẬN HÀNH</span><h1>Cơ sở, phòng và dịch vụ</h1>
       <p>Quản lý tài nguyên theo chi nhánh và công bố mức giá có hiệu lực cho luồng đặt lịch.</p></div></header>
-    <section className="catalog-toolbar panel"><label>Chi nhánh<select value={branchPublicId} onChange={(event) => setBranchPublicId(event.target.value)}>
+    {branchPublicId && <section className="catalog-toolbar panel"><label>Chi nhánh<select value={branchPublicId} onChange={(event) => setBranchPublicId(event.target.value)}>
       {references.data.branches.map((item) => <option key={item.publicId} value={item.publicId}>{item.name}</option>)}
-    </select></label></section>
+    </select></label></section>}
 
-    <div className="catalog-columns">
+    {references.data.canManageOrganizationServices && <OrganizationCatalog />}
+    {!branchPublicId && <div className="page-state">Chưa có chi nhánh hoạt động. Tạo hoặc kích hoạt chi nhánh trong danh mục tổ chức.</div>}
+
+    {branchPublicId && <div className="catalog-columns">
       <section><RoomForm references={references.data} branchPublicId={branchPublicId} />
         <div className="catalog-list">
           <h2>Phòng tại chi nhánh</h2>
@@ -226,6 +302,7 @@ export function CatalogPage() {
             <div><span className={`status ${room.isActive ? 'status-active' : 'status-disabled'}`}>{room.isActive ? 'Hoạt động' : 'Tạm ngừng'}</span>
               <h3>{room.name}</h3><p>{room.code} · {roomLabels[room.type]} · Tầng {room.floorNo ?? '—'} · {room.capacity} chỗ</p></div>
             <button className="secondary" disabled={roomStatus.isPending} onClick={() => roomStatus.mutate(room)}>{room.isActive ? 'Tạm ngừng' : 'Kích hoạt'}</button>
+            <RoomEditForm key={`${room.publicId}:${room.rowVersion}`} room={room} branchPublicId={branchPublicId} />
           </article>)}</div>
       </section>
       <section>
@@ -240,12 +317,15 @@ export function CatalogPage() {
               <strong>{service.branchPrices[0] ? formatMoney(service.branchPrices[0].amount) : 'Chưa có giá tại chi nhánh'}</strong></div>
               {references.data.canManageOrganizationServices && <button className="secondary" disabled={serviceStatus.isPending}
                 onClick={() => serviceStatus.mutate(service)}>{service.isActive ? 'Tạm ngừng' : 'Kích hoạt'}</button>}</div>
+            {references.data.canManageOrganizationServices && <ServiceEditForm
+              key={`${service.publicId}:${service.rowVersion}:edit`} service={service}
+              references={references.data} branchPublicId={branchPublicId} />}
             <PriceForm key={`${service.publicId}:${branchPublicId}:${service.branchPrices[0]?.publicId ?? 'new'}`}
               service={service} branchPublicId={branchPublicId} />
             {references.data.canManageOrganizationServices && <ResultSchemaForm
               key={`${service.publicId}:${service.rowVersion}:schema`} service={service} branchPublicId={branchPublicId} />}
           </article>)}</div>
       </section>
-    </div>
+    </div>}
   </>
 }

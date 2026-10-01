@@ -1,7 +1,7 @@
 import { HttpError } from '../../shared/http/errors.js';
 import type { ClinicPrincipal } from '../identity/index.js';
 import type {
-  AppointmentRepository, AppointmentStatus, BookAppointmentInput, CreateScheduleInput,
+  AppointmentRepository, AppointmentStatus, BookAppointmentInput, CreateScheduleInput, RequestTimeOffInput,
 } from './appointment.types.js';
 
 function number(error: unknown): number | undefined {
@@ -20,13 +20,17 @@ function mapError(error: unknown): never {
   }
   if ([53110, 53731].includes(code ?? 0)) throw new HttpError(409, 'IDEMPOTENCY_KEY_REUSED', 'Idempotency-Key đã dùng với nội dung khác.');
   if ([53111, 53732].includes(code ?? 0)) throw new HttpError(409, 'REQUEST_IN_PROGRESS', 'Yêu cầu trùng đang được xử lý.');
-  if ([53112, 53117, 53130, 53133, 53704].includes(code ?? 0)) throw new HttpError(409, 'SLOT_CONFLICT', 'Slot hoặc tài nguyên lịch không còn khả dụng.');
+  if ([52004, 53112, 53117, 53130, 53133, 53704].includes(code ?? 0)) throw new HttpError(409, 'SLOT_CONFLICT', 'Slot hoặc tài nguyên lịch không còn khả dụng.');
+  if (code === 53750) throw new HttpError(409, 'SCHEDULE_STATE_CONFLICT', 'Trạng thái lịch đã thay đổi. Vui lòng tải lại.');
+  if (code === 52009) throw new HttpError(409, 'TIME_OFF_APPOINTMENTS_CONFLICT',
+    'Cần xử lý các lịch hẹn đã đặt trước khi duyệt nghỉ.');
+  if (code === 53753) throw new HttpError(409, 'TIME_OFF_OVERLAP', 'Đã có yêu cầu nghỉ trùng thời gian.');
   if ([53113, 53123, 53131, 53733].includes(code ?? 0)) throw new HttpError(409, 'BOOKING_POLICY_CONFLICT', 'Đã ngoài thời hạn cho phép đặt, đổi hoặc hủy lịch.');
   if ([53115, 53116, 53132, 53734].includes(code ?? 0)) throw new HttpError(409, 'AVAILABILITY_CHANGED', 'Bác sĩ hoặc dịch vụ không còn nhận đặt lịch này.');
   if ([53114, 53118, 53119, 53120, 53122, 53125, 53126, 53134, 53135].includes(code ?? 0)) {
     throw new HttpError(409, 'APPOINTMENT_STATE_CONFLICT', 'Trạng thái lịch hẹn không cho phép thao tác này.');
   }
-  if ([53103, 53105, 53107, 53121, 53124, 53700, 53701, 53702, 53703, 53705, 53706, 53730].includes(code ?? 0)) {
+  if ([52002, 52003, 53103, 53105, 53107, 53121, 53124, 53700, 53701, 53702, 53703, 53705, 53706, 53730, 53751, 53752].includes(code ?? 0)) {
     throw new HttpError(400, 'SCHEDULE_VALIDATION_ERROR', 'Thông tin ca làm việc không hợp lệ.');
   }
   throw error;
@@ -48,6 +52,11 @@ export class AppointmentService {
     assertRange(fromDate, toDate, 31);
     return this.repository.availability(branchPublicId, servicePublicId, fromDate, toDate, doctorPublicId);
   }
+  async adminAvailability(actor: ClinicPrincipal, branchPublicId: string, servicePublicId: string,
+    serviceDate: string, requestId: string) {
+    try { return await this.repository.adminAvailability(actor, branchPublicId, servicePublicId, serviceDate, requestId); }
+    catch (error) { mapError(error); }
+  }
   async scheduling(actor: ClinicPrincipal, branchPublicId: string, requestId: string) {
     try { return await this.repository.scheduling(actor, branchPublicId, requestId); } catch (error) { mapError(error); }
   }
@@ -56,6 +65,31 @@ export class AppointmentService {
       const publicId = await this.repository.createSchedule(actor, input, requestId);
       return { publicId };
     } catch (error) { mapError(error); }
+  }
+  async listMySchedules(actor: ClinicPrincipal, requestId: string) {
+    try { return await this.repository.listMySchedules(actor, requestId); } catch (error) { mapError(error); }
+  }
+  async decideSchedule(actor: ClinicPrincipal, publicId: string, decision: 'CONFIRM' | 'REJECT',
+    reason: string | null, requestId: string) {
+    try { await this.repository.decideSchedule(actor, publicId, decision, reason, requestId); return { publicId }; }
+    catch (error) { mapError(error); }
+  }
+  async publishSchedule(actor: ClinicPrincipal, publicId: string, requestId: string) {
+    try { await this.repository.publishSchedule(actor, publicId, requestId); return { publicId }; }
+    catch (error) { mapError(error); }
+  }
+  async requestTimeOff(actor: ClinicPrincipal, input: RequestTimeOffInput, requestId: string) {
+    try { return { publicId: await this.repository.requestTimeOff(actor, input, requestId) }; }
+    catch (error) { mapError(error); }
+  }
+  async listTimeOff(actor: ClinicPrincipal, branchPublicId: string | null, requestId: string) {
+    try { return await this.repository.listTimeOff(actor, branchPublicId, requestId); }
+    catch (error) { mapError(error); }
+  }
+  async decideTimeOff(actor: ClinicPrincipal, publicId: string, decision: 'APPROVE' | 'REJECT' | 'CANCEL',
+    reason: string | null, requestId: string) {
+    try { await this.repository.decideTimeOff(actor, publicId, decision, reason, requestId); return { publicId }; }
+    catch (error) { mapError(error); }
   }
   async generateSlots(actor: ClinicPrincipal, publicId: string, fromDate: string, toDate: string, requestId: string) {
     assertRange(fromDate, toDate, 366);

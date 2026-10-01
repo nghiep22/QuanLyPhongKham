@@ -13,6 +13,7 @@ const walkIn = z.object({ branchPublicId: uuid, patientPublicId: uuid, doctorPub
   roomPublicId: uuid, servicePublicId: uuid, chiefComplaint: z.string().trim().max(1000).nullable().optional(),
   priorityLevel: z.number().int().min(0).max(9).default(0) }).strict();
 const cancelEncounter = z.object({ reason: z.string().trim().min(10).max(500) }).strict();
+const queueReason = cancelEncounter;
 
 function validate<T>(schema: z.ZodType<T>, value: unknown): T {
   const result = schema.safeParse(value);
@@ -65,6 +66,16 @@ export function createReceptionRouter(auth: PrincipalAuthenticator, service: Rec
   router.post('/queues/call-next', asyncRoute(async (request, response) => {
     const input = validate(branchQuery, request.body);
     success(response, await service.callNext(await actor(request, auth), input.branchPublicId, response.locals.requestId));
+  }));
+  router.post('/queues/:ticketId/skip', asyncRoute(async (request, response) => {
+    const input = validate(queueReason, request.body);
+    success(response, await service.changeTicketStatus(await actor(request, auth),
+      validate(uuid, request.params.ticketId), 'SKIP', input.reason, response.locals.requestId));
+  }));
+  router.post('/queues/:ticketId/recall', asyncRoute(async (request, response) => {
+    const input = validate(queueReason, request.body);
+    success(response, await service.changeTicketStatus(await actor(request, auth),
+      validate(uuid, request.params.ticketId), 'RECALL', input.reason, response.locals.requestId));
   }));
   router.post('/encounters/:encounterId/cancel', asyncRoute(async (request, response) => {
     const input = validate(cancelEncounter, request.body);

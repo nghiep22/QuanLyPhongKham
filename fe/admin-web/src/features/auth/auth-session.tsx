@@ -1,5 +1,6 @@
 import type { AuthenticatedUser, AuthResponse } from '@clinic/generated-api-types'
 import { ApiClientError } from '@clinic/generated-api-client'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   useCallback,
   useEffect,
@@ -24,24 +25,31 @@ function refreshInitialSession() {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient()
   const [user, setUser] = useState<AuthenticatedUser | null>(null)
   const [isRestoring, setIsRestoring] = useState(true)
   const [expiresAt, setExpiresAt] = useState<number | null>(null)
   const sessionGeneration = useRef(0)
+  const sessionUserSnapshot = useRef<string | null>(null)
 
   const applySession = useCallback((response: AuthResponse) => {
+    const snapshot = JSON.stringify(response.data.user)
+    if (snapshot !== sessionUserSnapshot.current) queryClient.clear()
+    sessionUserSnapshot.current = snapshot
     setAccessToken(response.data.accessToken)
     setUser(response.data.user)
     setExpiresAt(Date.now() + response.data.expiresIn * 1000)
-  }, [])
+  }, [queryClient])
 
   const clearSession = useCallback(() => {
     sessionGeneration.current += 1
+    sessionUserSnapshot.current = null
     setAccessToken(null)
+    queryClient.clear()
     setUser(null)
     setExpiresAt(null)
     initialRefresh = null
-  }, [])
+  }, [queryClient])
 
   useEffect(() => {
     let active = true

@@ -17,11 +17,14 @@ BEGIN TRY
         THROW 55700,N'Thiếu dữ liệu seed cho regression lịch hẹn.',1;
     IF EXISTS(
         SELECT required.object_name FROM (VALUES
-          (N'sp_clinic_get_scheduling'),(N'sp_clinic_create_working_schedule'),(N'sp_clinic_generate_slots'),
+          (N'sp_clinic_get_scheduling'),(N'sp_clinic_create_working_schedule'),
+          (N'sp_clinic_list_my_working_schedules'),(N'sp_clinic_decide_working_schedule'),
+          (N'sp_clinic_publish_working_schedule'),(N'sp_clinic_generate_slots'),
+          (N'sp_clinic_request_time_off'),(N'sp_clinic_list_time_off'),(N'sp_clinic_decide_time_off'),
           (N'sp_clinic_book_appointment'),(N'sp_clinic_reschedule_appointment'),
           (N'sp_clinic_confirm_appointment'),(N'sp_clinic_cancel_appointment'),
           (N'sp_clinic_mark_appointment_no_show'),(N'sp_clinic_list_my_appointments'),
-          (N'sp_clinic_list_admin_appointments'),(N'sp_clinic_get_appointment')
+          (N'sp_clinic_list_admin_appointments'),(N'sp_clinic_list_admin_available_slots'),(N'sp_clinic_get_appointment')
         ) required(object_name)
         WHERE NOT EXISTS(SELECT 1 FROM sys.database_permissions dp
           WHERE dp.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'clinic_api_executor')
@@ -96,6 +99,21 @@ BEGIN TRY
       @working_schedule_public_id=@schedule_public_id OUTPUT;
     IF @schedule_public_id IS NULL OR NOT EXISTS(SELECT 1 FROM dbo.doctor_schedule_breaks WHERE working_schedule_id=@schedule_id)
       THROW 55703,N'Không tạo public schedule hoặc khoảng nghỉ.',1;
+    IF NOT EXISTS(SELECT 1 FROM dbo.doctor_working_schedules WHERE working_schedule_id=@schedule_id
+                  AND workflow_status='PROPOSED' AND is_active=0)
+      THROW 55730,N'Ca đề xuất đã được công bố trước khi bác sĩ xác nhận.',1;
+    EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=@doctor_user_id;
+    EXEC dbo.sp_clinic_decide_working_schedule @actor_user_id=@doctor_user_id,
+      @working_schedule_public_id=@schedule_public_id,@decision='CONFIRM';
+    EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=@admin_id;
+    IF NOT EXISTS(SELECT 1 FROM dbo.doctor_working_schedules WHERE working_schedule_id=@schedule_id
+                  AND workflow_status='DOCTOR_CONFIRMED' AND is_active=0)
+      THROW 55731,N'Xác nhận của bác sĩ không giữ ca ở trạng thái chờ công bố.',1;
+    EXEC dbo.sp_clinic_publish_working_schedule @actor_user_id=@admin_id,
+      @working_schedule_public_id=@schedule_public_id;
+    IF NOT EXISTS(SELECT 1 FROM dbo.doctor_working_schedules WHERE working_schedule_id=@schedule_id
+                  AND workflow_status='PUBLISHED' AND is_active=1)
+      THROW 55732,N'Admin chưa công bố ca hợp lệ.',1;
 
     DECLARE @created int;
     EXEC dbo.sp_generate_doctor_slots @actor_user_id=@admin_id,@working_schedule_id=@schedule_id,
@@ -104,6 +122,26 @@ BEGIN TRY
     EXEC dbo.sp_generate_doctor_slots @actor_user_id=@admin_id,@working_schedule_id=@schedule_id,
       @from_date_local=@target_date,@to_date_local=@second_date,@created_count=@created OUTPUT;
     IF @created<>0 THROW 55706,N'Sinh slot retry không idempotent.',1;
+
+    DECLARE @time_off_public_id uniqueidentifier,
+      @branch_public_id uniqueidentifier=(SELECT public_id FROM dbo.branches WHERE branch_id=@branch_id);
+    EXEC dbo.sp_clinic_list_admin_available_slots @actor_user_id=@admin_id,
+      @branch_public_id=@branch_public_id,@service_public_id=@service_public_id,
+      @service_date_local=@target_date;
+    EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=@doctor_user_id;
+    EXEC dbo.sp_clinic_request_time_off @actor_user_id=@doctor_user_id,
+      @branch_public_id=@branch_public_id,@service_date_local=@second_date,
+      @local_start_time='09:30',@local_end_time='10:00',@reason=N'Trực bệnh viện',
+      @time_off_public_id=@time_off_public_id OUTPUT;
+    EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=@admin_id;
+    IF NOT EXISTS(SELECT 1 FROM dbo.doctor_time_off WHERE public_id=@time_off_public_id AND status='PENDING')
+      THROW 55733,N'Yêu cầu báo bận chưa được tạo.',1;
+    EXEC dbo.sp_clinic_decide_time_off @actor_user_id=@admin_id,@time_off_public_id=@time_off_public_id,
+      @decision='APPROVE';
+    IF NOT EXISTS(SELECT 1 FROM dbo.doctor_time_off WHERE public_id=@time_off_public_id AND status='APPROVED')
+       OR NOT EXISTS(SELECT 1 FROM dbo.appointment_slots WHERE working_schedule_id=@schedule_id
+                     AND service_date_local=@second_date AND start_time_local='09:30' AND status='BLOCKED')
+      THROW 55734,N'Duyệt nghỉ không chặn slot trống.',1;
 
     DECLARE @patient_id bigint,@patient_public_id uniqueidentifier;
     EXEC dbo.sp_create_patient @actor_user_id=@admin_id,@branch_id=@branch_id,@full_name=N'Bệnh nhân Lịch',
@@ -125,6 +163,13 @@ BEGIN TRY
     IF NOT EXISTS(SELECT 1 FROM dbo.v_available_appointment_slots WHERE slot_public_id=@slot_public_id
       AND service_public_id=@service_public_id AND doctor_public_id=@doctor_public_id)
       THROW 55707,N'Public availability không lọc đúng doctor/service/booking window.',1;
+    EXEC dbo.sp_assign_doctor_service @actor_user_id=@admin_id,@branch_id=@branch_id,
+      @doctor_id=@doctor_id,@service_id=@service_id,@custom_duration_min=45;
+    IF EXISTS(SELECT 1 FROM dbo.v_available_appointment_slots WHERE slot_public_id=@slot_public_id
+      AND service_public_id=@service_public_id)
+      THROW 55735,N'Dịch vụ dài hơn slot vẫn hiển thị là có thể đặt.',1;
+    EXEC dbo.sp_assign_doctor_service @actor_user_id=@admin_id,@branch_id=@branch_id,
+      @doctor_id=@doctor_id,@service_id=@service_id,@custom_duration_min=30;
 
     EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=@patient_user_id;
     DECLARE @book_key uniqueidentifier=NEWID(),@appointment_public_id uniqueidentifier;

@@ -148,6 +148,8 @@ function exportOperationsReport(report: OperationsReport, branch: ReportBranch, 
     { rowType: 'Tổng quan', item: 'Không đến', value: report.summary.noShowCount },
     { rowType: 'Tổng quan', item: 'Đã hủy', value: report.summary.cancelledCount },
     { rowType: 'Tổng quan', item: 'Thời gian chờ trung bình (phút)', value: report.summary.averageWaitMinutes ?? '' },
+    { rowType: 'Tổng quan', item: 'Thời gian chờ P90 (phút)', value: report.summary.p90WaitMinutes ?? '' },
+    { rowType: 'Tổng quan', item: 'Lượt đến trực tiếp', value: report.summary.walkInEncounterCount },
     ...report.daily.map((row) => ({
       rowType: 'Chi tiết theo ngày',
       date: row.date,
@@ -243,7 +245,7 @@ export function ReportsPage() {
 
   const ops = operations.data?.data; const cash = revenue.data?.data; const stock = inventory.data?.data
   return <>
-    <header><div><span className="eyebrow">REPORTING CENTER</span><h1>Báo cáo điều hành</h1>
+    <header><div><span className="eyebrow">TRUNG TÂM BÁO CÁO</span><h1>Báo cáo điều hành</h1>
       <p>Số liệu theo ngày nghiệp vụ của chi nhánh, tách quyền vận hành, tài chính và tồn kho.</p></div></header>
     <section className="panel report-toolbar">
       <label>Chi nhánh<select value={selectedBranch} onChange={(event) => setBranchId(event.target.value)}>
@@ -251,7 +253,9 @@ export function ReportsPage() {
       <label>Từ ngày<input type="date" value={from} onChange={(event) => setFrom(event.target.value)} /></label>
       <label>Đến ngày<input type="date" value={to} onChange={(event) => setTo(event.target.value)} /></label>
       <button type="button" className="secondary" disabled={!validRange || operations.isFetching || revenue.isFetching || inventory.isFetching} onClick={() => {
-        void operations.refetch(); void revenue.refetch(); void inventory.refetch()
+        if (branch?.canViewOperations) void operations.refetch()
+        if (branch?.canViewRevenue) void revenue.refetch()
+        if (branch?.canViewInventory) void inventory.refetch()
       }}>Làm mới</button>
     </section>
     {!validRange && <div className="form-error" role="alert">Ngày kết thúc phải từ ngày bắt đầu trở đi.</div>}
@@ -267,6 +271,8 @@ export function ReportsPage() {
         <div><span>Không đến</span><strong>{ops.summary.noShowCount}</strong></div>
         <div><span>Đã hủy</span><strong>{ops.summary.cancelledCount}</strong></div>
         <div><span>Chờ trung bình</span><strong>{ops.summary.averageWaitMinutes == null ? '—' : `${ops.summary.averageWaitMinutes} phút`}</strong></div>
+        <div><span>Chờ P90</span><strong>{ops.summary.p90WaitMinutes == null ? '—' : `${ops.summary.p90WaitMinutes} phút`}</strong></div>
+        <div><span>Walk-in</span><strong>{ops.summary.walkInEncounterCount}</strong></div>
       </div><div className="report-table-wrap"><table className="report-table"><thead><tr><th>Ngày</th><th>Lịch hẹn</th><th>Lượt đến</th>
         <th>Hoàn tất</th><th>Không đến</th><th>Đã hủy</th></tr></thead><tbody>{ops.daily.map((row) => <tr key={row.date}>
           <td>{dateName(row.date)}</td><td>{row.appointmentCount}</td><td>{row.arrivedCount}</td><td>{row.completedCount}</td>

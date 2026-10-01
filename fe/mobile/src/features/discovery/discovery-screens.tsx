@@ -512,13 +512,14 @@ function DoctorDetailScreen({ navigation, route, onBook }:
       {!services.isLoading && !branchDoctors.isLoading && !services.isError && !branchDoctors.isError
         && !doctorServices.length && <EmptyState compact title="Chưa có dịch vụ tại cơ sở này"
         body="Chọn một chi nhánh khác của bác sĩ." />}
-      <PrimaryButton label="Đặt lịch với bác sĩ" onPress={() => onBook?.({
+      {selectedBranch && doctorServices.length > 0 && !services.isLoading && !branchDoctors.isLoading
+        && !services.isError && !branchDoctors.isError && <PrimaryButton label="Đặt lịch với bác sĩ" onPress={() => onBook?.({
         branchPublicId: selectedBranch?.publicId,
         branchName: selectedBranch?.name,
         doctorPublicId: doctor.publicId, doctorName: doctor.fullName,
         servicePublicId: doctorServices[0]?.publicId,
         serviceName: doctorServices[0]?.name,
-      })} />
+      })} />}
     </ScrollView>
   </SafeAreaView>;
 }

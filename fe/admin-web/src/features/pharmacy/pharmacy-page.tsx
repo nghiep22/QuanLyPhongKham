@@ -1,13 +1,14 @@
 import { ApiClientError } from '@clinic/generated-api-client'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState, type FormEvent } from 'react'
+import { useLayoutEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/auth-context'
 import { apiClient } from '../../shared/api/client'
+import { clearPendingOperation, executeIdempotent, hasPendingOperation, verifyPendingOperation } from '../../shared/api/idempotent-operation'
 import { openPrintDocument, prescriptionPrintDocument } from '../../shared/printing'
 
 function message(error: unknown) {
-  if (!(error instanceof ApiClientError)) return 'Không thể kết nối hệ thống. Hãy thử lại.'
+  if (!(error instanceof ApiClientError)) return error instanceof Error ? error.message : 'Không thể kết nối hệ thống. Hãy thử lại.'
   if (error.status === 403) return 'Bạn không có quyền thực hiện thao tác này tại chi nhánh.'
   if (error.status === 409 && error.code === 'PHARMACY_ALLERGY_CONFLICT') return error.message
   if (error.status === 409) return error.code === 'PHARMACY_CONFLICT'
@@ -25,12 +26,18 @@ export function PharmacyPage() {
   const [busy, setBusy] = useState('')
   const [error, setError] = useState<unknown>(null)
   const [notice, setNotice] = useState('')
+  const [pending, setPending] = useState<{ scope: string; branchId: string; prescriptionId: string } | null>(null)
+  const [reconciledScope, setReconciledScope] = useState('')
+  const [reconciling, setReconciling] = useState(false)
   const canPrescribe = Boolean(user?.permissions.includes('PRESCRIPTIONS_WRITE'))
   const canDispense = Boolean(user?.permissions.includes('PHARMACY_DISPENSE'))
   const canInventory = Boolean(user?.permissions.includes('INVENTORY_MANAGE'))
   const canCatalog = Boolean(user?.roles.some((role) => role.code === 'ADMIN'))
   const branches = useQuery({ queryKey: ['pharmacy-branches'], queryFn: () => apiClient.pharmacy.branches() })
   const selectedBranch = branchId || branches.data?.data[0]?.publicId || ''
+  const currentContext = useRef({ branchId: selectedBranch, prescriptionId: selectedId })
+  useLayoutEffect(() => { currentContext.current = { branchId: selectedBranch, prescriptionId: selectedId } },
+    [selectedBranch, selectedId])
   const workspace = useQuery({ queryKey: ['pharmacy-workspace', selectedBranch],
     queryFn: () => apiClient.pharmacy.workspace(selectedBranch), enabled: Boolean(selectedBranch) })
   const prescription = useQuery({ queryKey: ['pharmacy-prescription', selectedId],
@@ -77,18 +84,52 @@ export function PharmacyPage() {
     void queryClient.invalidateQueries({ queryKey: ['pharmacy-reconciliation', selectedBranch] })
     if (selectedId) void queryClient.invalidateQueries({ queryKey: ['pharmacy-prescription', selectedId] })
   }
-  const run = async (label: string, operation: () => Promise<unknown>) => {
+  const run = async (label: string, operation: () => Promise<unknown>, scope?: string) => {
     setBusy(label); setError(null); setNotice('')
-    try { await operation(); refresh(); setNotice(`${label} thành công.`); return true }
-    catch (cause) { setError(cause); return false }
+    try { await operation(); refresh(); if (scope) { setPending(null); setReconciledScope('') }
+      setNotice(`${label} thành công.`); return true }
+    catch (cause) { setError(cause); if (scope && hasPendingOperation(scope)) {
+      setPending({ scope, branchId: selectedBranch,
+        prescriptionId: scope.includes(':pharmacy:dispense:') ? selectedId : '' })
+      setReconciledScope('')
+    } return false }
     finally { setBusy('') }
+  }
+  const selectPrescription = (id: string) => {
+    setSelectedId(id); setReconciledScope('')
+    setDispenseItemId(''); setDispenseBatchId(''); setDispenseQuantity(''); setDispenseAllergyReason('')
+  }
+  const selectBranch = (id: string) => {
+    setBranchId(id); selectPrescription('')
+    setLocationId(''); setBatchId(''); setStockQuantity(''); setReason('')
+    setNewBatchMedicine(''); setBatchNumber(''); setExpiryDate('')
+    setLocationCode(''); setLocationName('')
+  }
+  const pendingMatches = Boolean(pending && pending.branchId === selectedBranch
+    && (!pending.prescriptionId || pending.prescriptionId === selectedId))
+  const reconcilePending = async () => {
+    if (!pending || !pendingMatches || !hasPendingOperation(pending.scope)) return
+    setReconciling(true); setReconciledScope(''); setError(null)
+    try {
+      const verified = await verifyPendingOperation(pending.scope,
+        () => currentContext.current.branchId === pending.branchId
+          && (!pending.prescriptionId || currentContext.current.prescriptionId === pending.prescriptionId),
+        async () => {
+          await queryClient.refetchQueries({ queryKey: ['pharmacy-workspace', pending.branchId], exact: true }, { throwOnError: true })
+          if (pending.prescriptionId) await queryClient.refetchQueries({
+            queryKey: ['pharmacy-prescription', pending.prescriptionId], exact: true,
+          }, { throwOnError: true })
+        })
+      if (verified) setReconciledScope(pending.scope)
+    } catch (cause) { setError(cause) }
+    finally { setReconciling(false) }
   }
   const createPrescription = async (event: FormEvent) => {
     event.preventDefault()
     let created = ''
     if (await run('Tạo đơn nháp', async () => { const result = await apiClient.pharmacy.createPrescription(encounterId,
       { validDays: Number(validDays) }); created = result.data.publicId })) {
-      setSelectedId(created); setEncounterId('')
+      selectPrescription(created); setEncounterId('')
     }
   }
   const addItem = async (event: FormEvent) => {
@@ -102,8 +143,17 @@ export function PharmacyPage() {
   }
   const receive = async (event: FormEvent) => {
     event.preventDefault()
-    if (await run('Nhập kho', () => apiClient.pharmacy.receive({ locationPublicId: locationId,
-      batchPublicId: batchId, quantity: Number(stockQuantity), reason: reason.trim() || null }))) {
+    const currentWorkspace = workspace.data?.data
+    if (!currentWorkspace?.locations.some((item) => item.publicId === locationId)
+      || !currentWorkspace.batches.some((item) => item.publicId === batchId)) {
+      setError(new Error('Chọn vị trí và lô thuộc chi nhánh đang xem trước khi nhập kho.'))
+      return
+    }
+    const body = { locationPublicId: locationId, batchPublicId: batchId,
+      quantity: Number(stockQuantity), reason: reason.trim() || null }
+    const scope = `${user?.publicId}:pharmacy:receive:${selectedBranch}`
+    if (await run('Nhập kho', () => executeIdempotent(scope, body,
+      (key) => apiClient.pharmacy.receive(body, key)), scope)) {
       setBatchId(''); setStockQuantity(''); setReason('')
     }
   }
@@ -135,10 +185,15 @@ export function PharmacyPage() {
     event.preventDefault()
     const openSession = prescription.data?.data.dispensations.find((session) => session.status === 'DRAFT')
     if (!openSession) return
-    if (await run('Cấp thuốc', () => apiClient.pharmacy.dispense(openSession.publicId, {
+    const body = {
       prescriptionItemPublicId: dispenseItemId, batchPublicId: dispenseBatchId, quantity: Number(dispenseQuantity),
       allergyOverrideReason: dispenseAllergyReason.trim() || null,
-    }))) { setDispenseItemId(''); setDispenseBatchId(''); setDispenseQuantity(''); setDispenseAllergyReason('') }
+    }
+    const scope = `${user?.publicId}:pharmacy:dispense:${openSession.publicId}`
+    if (await run('Cấp thuốc', () => executeIdempotent(scope, body,
+      (key) => apiClient.pharmacy.dispense(openSession.publicId, body, key)), scope)) {
+      setDispenseItemId(''); setDispenseBatchId(''); setDispenseQuantity(''); setDispenseAllergyReason('')
+    }
   }
 
   if (branches.isLoading) return <div className="page-state">Đang tải phạm vi nhà thuốc…</div>
@@ -165,14 +220,22 @@ export function PharmacyPage() {
   }
 
   return <>
-    <header><div><span className="eyebrow">PHARMACY WORKSPACE</span><h1>Đơn thuốc & nhà thuốc</h1>
+    <header><div><span className="eyebrow">QUẢN LÝ NHÀ THUỐC</span><h1>Đơn thuốc & nhà thuốc</h1>
       <p>Kê đơn, nhập lô, cấp thuốc FEFO và đối soát tồn theo chi nhánh.</p></div></header>
     <section className="panel clinical-toolbar"><label>Chi nhánh<select value={selectedBranch}
-      onChange={(event) => { setBranchId(event.target.value); setSelectedId('') }}>
+      onChange={(event) => selectBranch(event.target.value)}>
       {branches.data.data.map((branch) => <option key={branch.publicId} value={branch.publicId}>{branch.name}</option>)}</select></label>
       <button type="button" className="secondary" onClick={refresh}>Tải lại</button></section>
     {notice && <div className="form-success" role="status">{notice}</div>}
     {Boolean(error) && <div className="form-error" role="alert">{message(error)}</div>}
+    {pending && <section className="panel"><p>Giao dịch kho chưa rõ kết quả. Gửi lại cùng dữ liệu sẽ dùng lại khóa giao dịch.</p>
+      {!pendingMatches && <p className="appointment-warning">Chọn lại đúng chi nhánh và đơn thuốc của giao dịch trước để đối chiếu.</p>}
+      <div className="action-row"><button type="button" className="secondary" disabled={!pendingMatches || reconciling}
+        onClick={() => void reconcilePending()}>{reconciling ? 'Đang tải…' : 'Tải lại để đối chiếu'}</button>
+        {reconciledScope === pending.scope && pendingMatches && !reconciling && <button type="button" className="secondary" onClick={() => {
+          if (!window.confirm('Bạn đã đối chiếu tồn kho hoặc cấp phát và muốn bắt đầu giao dịch mới?')) return
+          clearPendingOperation(pending.scope); setPending(null); setReconciledScope(''); setError(null)
+        }}>Đã đối chiếu, bắt đầu giao dịch mới</button>}</div></section>}
     {workspace.isLoading ? <section className="panel page-state">Đang tải danh mục và đơn thuốc…</section>
       : workspace.error ? <section className="panel error-state page-state">{message(workspace.error)}</section>
         : data && <>
@@ -187,7 +250,7 @@ export function PharmacyPage() {
             {!data.prescriptions.length && <p>Chưa có đơn thuốc trong phạm vi này.</p>}
             {data.prescriptions.map((entry) => <button type="button" key={entry.publicId}
               className={`clinical-list-item ${selectedId === entry.publicId ? 'selected' : ''}`}
-              onClick={() => setSelectedId(entry.publicId)}><span className="status">{entry.status}</span>
+              onClick={() => selectPrescription(entry.publicId)}><span className="status">{entry.status}</span>
               <strong>{entry.patientName}</strong><small>{entry.code} · {entry.patientCode}</small>
               <small>{entry.itemCount} thuốc · Hạn {entry.validUntil ?? 'chưa phát hành'}</small></button>)}</section>
             <div className="clinical-detail">{!selectedId ? <section className="panel page-state">Chọn đơn thuốc để xem chi tiết.</section>
@@ -210,9 +273,11 @@ export function PharmacyPage() {
                       {rx.items.map((item) => <article className="clinical-record" key={item.publicId}>
                         <strong>{item.medicineName} · {item.strength}</strong>
                         <p>{item.dose} · {item.frequency} · {item.usageInstruction}</p>
-                        <small>Dị nguyên chuẩn hóa: {item.allergenNames.join(', ') || 'chưa khai báo'}</small>
-                        {item.allergyOverrideReason && <small>Đã override lúc kê: {item.allergyOverrideReason}</small>}
-                        <small>Đã cấp {item.dispensedQuantity}/{item.prescribedQuantity}</small></article>)}
+                        <div className="prescription-item-details">
+                          <small>Dị nguyên liên quan: {item.allergenNames.join(', ') || 'chưa khai báo'}</small>
+                          {item.allergyOverrideReason && <small>Lý do bác sĩ ghi khi kê dù có cảnh báo dị ứng: {item.allergyOverrideReason}</small>}
+                          <small>Đã cấp còn hiệu lực: {amount(item.dispensedQuantity)} / {amount(item.prescribedQuantity)}</small>
+                        </div></article>)}
                       {!rx.items.length && <p>Đơn chưa có thuốc.</p>}
                       {canPrescribe && rx.status === 'DRAFT' && <div className="action-row">
                         <button type="button" disabled={Boolean(busy) || !rx.items.length}

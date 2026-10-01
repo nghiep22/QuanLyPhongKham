@@ -5,7 +5,7 @@ import { HttpError } from '../../shared/http/errors.js';
 import type { PrincipalAuthenticator } from '../identity/index.js';
 import { ReportsService } from './reports.service.js';
 
-const query = z.object({ branchPublicId: z.string().uuid(), from: z.iso.date(), to: z.iso.date() }).strict()
+const query = z.object({ branchPublicId: z.guid(), from: z.iso.date(), to: z.iso.date() }).strict()
   .refine((value) => value.from <= value.to, { path: ['to'], message: 'Ngày kết thúc phải từ ngày bắt đầu trở đi.' });
 function validate(value: unknown) {
   const parsed = query.safeParse(value);

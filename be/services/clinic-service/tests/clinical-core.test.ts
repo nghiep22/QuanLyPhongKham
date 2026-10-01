@@ -25,6 +25,7 @@ class Auth implements PrincipalAuthenticator {
 
 function encounter(): ClinicalEncounterDetail {
   return { publicId: encounterId, code: 'LK-1', source: 'WALK_IN', status: 'WAITING',
+    rowVersion: 'AAAAAAAAAAE=',
     arrivedAtUtc: '2026-09-13T02:00:00.000Z', startedAtUtc: null, completedAtUtc: null, signedAtUtc: null,
     patientRelease: null, signature: null, chiefComplaint: 'Đau đầu',
     patient: { publicId: randomUUID(), code: 'BN-1', fullName: 'Nguyễn An', dateOfBirth: '1990-01-01', gender: 'OTHER' },
@@ -60,9 +61,10 @@ class MemoryClinical implements ClinicalRepository {
     this.item.status = 'IN_PROGRESS'; this.item.queue = { displayNumber: 'A0001', status: 'SERVING' };
     return Promise.resolve();
   }
-  updateNotes(_actor: ClinicPrincipal, _id: string, input: ClinicalNotesInput) {
+  updateNotes(_actor: ClinicPrincipal, _id: string, input: ClinicalNotesInput, expectedRowVersion: string) {
     if (this.item.status !== 'IN_PROGRESS') return Promise.reject({ number: 53223 });
-    Object.assign(this.item, input); return Promise.resolve();
+    if (this.item.rowVersion !== expectedRowVersion) return Promise.reject({ number: 53930 });
+    Object.assign(this.item, input); this.item.rowVersion = 'AAAAAAAAAAI='; return Promise.resolve();
   }
   addVitalSigns(_actor: ClinicPrincipal, _id: string, input: VitalSignsInput) {
     if (this.item.status === 'SIGNED') return Promise.reject({ number: 53225 });
@@ -168,7 +170,7 @@ describe('clinical core API', () => {
     const server = app(repository); const base = `/api/v1/encounters/${encounterId}`;
     const started = await request(server).post(`${base}/start`).set(auth).send({});
     expect(started.body.data.status).toBe('IN_PROGRESS');
-    const notes = await request(server).patch(`${base}/clinical-notes`).set(auth)
+    const notes = await request(server).patch(`${base}/clinical-notes`).set(auth).set('If-Match', '"AAAAAAAAAAE="')
       .send({ historyOfPresentIllness: 'Đau đầu hai ngày', treatmentPlan: 'Theo dõi' });
     expect(notes.body.data.historyOfPresentIllness).toBe('Đau đầu hai ngày');
     const blocked = await request(server).post(`${base}/complete`).set(auth);
@@ -179,6 +181,21 @@ describe('clinical core API', () => {
     const signed = await request(server).post(`${base}/sign`).set(auth);
     expect(completed.body.data.status).toBe('COMPLETED');
     expect(signed.body.data.sha256).toHaveLength(64);
+  });
+
+  it('requires If-Match and rejects a stale clinical note edit from a second session', async () => {
+    const server = app(repository); const endpoint = `/api/v1/encounters/${encounterId}/clinical-notes`;
+    await request(server).post(`/api/v1/encounters/${encounterId}/start`).set(auth).send({});
+    const missing = await request(server).patch(endpoint).set(auth).send({ treatmentPlan: 'Kế hoạch A' });
+    const first = await request(server).patch(endpoint).set(auth).set('If-Match', '"AAAAAAAAAAE="')
+      .send({ treatmentPlan: 'Kế hoạch A' });
+    const stale = await request(server).patch(endpoint).set(auth).set('If-Match', '"AAAAAAAAAAE="')
+      .send({ treatmentPlan: 'Kế hoạch B' });
+    expect(missing.status).toBe(428);
+    expect(first.status).toBe(200);
+    expect(stale.status).toBe(409);
+    expect(stale.body.error.code).toBe('CLINICAL_VERSION_CONFLICT');
+    expect(repository.item.treatmentPlan).toBe('Kế hoạch A');
   });
 
   it('validates and forwards the explicit queue-call bypass reason', async () => {
@@ -221,7 +238,8 @@ describe('clinical core API', () => {
   it('rejects updates after signing and allows an append-only amendment', async () => {
     const server = app(repository); const base = `/api/v1/encounters/${encounterId}`;
     repository.item.status = 'SIGNED';
-    const changed = await request(server).patch(`${base}/clinical-notes`).set(auth).send({ treatmentPlan: 'overwrite' });
+    const changed = await request(server).patch(`${base}/clinical-notes`).set(auth)
+      .set('If-Match', `"${repository.item.rowVersion}"`).send({ treatmentPlan: 'overwrite' });
     const amendment = await request(server).post(`${base}/amendments`).set(auth)
       .send({ reason: 'Bổ sung sau ký', content: 'Đã tư vấn thêm.' });
     expect(changed.status).toBe(409); expect(amendment.status).toBe(201);

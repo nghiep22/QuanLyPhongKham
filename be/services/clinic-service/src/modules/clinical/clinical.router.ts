@@ -54,6 +54,13 @@ function validate<T>(schema: z.ZodType<T>, value: unknown): T {
   });
   return result.data;
 }
+function ifMatch(request: Request) {
+  const value = request.header('if-match');
+  if (!value) throw new HttpError(428, 'PRECONDITION_REQUIRED', 'Lưu nội dung khám cần If-Match.');
+  const match = /^"([A-Za-z0-9+/]{11}=)"$/.exec(value);
+  if (!match) throw new HttpError(400, 'INVALID_IF_MATCH', 'If-Match không đúng định dạng phiên bản.');
+  return match[1]!;
+}
 function asyncRoute(handler: (request: Request, response: Response) => Promise<void>) {
   return (request: Request, response: Response, next: NextFunction) => void handler(request, response).catch(next);
 }
@@ -84,7 +91,8 @@ export function createClinicalRouter(auth: PrincipalAuthenticator, service: Clin
   }));
   router.patch('/encounters/:encounterId/clinical-notes', asyncRoute(async (request, response) => {
     const input = validate(notes, request.body); const encounterId = validate(uuid, request.params.encounterId);
-    const current = await actor(request, auth); await service.updateNotes(current, encounterId, input, response.locals.requestId);
+    const current = await actor(request, auth);
+    await service.updateNotes(current, encounterId, input, ifMatch(request), response.locals.requestId);
     success(response, await service.get(current, encounterId, response.locals.requestId));
   }));
   router.post('/encounters/:encounterId/vital-signs', asyncRoute(async (request, response) => success(response,

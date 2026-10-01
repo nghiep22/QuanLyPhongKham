@@ -168,6 +168,12 @@ Phạm vi đã hoàn thành:
 
 Phạm vi đã hoàn thành:
 
+- Bổ sung luồng chốt ca: Manager đề xuất, bác sĩ xác nhận hoặc từ chối có lý do,
+  Manager công bố. Chỉ ca đã công bố mới sinh slot; ca cũ được giữ trạng thái
+  công bố khi nâng cấp. Bác sĩ báo bận theo ngày/giờ địa phương của chi nhánh;
+  Manager duyệt/từ chối và phải xử lý lịch hẹn xung đột trước khi duyệt. Duyệt
+  nghỉ chặn slot trống; các quyết định có audit và giao diện cho hai vai trò.
+
 - Ca làm việc có public UUID, khoảng nghỉ, hiệu lực và thời lượng slot; command
   kiểm tra bác sĩ đang hoạt động, phân công chi nhánh, phòng đúng chi nhánh và
   chặn ca chồng bác sĩ/phòng trước khi ghi nguyên tử.
@@ -198,6 +204,11 @@ Phạm vi đã hoàn thành:
 - Walk-in tìm bệnh nhân trong scope chi nhánh rồi tạo trực tiếp Encounter + dịch
   vụ đầu + QueueTicket, không tạo appointment giả. Check-in và walk-in đều dùng
   `Idempotency-Key`, retry trả đúng public resource cũ.
+- Walk-in giữ một slot thực còn trống của đúng bác sĩ/phòng, đủ thời lượng dịch
+  vụ và bắt đầu trong ngưỡng chờ của chi nhánh (mặc định 45 phút). Đặt online,
+  điện thoại, tại quầy và walk-in không thể chiếm trùng; hủy lượt giải phóng slot.
+  Danh mục chi nhánh cho chỉnh ngưỡng 15–180 phút. Public/admin availability và
+  book/reschedule loại slot ngắn hơn dịch vụ.
 - Điều kiện hành nghề được kiểm tra tại ngày nghiệp vụ: bác sĩ/nhân viên còn hoạt
   động, giấy phép còn hiệu lực, còn phân công chi nhánh và còn thực hiện dịch vụ;
   phòng, chi nhánh và bảng giá cũng phải đang hợp lệ.
@@ -205,11 +216,13 @@ Phạm vi đã hoàn thành:
   được gọi wrapper public, không còn quyền ba command bigint nội bộ. Audit/outbox
   dùng public ID và nằm trong transaction nghiệp vụ.
 - Bộ cấp số khóa theo chi nhánh/ngày/loại và tăng đơn điệu. Call-next dùng khóa
-  dòng `UPDLOCK/READPAST/ROWLOCK`, ưu tiên giảm dần rồi FIFO; hai request đồng
+  dòng `UPDLOCK/READPAST/ROWLOCK`, chỉ gọi trước giờ dự kiến tối đa 10 phút,
+  ưu tiên theo mức đã cấp, lịch đã đặt rồi giờ slot; hai request đồng
   thời nhận hai ticket khác nhau. Lượt khám chỉ bắt đầu khi ticket đã `CALLED`,
   sau đó ticket/encounter/appointment chuyển `SERVING/IN_PROGRESS` nguyên tử.
 - Admin Web có màn Tiếp nhận responsive: chọn chi nhánh, xem queue tự làm mới,
-  check-in lịch trong ngày, tìm/tiếp nhận walk-in và gọi bệnh nhân kế tiếp.
+  check-in lịch trong ngày, lọc bác sĩ/phòng còn slot walk-in, xem giờ dự kiến và gọi bệnh
+  nhân kế tiếp. Báo cáo vận hành có thời gian chờ P90 và số walk-in để theo dõi.
 - OpenAPI 3.1 v0.6 và generated types/fetch client đồng bộ sáu operation mới.
 
 ## DONE — Slice 11: Clinical Core
@@ -500,6 +513,49 @@ Phạm vi đã hoàn thành:
 | Scheduler Worker smoke test | Worker khởi động đủ sáu job hold/prescription-expiry/slot/reminder/outbox/notification; sinh slot hệ thống đạt và `/health/live`, `/health/ready` cùng trả 200 với SQL thật |
 | npm audit --omit=dev --audit-level=high | Đạt; 0 high/critical. Còn 13 moderate từ dependency bắc cầu Expo/React Navigation, chưa có bản sửa không breaking |
 
+## Cập nhật 2026-09-26 — dữ liệu sức khỏe bệnh nhân
+
+- Đã bổ sung quản lý liên hệ khẩn cấp trên Admin Web, `If-Match`, lưu phiên bản cũ
+  ngừng hiệu lực và audit trong một transaction.
+- Bác sĩ/điều dưỡng có quan hệ chăm sóc đang mở có thể ghi/ngừng dị ứng và
+  ghi/giải quyết bệnh nền; dị ứng thuốc gắn dị nguyên chuẩn hóa để kê/cấp kiểm tra.
+- OpenAPI, generated client, API test, clean SQL baseline và regression bệnh nhân/
+  dị ứng thuốc đạt trên database thử riêng. Còn kiểm chứng mutation trên UI thật.
+
+## Cập nhật 2026-09-26 — bệnh nhân tự quản lý liên hệ khẩn cấp
+
+- Tài khoản có liên kết `SELF` đã xác minh và role PATIENT còn hiệu lực được xem,
+  thay tối đa 5 liên hệ trên User Web và Mobile. Liên kết người giám hộ không có
+  quyền sửa liên hệ của chủ hồ sơ.
+- SQL kiểm tra liên kết ở thời điểm ghi trong transaction, giữ lịch sử liên hệ cũ,
+  audit actor và dùng `If-Match` theo rowversion bệnh nhân để chống ghi đè.
+- OpenAPI/generated client, Clinic API test, typecheck/lint và regression trên
+  database thử riêng đạt. Còn kiểm chứng thao tác thật trên giao diện.
+
+## Cập nhật 2026-09-26 — gộp hồ sơ trùng PAT-10
+
+- Admin toàn cục có thể tìm hồ sơ chuẩn, xem trước số lịch hẹn/lượt khám đã ký/
+  hóa đơn/quyền truy cập và ghi lý do gộp trên Admin Web. Lệnh SQL kiểm tra hai
+  rowversion, định danh, công việc đang mở, liên kết tài khoản xung đột và hai
+  danh sách liên hệ khẩn cấp cùng đang dùng.
+- Hồ sơ nguồn chuyển thành bí danh có lịch sử audit; liên kết tài khoản đang hoạt
+  động được chuyển sang hồ sơ chuẩn. Lịch sử y tế và tài chính giữ khóa bệnh nhân
+  gốc để bảo toàn dấu SHA-256, còn luồng đọc bệnh nhân và kiểm tra dị ứng nhận diện
+  cả hai hồ sơ.
+- Clean SQL baseline, patient-merge regression (gồm quyền, hash đã ký, chặn
+  phiên bản cũ/liên kết chờ/hai chủ hồ sơ/hai danh sách liên hệ), các regression liên quan, OpenAPI,
+  Clinic API test, typecheck và lint đạt trên database thử. Còn kiểm thử UI thật.
+
+## Cập nhật 2026-09-26 — QUE-07 điều phối số hàng đợi
+
+- Quầy tiếp nhận có nút bỏ qua số đã gọi và gọi lại số đã bỏ qua; mỗi thao tác
+  bắt buộc lý do, kiểm tra quyền theo chi nhánh và ghi audit/outbox trong cùng
+  transaction. Lượt khám vẫn `WAITING` khi bỏ qua, bác sĩ không thể bắt đầu
+  khi số đang `SKIPPED`.
+- Hủy lượt đóng cả số đã bỏ qua. SQL regression xác minh chuyển trạng thái,
+  audit/outbox, gọi tiếp theo và hủy đồng bộ; OpenAPI, Clinic API test,
+  typecheck/lint đạt. Còn kiểm thử trực tiếp trên giao diện với dữ liệu thử.
+
 ## Chưa hoàn thành
 
 - Phase 0 baseline freeze tổng thể, checksum và các defect P0 ngoài phạm vi Auth.
@@ -507,12 +563,14 @@ Phạm vi đã hoàn thành:
 - Theo dõi bản vá upstream cho 13 cảnh báo moderate bắc cầu Expo/React Navigation;
   không dùng `npm audit fix --force` vì công cụ đề xuất hạ Expo xuống bản breaking.
 - Các mục Auth P1 như MFA, quản lý permission động và lịch sử session.
-- Phase 3 còn quản lý liên hệ khẩn cấp và ghi dị ứng/bệnh nền; chính sách công bố
-  kết quả cho patient/guardian đã hoàn thành qua Slice 17.
+- Phase 3 còn kiểm chứng thao tác liên hệ khẩn cấp, dị ứng/bệnh nền và gộp hồ sơ
+  trùng trên UI thật. PAT-10 đã có Admin Web/API/SQL, xem trước điều kiện chặn,
+  lịch sử audit và regression giữ nguyên dấu SHA-256 của lượt khám đã ký.
 - Phase 4 còn time-off, ngày nghỉ/lịch đặc biệt và quy trình duyệt ca; core đặt
   lịch online/tại quầy và reminder đa kênh đã hoàn thành qua Slice 09/15.
-- Phase 5 còn recall/skip/cancel/transfer ticket có lý do, đóng phiên, bảng hiển
-  thị công khai và ước lượng thời gian chờ; lõi Reception & Queue của Slice 10 đã hoàn thành.
+- Phase 5 đã có recall/skip/cancel ticket có lý do từ Admin Web đến SQL. Còn
+  kiểm thử giao diện thật, chuyển số, đóng phiên, bảng hiển thị công khai và ước
+  lượng thời gian chờ; lõi Reception & Queue của Slice 10 đã hoàn thành.
 - Phase 6 còn kết quả nhiều phiên bản, đính kèm tệp và chữ ký số có kiểm chứng
   certificate; lõi bác sĩ hoàn tất/ký/bổ sung/hủy, công bố, lịch sử bệnh nhân,
   xác minh lại dấu SHA-256 và validation FINAL theo schema đã hoàn thành qua

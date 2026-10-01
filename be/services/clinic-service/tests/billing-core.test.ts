@@ -6,7 +6,7 @@ import { BillingService } from '../src/modules/billing/billing.service.js';
 import type { BillingBranch, BillingRepository, InvoiceDetail } from '../src/modules/billing/billing.types.js';
 import type { ClinicPrincipal, PrincipalAuthenticator } from '../src/modules/identity/index.js';
 
-const branchId = randomUUID(); const encounterId = randomUUID(); const invoiceId = randomUUID();
+const branchId = '8DFFE243-78B2-F111-9787-387A0E5C4A9E'; const encounterId = randomUUID(); const invoiceId = randomUUID();
 const allocationId = randomUUID(); const paymentId = randomUUID(); const refundId = randomUUID();
 const billingBranch: BillingBranch = { publicId: branchId, code: 'MAIN', name: 'Chi nhánh chính',
   timezoneName: 'SE Asia Standard Time', medicalLicenseNo: 'PK-001', phone: '02812345678',
@@ -50,6 +50,8 @@ describe('billing API', () => {
     const result = await request(app).get('/api/v1/billing/branches').set(authorization);
     expect(result.status).toBe(200); expect(result.body.data[0]).toEqual(billingBranch);
     expect(result.body.data[0]).not.toHaveProperty('branchId');
+    expect((await request(app).get('/api/v1/billing/workspace')
+      .query({ branchPublicId: result.body.data[0].publicId }).set(authorization)).status).toBe(200);
   });
   it('creates, synchronizes and issues an invoice with an idempotency key', async () => {
     const { app, repository } = fixture(); const key = randomUUID();

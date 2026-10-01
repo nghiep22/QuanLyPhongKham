@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiClient } from '../../shared/api/client';
+import { MyEmergencyContactsEditor } from './my-emergency-contacts';
 
 const relationships: Array<[PatientRelationship, string]> = [
   ['SELF', 'Bản thân'], ['CHILD', 'Con'], ['SPOUSE', 'Vợ/chồng'],
@@ -57,6 +58,7 @@ export function PatientAccessScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [emergencyPatientId, setEmergencyPatientId] = useState<string | null>(null);
   const retry = useRef<{ payload: string; key: string } | null>(null);
 
   const load = useCallback(async (refresh = false) => {
@@ -164,10 +166,18 @@ export function PatientAccessScreen() {
           <Text style={styles.muted}>{link.patient.code} · {link.patient.dateOfBirth}</Text>
         </View><Text style={styles.badge}>{relationships.find(([value]) => value === link.relationshipType)?.[1]}</Text></View>
         {link.accessKind === 'DELEGATED' && <Text style={styles.muted}>Người được cấp: {link.linkedUser.displayName}</Text>}
+        {link.accessKind === 'OWN' && link.relationshipType === 'SELF' && <Pressable
+          onPress={() => setEmergencyPatientId(link.patient.publicId)}>
+          <Text style={styles.profileLink}>Liên hệ khẩn cấp</Text>
+        </Pressable>}
         {link.canRevoke && <Pressable onPress={() => revoke(link.publicId, link.linkedUser.displayName)}>
           <Text style={styles.dangerLink}>Thu hồi quyền truy cập</Text>
         </Pressable>}
       </View>) : <Text style={styles.empty}>Chưa có hồ sơ đã xác minh.</Text>}
+      {emergencyPatientId && data?.links.some((link) => link.accessKind === 'OWN'
+        && link.relationshipType === 'SELF' && link.patient.publicId === emergencyPatientId)
+        && <MyEmergencyContactsEditor key={emergencyPatientId} patientId={emergencyPatientId}
+          onClose={() => setEmergencyPatientId(null)} />}
 
       <View style={styles.formCard}>
         <Text style={styles.sectionTitle}>Yêu cầu liên kết hồ sơ có sẵn</Text>
@@ -241,6 +251,7 @@ const styles = StyleSheet.create({
   buttonText: { color: 'white', fontSize: 15, fontWeight: '800' },
   disabled: { opacity: 0.65 },
   dangerLink: { color: '#a73531', fontWeight: '700', marginTop: 12 },
+  profileLink: { color: '#167665', fontWeight: '700', marginTop: 12 },
   reason: { color: '#516a72', lineHeight: 20, marginTop: 8 },
   error: { backgroundColor: '#fff0ef', borderRadius: 10, color: '#9d2c25', marginTop: 14, padding: 12 },
   success: { backgroundColor: '#dff3ec', borderRadius: 10, color: '#17614f', marginTop: 14, padding: 12 },

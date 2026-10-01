@@ -71,6 +71,8 @@ BEGIN
             CONSTRAINT DF_branches_check_in_early DEFAULT (120),
         check_in_late_minutes         smallint NOT NULL
             CONSTRAINT DF_branches_check_in_late DEFAULT (180),
+        walk_in_max_wait_minutes      smallint NOT NULL
+            CONSTRAINT DF_branches_walk_in_max_wait DEFAULT (45),
         is_active                     bit NOT NULL CONSTRAINT DF_branches_active DEFAULT (1),
         created_at_utc                datetime2(3) NOT NULL
             CONSTRAINT DF_branches_created DEFAULT SYSUTCDATETIME(),
@@ -84,7 +86,8 @@ BEGIN
         CONSTRAINT CK_branches_hold CHECK (online_hold_minutes BETWEEN 1 AND 120),
         CONSTRAINT CK_branches_cancel CHECK (cancellation_deadline_minutes >= 0),
         CONSTRAINT CK_branches_check_in_early CHECK (check_in_early_minutes BETWEEN 0 AND 720),
-        CONSTRAINT CK_branches_check_in_late CHECK (check_in_late_minutes BETWEEN 0 AND 1440)
+        CONSTRAINT CK_branches_check_in_late CHECK (check_in_late_minutes BETWEEN 0 AND 1440),
+        CONSTRAINT CK_branches_walk_in_max_wait CHECK (walk_in_max_wait_minutes BETWEEN 15 AND 180)
     );
 END;
 GO
@@ -108,10 +111,15 @@ IF COL_LENGTH(N'dbo.branches', N'check_in_early_minutes') IS NULL
 IF COL_LENGTH(N'dbo.branches', N'check_in_late_minutes') IS NULL
     ALTER TABLE dbo.branches ADD check_in_late_minutes smallint NOT NULL
         CONSTRAINT DF_branches_check_in_late DEFAULT (180) WITH VALUES;
+IF COL_LENGTH(N'dbo.branches', N'walk_in_max_wait_minutes') IS NULL
+    ALTER TABLE dbo.branches ADD walk_in_max_wait_minutes smallint NOT NULL
+        CONSTRAINT DF_branches_walk_in_max_wait DEFAULT (45) WITH VALUES;
 IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.branches') AND name=N'CK_branches_check_in_early')
     EXEC sys.sp_executesql N'ALTER TABLE dbo.branches ADD CONSTRAINT CK_branches_check_in_early CHECK (check_in_early_minutes BETWEEN 0 AND 720);';
 IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.branches') AND name=N'CK_branches_check_in_late')
     EXEC sys.sp_executesql N'ALTER TABLE dbo.branches ADD CONSTRAINT CK_branches_check_in_late CHECK (check_in_late_minutes BETWEEN 0 AND 1440);';
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.branches') AND name=N'CK_branches_walk_in_max_wait')
+    EXEC sys.sp_executesql N'ALTER TABLE dbo.branches ADD CONSTRAINT CK_branches_walk_in_max_wait CHECK (walk_in_max_wait_minutes BETWEEN 15 AND 180);';
 GO
 
 IF OBJECT_ID(N'dbo.rooms', N'U') IS NULL
@@ -184,6 +192,8 @@ IF NOT EXISTS (SELECT 1 FROM sys.default_constraints WHERE parent_object_id=OBJE
     EXEC sys.sp_executesql N'ALTER TABLE dbo.specialties ADD CONSTRAINT DF_specialties_public_id DEFAULT NEWSEQUENTIALID() FOR public_id;';
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.specialties') AND name=N'UX_specialties_public_id')
     EXEC sys.sp_executesql N'CREATE UNIQUE INDEX UX_specialties_public_id ON dbo.specialties(public_id);';
+IF COL_LENGTH(N'dbo.specialties', N'row_ver') IS NULL
+    ALTER TABLE dbo.specialties ADD row_ver rowversion;
 GO
 
 IF OBJECT_ID(N'dbo.service_categories', N'U') IS NULL
@@ -214,6 +224,8 @@ IF NOT EXISTS (SELECT 1 FROM sys.default_constraints WHERE parent_object_id=OBJE
     EXEC sys.sp_executesql N'ALTER TABLE dbo.service_categories ADD CONSTRAINT DF_service_categories_public_id DEFAULT NEWSEQUENTIALID() FOR public_id;';
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.service_categories') AND name=N'UX_service_categories_public_id')
     EXEC sys.sp_executesql N'CREATE UNIQUE INDEX UX_service_categories_public_id ON dbo.service_categories(public_id);';
+IF COL_LENGTH(N'dbo.service_categories', N'row_ver') IS NULL
+    ALTER TABLE dbo.service_categories ADD row_ver rowversion;
 GO
 
 IF OBJECT_ID(N'dbo.services', N'U') IS NULL
@@ -827,6 +839,27 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.patie
     INCLUDE (patient_code, status);
 GO
 
+IF OBJECT_ID(N'dbo.patient_merge_history', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.patient_merge_history
+    (
+        patient_merge_id bigint IDENTITY(1,1) NOT NULL CONSTRAINT PK_patient_merge_history PRIMARY KEY,
+        source_patient_id bigint NOT NULL CONSTRAINT UQ_patient_merge_source UNIQUE,
+        target_patient_id bigint NOT NULL,
+        performed_by_user_id bigint NOT NULL,
+        reason nvarchar(500) NOT NULL,
+        merged_at_utc datetime2(3) NOT NULL CONSTRAINT DF_patient_merge_time DEFAULT SYSUTCDATETIME(),
+        source_snapshot_json nvarchar(max) NOT NULL,
+        CONSTRAINT FK_patient_merge_source FOREIGN KEY(source_patient_id) REFERENCES dbo.patients(patient_id),
+        CONSTRAINT FK_patient_merge_target FOREIGN KEY(target_patient_id) REFERENCES dbo.patients(patient_id),
+        CONSTRAINT FK_patient_merge_actor FOREIGN KEY(performed_by_user_id) REFERENCES dbo.users(user_id),
+        CONSTRAINT CK_patient_merge_distinct CHECK(source_patient_id<>target_patient_id),
+        CONSTRAINT CK_patient_merge_reason CHECK(LEN(TRIM(reason))>=20),
+        CONSTRAINT CK_patient_merge_snapshot CHECK(ISJSON(source_snapshot_json)=1)
+    );
+END;
+GO
+
 IF OBJECT_ID(N'dbo.user_patient_access', N'U') IS NULL
 BEGIN
     CREATE TABLE dbo.user_patient_access
@@ -886,6 +919,9 @@ IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE parent_object_id=OBJECT_ID(N
     ALTER TABLE dbo.user_patient_access ADD CONSTRAINT FK_user_patient_verified_branch FOREIGN KEY (verified_branch_id) REFERENCES dbo.branches(branch_id);
 IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE parent_object_id=OBJECT_ID(N'dbo.user_patient_access') AND name=N'FK_user_patient_revoker')
     ALTER TABLE dbo.user_patient_access ADD CONSTRAINT FK_user_patient_revoker FOREIGN KEY (revoked_by_user_id) REFERENCES dbo.users(user_id);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.user_patient_access') AND name=N'IX_user_patient_access_patient')
+    CREATE INDEX IX_user_patient_access_patient ON dbo.user_patient_access(patient_id,user_id)
+    INCLUDE (status,relationship_type);
 GO
 
 IF OBJECT_ID(N'dbo.patient_access_requests', N'U') IS NULL
@@ -942,6 +978,9 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.patient
     CREATE INDEX IX_patient_access_requests_requester
     ON dbo.patient_access_requests(requester_user_id,created_at_utc DESC)
     INCLUDE (public_id,status,relationship_type,expires_at_utc);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.patient_access_requests') AND name=N'IX_patient_access_requests_patient_status')
+    CREATE INDEX IX_patient_access_requests_patient_status
+    ON dbo.patient_access_requests(patient_id,status);
 GO
 
 IF OBJECT_ID(N'dbo.patient_emergency_contacts', N'U') IS NULL
@@ -1115,6 +1154,10 @@ BEGIN
         effective_from      date NOT NULL,
         effective_to        date NULL,
         is_active           bit NOT NULL CONSTRAINT DF_working_schedules_active DEFAULT (1),
+        workflow_status     varchar(20) NOT NULL CONSTRAINT DF_working_schedules_workflow DEFAULT ('PUBLISHED'),
+        decision_note       nvarchar(500) NULL,
+        doctor_confirmed_at_utc datetime2(3) NULL,
+        published_at_utc    datetime2(3) NULL,
         created_by_user_id  bigint NOT NULL,
         created_at_utc      datetime2(3) NOT NULL CONSTRAINT DF_working_schedules_created DEFAULT SYSUTCDATETIME(),
         updated_at_utc      datetime2(3) NOT NULL CONSTRAINT DF_working_schedules_updated DEFAULT SYSUTCDATETIME(),
@@ -1126,12 +1169,75 @@ BEGIN
         CONSTRAINT FK_working_schedules_creator FOREIGN KEY (created_by_user_id) REFERENCES dbo.users(user_id),
         CONSTRAINT CK_working_schedules_weekday CHECK (weekday_iso BETWEEN 1 AND 7),
         CONSTRAINT CK_working_schedules_time CHECK (local_start_time < local_end_time),
-        CONSTRAINT CK_working_schedules_slot CHECK (slot_duration_min BETWEEN 5 AND 240),
+        CONSTRAINT CK_working_schedules_slot CHECK (slot_duration_min BETWEEN 5 AND 480),
         CONSTRAINT CK_working_schedules_horizon CHECK
             (booking_horizon_days IS NULL OR booking_horizon_days BETWEEN 1 AND 365),
         CONSTRAINT CK_working_schedules_dates CHECK (effective_to IS NULL OR effective_to >= effective_from)
     );
 END;
+GO
+
+IF EXISTS (SELECT 1 FROM sys.check_constraints
+           WHERE parent_object_id=OBJECT_ID(N'dbo.doctor_working_schedules')
+             AND name=N'CK_working_schedules_slot' AND definition LIKE N'%240%')
+    ALTER TABLE dbo.doctor_working_schedules DROP CONSTRAINT CK_working_schedules_slot;
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints
+               WHERE parent_object_id=OBJECT_ID(N'dbo.doctor_working_schedules')
+                 AND name=N'CK_working_schedules_slot')
+    ALTER TABLE dbo.doctor_working_schedules ADD CONSTRAINT CK_working_schedules_slot
+        CHECK (slot_duration_min BETWEEN 5 AND 480);
+GO
+
+IF COL_LENGTH(N'dbo.patient_allergies',N'public_id') IS NULL
+    ALTER TABLE dbo.patient_allergies ADD public_id uniqueidentifier NULL;
+IF COL_LENGTH(N'dbo.patient_conditions',N'public_id') IS NULL
+    ALTER TABLE dbo.patient_conditions ADD public_id uniqueidentifier NULL;
+GO
+UPDATE dbo.patient_allergies SET public_id=NEWID() WHERE public_id IS NULL;
+UPDATE dbo.patient_conditions SET public_id=NEWID() WHERE public_id IS NULL;
+GO
+IF EXISTS(SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.patient_allergies') AND name=N'public_id' AND is_nullable=1)
+    ALTER TABLE dbo.patient_allergies ALTER COLUMN public_id uniqueidentifier NOT NULL;
+IF EXISTS(SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.patient_conditions') AND name=N'public_id' AND is_nullable=1)
+    ALTER TABLE dbo.patient_conditions ALTER COLUMN public_id uniqueidentifier NOT NULL;
+IF NOT EXISTS(SELECT 1 FROM sys.default_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.patient_allergies') AND name=N'DF_patient_allergies_public_id')
+    ALTER TABLE dbo.patient_allergies ADD CONSTRAINT DF_patient_allergies_public_id DEFAULT NEWSEQUENTIALID() FOR public_id;
+IF NOT EXISTS(SELECT 1 FROM sys.default_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.patient_conditions') AND name=N'DF_patient_conditions_public_id')
+    ALTER TABLE dbo.patient_conditions ADD CONSTRAINT DF_patient_conditions_public_id DEFAULT NEWSEQUENTIALID() FOR public_id;
+IF NOT EXISTS(SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.patient_allergies') AND name=N'UX_patient_allergies_public_id')
+    CREATE UNIQUE INDEX UX_patient_allergies_public_id ON dbo.patient_allergies(public_id);
+IF NOT EXISTS(SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.patient_conditions') AND name=N'UX_patient_conditions_public_id')
+    CREATE UNIQUE INDEX UX_patient_conditions_public_id ON dbo.patient_conditions(public_id);
+GO
+
+IF COL_LENGTH(N'dbo.patient_emergency_contacts',N'is_active') IS NULL
+    ALTER TABLE dbo.patient_emergency_contacts ADD is_active bit NOT NULL
+        CONSTRAINT DF_patient_emergency_contacts_active DEFAULT (1);
+IF COL_LENGTH(N'dbo.patient_emergency_contacts',N'created_at_utc') IS NULL
+    ALTER TABLE dbo.patient_emergency_contacts ADD created_at_utc datetime2(3) NOT NULL
+        CONSTRAINT DF_patient_emergency_contacts_created DEFAULT SYSUTCDATETIME();
+IF NOT EXISTS(SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.patient_emergency_contacts')
+    AND name=N'IX_patient_emergency_contacts_patient_active')
+    CREATE INDEX IX_patient_emergency_contacts_patient_active
+    ON dbo.patient_emergency_contacts(patient_id,is_active);
+GO
+
+IF COL_LENGTH(N'dbo.doctor_working_schedules', N'workflow_status') IS NULL
+    ALTER TABLE dbo.doctor_working_schedules ADD workflow_status varchar(20) NOT NULL
+        CONSTRAINT DF_working_schedules_workflow DEFAULT ('PUBLISHED');
+IF COL_LENGTH(N'dbo.doctor_working_schedules', N'decision_note') IS NULL
+    ALTER TABLE dbo.doctor_working_schedules ADD decision_note nvarchar(500) NULL;
+IF COL_LENGTH(N'dbo.doctor_working_schedules', N'doctor_confirmed_at_utc') IS NULL
+    ALTER TABLE dbo.doctor_working_schedules ADD doctor_confirmed_at_utc datetime2(3) NULL;
+IF COL_LENGTH(N'dbo.doctor_working_schedules', N'published_at_utc') IS NULL
+    ALTER TABLE dbo.doctor_working_schedules ADD published_at_utc datetime2(3) NULL;
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.doctor_working_schedules')
+               AND name=N'CK_working_schedules_workflow')
+    ALTER TABLE dbo.doctor_working_schedules ADD CONSTRAINT CK_working_schedules_workflow
+        CHECK (workflow_status IN ('PROPOSED','DOCTOR_CONFIRMED','REJECTED','PUBLISHED')
+               AND (workflow_status = 'PUBLISHED' OR is_active=0));
 GO
 
 IF COL_LENGTH(N'dbo.doctor_working_schedules', N'public_id') IS NULL
@@ -1168,17 +1274,20 @@ BEGIN
     CREATE TABLE dbo.doctor_time_off
     (
         doctor_time_off_id bigint IDENTITY(1,1) NOT NULL,
+        public_id          uniqueidentifier NOT NULL CONSTRAINT DF_time_off_public_id DEFAULT NEWSEQUENTIALID(),
         doctor_id          bigint NOT NULL,
         branch_id          bigint NULL,
         starts_at_utc      datetime2(3) NOT NULL,
         ends_at_utc        datetime2(3) NOT NULL,
         reason             nvarchar(500) NULL,
+        decision_note      nvarchar(500) NULL,
         status             varchar(20) NOT NULL CONSTRAINT DF_time_off_status DEFAULT ('PENDING'),
         requested_by_user_id bigint NOT NULL,
         approved_by_user_id bigint NULL,
         approved_at_utc    datetime2(3) NULL,
         created_at_utc     datetime2(3) NOT NULL CONSTRAINT DF_time_off_created DEFAULT SYSUTCDATETIME(),
         CONSTRAINT PK_doctor_time_off PRIMARY KEY CLUSTERED (doctor_time_off_id),
+        CONSTRAINT UQ_time_off_public_id UNIQUE (public_id),
         CONSTRAINT FK_time_off_doctor FOREIGN KEY (doctor_id) REFERENCES dbo.doctors(doctor_id),
         CONSTRAINT FK_time_off_branch FOREIGN KEY (branch_id) REFERENCES dbo.branches(branch_id),
         CONSTRAINT FK_time_off_requester FOREIGN KEY (requested_by_user_id) REFERENCES dbo.users(user_id),
@@ -1190,6 +1299,21 @@ BEGIN
              OR status <> 'APPROVED')
     );
 END;
+GO
+
+IF COL_LENGTH(N'dbo.doctor_time_off', N'public_id') IS NULL
+BEGIN
+    ALTER TABLE dbo.doctor_time_off ADD public_id uniqueidentifier NULL;
+    EXEC sys.sp_executesql N'UPDATE dbo.doctor_time_off SET public_id=NEWID() WHERE public_id IS NULL;';
+    EXEC sys.sp_executesql N'ALTER TABLE dbo.doctor_time_off ALTER COLUMN public_id uniqueidentifier NOT NULL;';
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.default_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.doctor_time_off')
+               AND name=N'DF_time_off_public_id')
+    EXEC sys.sp_executesql N'ALTER TABLE dbo.doctor_time_off ADD CONSTRAINT DF_time_off_public_id DEFAULT NEWSEQUENTIALID() FOR public_id;';
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.doctor_time_off') AND name=N'UQ_time_off_public_id')
+    EXEC sys.sp_executesql N'CREATE UNIQUE INDEX UQ_time_off_public_id ON dbo.doctor_time_off(public_id);';
+IF COL_LENGTH(N'dbo.doctor_time_off', N'decision_note') IS NULL
+    ALTER TABLE dbo.doctor_time_off ADD decision_note nvarchar(500) NULL;
 GO
 
 IF OBJECT_ID(N'dbo.clinic_holidays', N'U') IS NULL
@@ -1555,6 +1679,18 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.encou
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.encounters') AND name = N'UX_encounters_room_in_progress')
     CREATE UNIQUE INDEX UX_encounters_room_in_progress ON dbo.encounters(room_id)
     WHERE is_in_progress = 1 AND room_id IS NOT NULL;
+GO
+
+/* Walk-in giữ cùng công suất slot với các kênh đặt lịch, không tạo lịch hẹn giả. */
+IF COL_LENGTH(N'dbo.appointment_slots', N'walk_in_encounter_id') IS NULL
+    ALTER TABLE dbo.appointment_slots ADD walk_in_encounter_id bigint NULL;
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE parent_object_id=OBJECT_ID(N'dbo.appointment_slots') AND name=N'FK_slots_walk_in_encounter')
+    ALTER TABLE dbo.appointment_slots ADD CONSTRAINT FK_slots_walk_in_encounter
+        FOREIGN KEY (walk_in_encounter_id) REFERENCES dbo.encounters(encounter_id);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.appointment_slots') AND name=N'UX_slots_walk_in_encounter')
+    CREATE UNIQUE INDEX UX_slots_walk_in_encounter ON dbo.appointment_slots(walk_in_encounter_id)
+    WHERE walk_in_encounter_id IS NOT NULL;
 GO
 
 IF OBJECT_ID(N'dbo.encounter_staff_assignments', N'U') IS NULL
@@ -2265,9 +2401,6 @@ GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.prescriptions') AND name = N'IX_prescriptions_encounter')
     CREATE INDEX IX_prescriptions_encounter ON dbo.prescriptions(encounter_id, status);
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.prescriptions') AND name = N'IX_prescriptions_expiry')
-    CREATE INDEX IX_prescriptions_expiry ON dbo.prescriptions(status,valid_until,prescription_id)
-    INCLUDE(branch_id,public_id);
 GO
 
 IF OBJECT_ID(N'dbo.prescription_items', N'U') IS NULL
@@ -2498,6 +2631,8 @@ BEGIN
         EXEC sys.sp_executesql @pharmacy_sql;
     END;
     IF @pharmacy_table IN (N'inventory_movements',N'dispensation_items')
+       AND OBJECT_ID(N'dbo.'+CASE WHEN @pharmacy_table=N'inventory_movements'
+           THEN N'trg_inventory_movements_append_only' ELSE N'trg_dispensation_items_append_only' END,N'TR') IS NOT NULL
     BEGIN
         SET @pharmacy_sql=N'BEGIN TRY BEGIN TRANSACTION; '
             +N'DISABLE TRIGGER '+QUOTENAME(CASE WHEN @pharmacy_table=N'inventory_movements'
@@ -2539,6 +2674,11 @@ BEGIN
 END;
 CLOSE pharmacy_public_ids;
 DEALLOCATE pharmacy_public_ids;
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.prescriptions') AND name = N'IX_prescriptions_expiry')
+    CREATE INDEX IX_prescriptions_expiry ON dbo.prescriptions(status,valid_until,prescription_id)
+    INCLUDE(branch_id,public_id);
 GO
 
 /*=============================================================================
@@ -2803,6 +2943,9 @@ BEGIN
         EXEC sys.sp_executesql @billing_sql;
     END;
     IF @billing_table IN (N'invoice_items',N'payment_allocations',N'refund_allocations')
+       AND OBJECT_ID(N'dbo.'+CASE @billing_table WHEN N'invoice_items' THEN N'trg_invoice_items_guard_and_totals'
+           WHEN N'payment_allocations' THEN N'trg_financial_allocations_append_only'
+           ELSE N'trg_refund_allocations_append_only' END,N'TR') IS NOT NULL
     BEGIN
         SET @billing_sql=N'BEGIN TRY BEGIN TRANSACTION; DISABLE TRIGGER '
           +QUOTENAME(CASE @billing_table WHEN N'invoice_items' THEN N'trg_invoice_items_guard_and_totals'
@@ -3135,6 +3278,7 @@ FROM (VALUES
     ('ROLES_MANAGE',          N'Quản lý phân quyền',             'SECURITY',   N'Gán và thu hồi vai trò'),
     ('MASTER_DATA_MANAGE',    N'Quản lý danh mục',               'MASTER',     N'Chi nhánh, phòng, dịch vụ và thuốc'),
     ('PATIENTS_MANAGE',       N'Quản lý bệnh nhân',              'PATIENT',    N'Tạo và cập nhật hồ sơ hành chính'),
+    ('PATIENTS_MERGE',        N'Gộp hồ sơ bệnh nhân',            'PATIENT',    N'Gộp trùng có bảo toàn lịch sử và audit'),
     ('PATIENTS_VIEW',         N'Xem hồ sơ bệnh nhân',            'PATIENT',    N'Tra cứu bệnh nhân theo phạm vi'),
     ('PATIENT_PORTAL_LINK_MANAGE', N'Duyệt liên kết cổng bệnh nhân', 'PATIENT', N'Duyệt, từ chối và thu hồi quyền truy cập hồ sơ'),
     ('APPOINTMENTS_SELF',     N'Đặt lịch cá nhân',               'SCHEDULE',   N'Đặt/hủy lịch cho hồ sơ được ủy quyền'),
@@ -3278,11 +3422,19 @@ JOIN dbo.service_branch_prices bp ON bp.branch_id=s.branch_id AND bp.service_id=
  AND (bp.effective_to IS NULL OR bp.effective_to>=s.service_date_local)
 WHERE s.status = 'OPEN'
   AND d.accepts_online_booking = 1
+  AND s.walk_in_encounter_id IS NULL
+  AND COALESCE(ds.custom_duration_min,svc.default_duration_min) <= DATEDIFF(MINUTE,s.starts_at_utc,s.ends_at_utc)
   AND SYSUTCDATETIME() >= s.booking_opens_at_utc
   AND SYSUTCDATETIME() < s.booking_closes_at_utc
   AND NOT EXISTS
       (SELECT 1 FROM dbo.appointments a
        WHERE a.slot_id = s.slot_id AND a.occupies_slot = 1);
+GO
+
+CREATE OR ALTER VIEW dbo.v_patient_identity_members
+AS
+SELECT patient_id,CASE WHEN status='MERGED' THEN merged_into_patient_id ELSE patient_id END AS canonical_patient_id
+FROM dbo.patients;
 GO
 
 CREATE OR ALTER VIEW dbo.v_doctor_daily_schedule
@@ -3340,7 +3492,7 @@ JOIN dbo.patients p ON p.patient_id = en.patient_id
 JOIN dbo.doctors d ON d.doctor_id = en.attending_doctor_id
 JOIN dbo.employees emp ON emp.employee_id = d.employee_id
 LEFT JOIN dbo.rooms r ON r.room_id = en.room_id
-WHERE qs.status = 'OPEN' AND qt.status IN ('WAITING','CALLED','SERVING');
+WHERE qs.status = 'OPEN' AND qt.status IN ('WAITING','CALLED','SERVING','SKIPPED');
 GO
 
 CREATE OR ALTER VIEW dbo.v_patient_encounter_history
@@ -3657,19 +3809,24 @@ GO
 
 CREATE OR ALTER VIEW dbo.v_catalog_branches_v1
 AS
-SELECT branch_id,public_id,branch_code,branch_name,is_active
+SELECT branch_id,public_id,branch_code,branch_name,medical_license_no,phone,email,
+       address_line,ward,district,province,timezone_name,booking_horizon_days,
+       online_hold_minutes,cancellation_deadline_minutes,check_in_early_minutes,
+       check_in_late_minutes,walk_in_max_wait_minutes,is_active,CONVERT(varbinary(8),row_ver) AS row_version
 FROM dbo.branches;
 GO
 
 CREATE OR ALTER VIEW dbo.v_catalog_categories_v1
 AS
-SELECT service_category_id,public_id,category_code,category_name,display_order,is_active
+SELECT service_category_id,public_id,category_code,category_name,display_order,is_active,
+       CONVERT(varbinary(8),row_ver) AS row_version
 FROM dbo.service_categories;
 GO
 
 CREATE OR ALTER VIEW dbo.v_catalog_specialties_v1
 AS
-SELECT specialty_id,public_id,specialty_code,specialty_name,is_active
+SELECT specialty_id,public_id,specialty_code,specialty_name,description,is_active,
+       CONVERT(varbinary(8),row_ver) AS row_version
 FROM dbo.specialties;
 GO
 
@@ -4022,6 +4179,13 @@ BEGIN
         WHERE i.status = 'APPROVED'
     )
         THROW 52009, N'Không thể duyệt nghỉ vì đang có lịch hẹn hoạt động bị xung đột.', 1;
+    IF EXISTS
+    (
+        SELECT 1 FROM inserted i JOIN dbo.appointment_slots s
+          ON s.doctor_id=i.doctor_id AND (i.branch_id IS NULL OR s.branch_id=i.branch_id)
+         AND s.starts_at_utc<i.ends_at_utc AND s.ends_at_utc>i.starts_at_utc
+        WHERE i.status='APPROVED' AND s.walk_in_encounter_id IS NOT NULL
+    ) THROW 52009,N'Không thể duyệt nghỉ vì đang có lượt walk-in hoạt động.',1;
 
     UPDATE s
        SET status = 'BLOCKED',
@@ -4056,6 +4220,13 @@ BEGIN
         JOIN dbo.appointments a ON a.slot_id = s.slot_id AND a.occupies_slot = 1
     )
         THROW 52010, N'Không thể tạo giờ nghỉ lễ vì đang có lịch hẹn hoạt động.', 1;
+    IF EXISTS
+    (
+        SELECT 1 FROM inserted h JOIN dbo.appointment_slots s
+          ON s.branch_id=h.branch_id AND s.service_date_local=h.holiday_date
+         AND (h.is_closed_all_day=1 OR (s.start_time_local<h.local_end_time AND s.end_time_local>h.local_start_time))
+        WHERE s.walk_in_encounter_id IS NOT NULL
+    ) THROW 52010,N'Không thể tạo giờ nghỉ lễ vì đang có lượt walk-in hoạt động.',1;
 
     UPDATE s
        SET status = 'BLOCKED',
@@ -4076,6 +4247,16 @@ AFTER INSERT, UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;
+
+    IF EXISTS
+    (
+        SELECT 1 FROM inserted i
+        LEFT JOIN dbo.encounters e ON e.encounter_id=i.walk_in_encounter_id
+        WHERE i.walk_in_encounter_id IS NOT NULL
+          AND (i.status<>'OPEN' OR e.encounter_source<>'WALK_IN' OR e.status='CANCELLED'
+               OR e.branch_id<>i.branch_id OR e.attending_doctor_id<>i.doctor_id OR e.room_id<>i.room_id
+               OR EXISTS(SELECT 1 FROM dbo.appointments a WHERE a.slot_id=i.slot_id AND a.occupies_slot=1))
+    ) THROW 52016,N'Slot walk-in không hợp lệ hoặc đã có lịch hẹn.',1;
 
     IF EXISTS
     (
@@ -4176,6 +4357,27 @@ BEGIN
         WHERE i.occupies_slot = 1 AND s.status IN ('BLOCKED','CANCELLED')
     )
         THROW 52018, N'Không thể giữ lịch trên slot đã khóa hoặc hủy.', 1;
+
+    IF EXISTS
+    (
+        SELECT 1 FROM inserted i
+        JOIN dbo.appointment_slots s ON s.slot_id=i.slot_id
+        WHERE i.occupies_slot=1 AND s.walk_in_encounter_id IS NOT NULL
+    )
+        THROW 52018, N'Slot đã được giữ cho lượt đến trực tiếp.', 1;
+
+    IF EXISTS
+    (
+        SELECT 1 FROM inserted i
+        LEFT JOIN deleted prior ON prior.appointment_id=i.appointment_id
+        JOIN dbo.appointment_slots s ON s.slot_id=i.slot_id
+        JOIN dbo.services svc ON svc.service_id=i.service_id
+        JOIN dbo.doctor_services ds ON ds.doctor_id=i.doctor_id AND ds.service_id=i.service_id
+        WHERE i.occupies_slot=1
+          AND (prior.appointment_id IS NULL OR prior.slot_id<>i.slot_id OR prior.service_id<>i.service_id)
+          AND COALESCE(ds.custom_duration_min,svc.default_duration_min)>DATEDIFF(MINUTE,s.starts_at_utc,s.ends_at_utc)
+    )
+        THROW 52019, N'Thời lượng dịch vụ dài hơn slot.', 1;
 
     IF EXISTS
     (
@@ -4865,6 +5067,223 @@ GO
 /*=============================================================================
   14. COMMAND PROCEDURES - KHỞI TẠO, NHÂN SỰ, RBAC VÀ BỆNH NHÂN
 =============================================================================*/
+
+CREATE OR ALTER PROCEDURE dbo.sp_catalog_create_branch
+    @actor_user_id bigint, @code varchar(20), @name nvarchar(200),
+    @address_line nvarchar(300), @ward nvarchar(100)=NULL,
+    @district nvarchar(100)=NULL, @province nvarchar(100)=NULL,
+    @phone varchar(20)=NULL, @email varchar(254)=NULL,
+    @medical_license_no nvarchar(100)=NULL, @timezone_name sysname,
+    @booking_horizon_days smallint, @online_hold_minutes smallint,
+    @cancellation_deadline_minutes int, @check_in_early_minutes smallint,
+    @check_in_late_minutes smallint, @branch_id bigint OUTPUT,
+    @walk_in_max_wait_minutes smallint=45
+AS
+BEGIN
+    SET NOCOUNT ON; SET XACT_ABORT ON;
+    EXEC dbo.sp_assert_permission @actor_user_id,'MASTER_DATA_MANAGE',NULL;
+    IF NOT EXISTS (SELECT 1 FROM sys.time_zone_info WHERE name=@timezone_name)
+        THROW 53620,N'Múi giờ Windows không hợp lệ.',1;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        INSERT dbo.branches(branch_code,branch_name,address_line,ward,district,province,
+            phone,email,medical_license_no,timezone_name,booking_horizon_days,
+            online_hold_minutes,cancellation_deadline_minutes,check_in_early_minutes,
+            check_in_late_minutes,walk_in_max_wait_minutes)
+        VALUES(@code,@name,@address_line,@ward,@district,@province,@phone,@email,
+            @medical_license_no,@timezone_name,@booking_horizon_days,
+            @online_hold_minutes,@cancellation_deadline_minutes,@check_in_early_minutes,
+            @check_in_late_minutes,@walk_in_max_wait_minutes);
+        SET @branch_id=SCOPE_IDENTITY();
+        EXEC dbo.sp_write_audit @actor_user_id,@branch_id,'BRANCH_CREATED','BRANCH',@code;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER TRIGGER dbo.trg_patient_merge_history_append_only
+ON dbo.patient_merge_history
+AFTER UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    THROW 52063,N'Lịch sử gộp hồ sơ là append-only.',1;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_catalog_update_branch
+    @actor_user_id bigint, @branch_id bigint, @name nvarchar(200),
+    @address_line nvarchar(300), @ward nvarchar(100)=NULL,
+    @district nvarchar(100)=NULL, @province nvarchar(100)=NULL,
+    @phone varchar(20)=NULL, @email varchar(254)=NULL,
+    @medical_license_no nvarchar(100)=NULL, @timezone_name sysname,
+    @booking_horizon_days smallint, @online_hold_minutes smallint,
+    @cancellation_deadline_minutes int, @check_in_early_minutes smallint,
+    @check_in_late_minutes smallint, @is_active bit,
+    @expected_row_ver varbinary(8),
+    @walk_in_max_wait_minutes smallint=NULL
+AS
+BEGIN
+    SET NOCOUNT ON; SET XACT_ABORT ON;
+    EXEC dbo.sp_assert_permission @actor_user_id,'MASTER_DATA_MANAGE',NULL;
+    IF NOT EXISTS (SELECT 1 FROM sys.time_zone_info WHERE name=@timezone_name)
+        THROW 53620,N'Múi giờ Windows không hợp lệ.',1;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        DECLARE @old_timezone sysname, @old_active bit;
+        SELECT @old_timezone=timezone_name,@old_active=is_active
+        FROM dbo.branches WITH (UPDLOCK,HOLDLOCK)
+        WHERE branch_id=@branch_id AND row_ver=@expected_row_ver;
+        IF @old_timezone IS NULL
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM dbo.branches WHERE branch_id=@branch_id)
+                THROW 53621,N'Chi nhánh không tồn tại.',1;
+            THROW 53622,N'Chi nhánh đã được cập nhật bởi phiên khác.',1;
+        END;
+        IF (@old_timezone<>@timezone_name OR (@old_active=1 AND @is_active=0))
+           AND EXISTS (SELECT 1 FROM dbo.appointments
+                       WHERE branch_id=@branch_id AND status IN ('PENDING','CONFIRMED','CHECKED_IN','IN_PROGRESS')
+                         AND scheduled_start_utc>=SYSUTCDATETIME())
+            THROW 53623,N'Chi nhánh có lịch hẹn tương lai; không thể đổi múi giờ hoặc tạm ngừng.',1;
+        IF (@old_timezone<>@timezone_name OR (@old_active=1 AND @is_active=0))
+           AND EXISTS (SELECT 1 FROM dbo.appointment_slots
+                       WHERE branch_id=@branch_id AND starts_at_utc>=SYSUTCDATETIME())
+            THROW 53623,N'Chi nhánh đã có slot tương lai; không thể đổi múi giờ hoặc tạm ngừng.',1;
+        UPDATE dbo.branches SET branch_name=@name,address_line=@address_line,ward=@ward,
+            district=@district,province=@province,phone=@phone,email=@email,
+            medical_license_no=@medical_license_no,timezone_name=@timezone_name,
+            booking_horizon_days=@booking_horizon_days,online_hold_minutes=@online_hold_minutes,
+            cancellation_deadline_minutes=@cancellation_deadline_minutes,
+            check_in_early_minutes=@check_in_early_minutes,
+            check_in_late_minutes=@check_in_late_minutes,
+            walk_in_max_wait_minutes=COALESCE(@walk_in_max_wait_minutes,walk_in_max_wait_minutes),is_active=@is_active,
+            updated_at_utc=SYSUTCDATETIME()
+        WHERE branch_id=@branch_id AND row_ver=@expected_row_ver;
+        IF @@ROWCOUNT=0 THROW 53622,N'Chi nhánh đã được cập nhật bởi phiên khác.',1;
+        DECLARE @entity_id varchar(100)=CONVERT(varchar(100),@branch_id);
+        EXEC dbo.sp_write_audit @actor_user_id,@branch_id,'BRANCH_UPDATED','BRANCH',@entity_id;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_catalog_create_specialty
+    @actor_user_id bigint, @code varchar(30), @name nvarchar(150),
+    @description nvarchar(1000)=NULL, @specialty_id bigint OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON; SET XACT_ABORT ON;
+    EXEC dbo.sp_assert_permission @actor_user_id,'MASTER_DATA_MANAGE',NULL;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        INSERT dbo.specialties(specialty_code,specialty_name,description)
+        VALUES(@code,@name,@description);
+        SET @specialty_id=SCOPE_IDENTITY();
+        DECLARE @entity_id varchar(100)=CONVERT(varchar(100),@specialty_id);
+        EXEC dbo.sp_write_audit @actor_user_id,NULL,'SPECIALTY_CREATED','SPECIALTY',@entity_id;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_catalog_update_specialty
+    @actor_user_id bigint, @specialty_id bigint, @name nvarchar(150),
+    @description nvarchar(1000)=NULL, @is_active bit,
+    @expected_row_ver varbinary(8)
+AS
+BEGIN
+    SET NOCOUNT ON; SET XACT_ABORT ON;
+    EXEC dbo.sp_assert_permission @actor_user_id,'MASTER_DATA_MANAGE',NULL;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        IF @is_active=0 AND EXISTS (SELECT 1 FROM dbo.services
+            WHERE specialty_id=@specialty_id AND is_active=1)
+            THROW 53624,N'Chuyên khoa đang được dịch vụ hoạt động sử dụng.',1;
+        UPDATE dbo.specialties SET specialty_name=@name,description=@description,is_active=@is_active
+        WHERE specialty_id=@specialty_id AND row_ver=@expected_row_ver;
+        IF @@ROWCOUNT=0
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM dbo.specialties WHERE specialty_id=@specialty_id)
+                THROW 53625,N'Chuyên khoa không tồn tại.',1;
+            THROW 53626,N'Chuyên khoa đã được cập nhật bởi phiên khác.',1;
+        END;
+        DECLARE @entity_id varchar(100)=CONVERT(varchar(100),@specialty_id);
+        EXEC dbo.sp_write_audit @actor_user_id,NULL,'SPECIALTY_UPDATED','SPECIALTY',@entity_id;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_catalog_create_category
+    @actor_user_id bigint, @code varchar(30), @name nvarchar(150),
+    @display_order int, @category_id bigint OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON; SET XACT_ABORT ON;
+    EXEC dbo.sp_assert_permission @actor_user_id,'MASTER_DATA_MANAGE',NULL;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        INSERT dbo.service_categories(category_code,category_name,display_order)
+        VALUES(@code,@name,@display_order);
+        SET @category_id=SCOPE_IDENTITY();
+        DECLARE @entity_id varchar(100)=CONVERT(varchar(100),@category_id);
+        EXEC dbo.sp_write_audit @actor_user_id,NULL,'SERVICE_CATEGORY_CREATED','SERVICE_CATEGORY',@entity_id;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_catalog_update_category
+    @actor_user_id bigint, @category_id bigint, @name nvarchar(150),
+    @display_order int, @is_active bit, @expected_row_ver varbinary(8)
+AS
+BEGIN
+    SET NOCOUNT ON; SET XACT_ABORT ON;
+    EXEC dbo.sp_assert_permission @actor_user_id,'MASTER_DATA_MANAGE',NULL;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        IF @is_active=0 AND EXISTS (SELECT 1 FROM dbo.services
+            WHERE service_category_id=@category_id AND is_active=1)
+            THROW 53627,N'Nhóm đang được dịch vụ hoạt động sử dụng.',1;
+        UPDATE dbo.service_categories SET category_name=@name,display_order=@display_order,
+            is_active=@is_active
+        WHERE service_category_id=@category_id AND row_ver=@expected_row_ver;
+        IF @@ROWCOUNT=0
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM dbo.service_categories WHERE service_category_id=@category_id)
+                THROW 53628,N'Nhóm dịch vụ không tồn tại.',1;
+            THROW 53629,N'Nhóm dịch vụ đã được cập nhật bởi phiên khác.',1;
+        END;
+        DECLARE @entity_id varchar(100)=CONVERT(varchar(100),@category_id);
+        EXEC dbo.sp_write_audit @actor_user_id,NULL,'SERVICE_CATEGORY_UPDATED','SERVICE_CATEGORY',@entity_id;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
 
 CREATE OR ALTER PROCEDURE dbo.sp_create_room
     @actor_user_id bigint,
@@ -7080,7 +7499,7 @@ BEGIN
         DECLARE @phone_normalized varchar(20)=NULLIF(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(@phone)),' ',''),'-',''),'.',''),'');
         IF COALESCE(@duplicate_override,0)=0 AND EXISTS(
             SELECT 1 FROM dbo.patients WITH (UPDLOCK,HOLDLOCK)
-            WHERE registration_branch_id=@branch_id AND status<>'MERGED'
+            WHERE registration_branch_id=@branch_id
               AND ((@phone_normalized IS NOT NULL AND phone_normalized=@phone_normalized)
                 OR (date_of_birth=@date_of_birth AND full_name=@full_name))
         ) THROW 53630,N'Có hồ sơ có thể trùng. Cần xem và xác nhận trước khi tạo.',1;
@@ -7140,12 +7559,18 @@ BEGIN
     SELECT TOP (50) CONVERT(varchar(36),public_id) AS publicId,patient_code AS code,
         full_name AS fullName,date_of_birth AS dateOfBirth,gender,phone,status,
         RIGHT(national_id,4) AS nationalIdLast4,row_ver AS rowVersion
-    FROM dbo.patients
+    FROM dbo.patients p
     WHERE registration_branch_id=@branch_id AND status<>'MERGED'
       AND (@date_of_birth IS NULL OR date_of_birth=@date_of_birth)
       AND (@query IS NULL OR patient_code LIKE '%'+CONVERT(varchar(100),@query)+'%'
         OR full_name LIKE N'%'+@query+N'%' OR phone_normalized LIKE '%'+REPLACE(REPLACE(REPLACE(CONVERT(varchar(100),@query),' ',''),'-',''),'.','')+'%'
-        OR national_id_normalized LIKE '%'+REPLACE(REPLACE(CONVERT(varchar(100),@query),' ',''),'-','')+'%')
+        OR national_id_normalized LIKE '%'+REPLACE(REPLACE(CONVERT(varchar(100),@query),' ',''),'-','')+'%'
+        OR EXISTS(SELECT 1 FROM dbo.patients alias
+          WHERE alias.merged_into_patient_id=p.patient_id AND
+            (alias.patient_code LIKE '%'+CONVERT(varchar(100),@query)+'%'
+             OR alias.full_name LIKE N'%'+@query+N'%'
+             OR alias.phone_normalized LIKE '%'+REPLACE(REPLACE(REPLACE(CONVERT(varchar(100),@query),' ',''),'-',''),'.','')+'%'
+             OR alias.national_id_normalized LIKE '%'+REPLACE(REPLACE(CONVERT(varchar(100),@query),' ',''),'-','')+'%')))
     ORDER BY updated_at_utc DESC,patient_id DESC;
 END;
 GO
@@ -7166,11 +7591,15 @@ BEGIN
     SELECT TOP (10) CONVERT(varchar(36),public_id) AS publicId,patient_code AS code,
         full_name AS fullName,date_of_birth AS dateOfBirth,gender,phone,status,
         RIGHT(national_id,4) AS nationalIdLast4,row_ver AS rowVersion
-    FROM dbo.patients
+    FROM dbo.patients p
     WHERE registration_branch_id=@branch_id AND status<>'MERGED'
       AND ((@national_normalized IS NOT NULL AND national_id_normalized=@national_normalized)
         OR (@phone_normalized IS NOT NULL AND phone_normalized=@phone_normalized)
-        OR (date_of_birth=@date_of_birth AND full_name=@full_name))
+        OR (date_of_birth=@date_of_birth AND full_name=@full_name)
+        OR EXISTS(SELECT 1 FROM dbo.patients alias WHERE alias.merged_into_patient_id=p.patient_id
+          AND ((@national_normalized IS NOT NULL AND alias.national_id_normalized=@national_normalized)
+            OR (@phone_normalized IS NOT NULL AND alias.phone_normalized=@phone_normalized)
+            OR (alias.date_of_birth=@date_of_birth AND alias.full_name=@full_name))))
     ORDER BY CASE WHEN @national_normalized IS NOT NULL AND national_id_normalized=@national_normalized THEN 0
                   WHEN @phone_normalized IS NOT NULL AND phone_normalized=@phone_normalized THEN 1 ELSE 2 END,
              updated_at_utc DESC;
@@ -7192,6 +7621,348 @@ BEGIN
         p.province,p.status,RIGHT(p.national_id,4) AS nationalIdLast4,p.row_ver AS rowVersion
     FROM dbo.patients p JOIN dbo.branches b ON b.branch_id=p.registration_branch_id
     WHERE p.public_id=@patient_public_id AND p.registration_branch_id=@branch_id AND p.status<>'MERGED';
+    SELECT ec.full_name AS fullName,ec.relationship_name AS relationshipName,
+        ec.phone,ec.is_primary AS isPrimary
+    FROM dbo.patient_emergency_contacts ec
+    JOIN dbo.patients p ON p.patient_id=ec.patient_id
+    WHERE p.public_id=@patient_public_id AND p.registration_branch_id=@branch_id
+      AND p.status<>'MERGED' AND ec.is_active=1
+    ORDER BY ec.is_primary DESC,ec.emergency_contact_id;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_clinic_preview_patient_merge
+    @actor_user_id bigint,
+    @source_public_id uniqueidentifier,
+    @target_public_id uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    EXEC dbo.sp_assert_permission @actor_user_id,'PATIENTS_MERGE',NULL;
+    IF @source_public_id=@target_public_id THROW 53660,N'Chọn hai hồ sơ khác nhau.',1;
+    DECLARE @source_id bigint,@target_id bigint;
+    SELECT @source_id=patient_id FROM dbo.patients WHERE public_id=@source_public_id AND status='ACTIVE';
+    SELECT @target_id=patient_id FROM dbo.patients WHERE public_id=@target_public_id AND status='ACTIVE';
+    IF @source_id IS NULL OR @target_id IS NULL THROW 53635,N'Không tìm thấy hồ sơ đang hoạt động.',1;
+    SELECT CONVERT(varchar(36),s.public_id) AS sourcePublicId,s.patient_code AS sourceCode,
+           s.full_name AS sourceName,s.date_of_birth AS sourceDateOfBirth,s.gender AS sourceGender,
+           CONVERT(varchar(36),sb.public_id) AS sourceBranchPublicId,sb.branch_name AS sourceBranchName,
+           RIGHT(s.national_id,4) AS sourceNationalIdLast4,s.row_ver AS sourceRowVersion,
+           CONVERT(varchar(36),t.public_id) AS targetPublicId,t.patient_code AS targetCode,
+           t.full_name AS targetName,t.date_of_birth AS targetDateOfBirth,t.gender AS targetGender,
+           CONVERT(varchar(36),tb.public_id) AS targetBranchPublicId,tb.branch_name AS targetBranchName,
+           RIGHT(t.national_id,4) AS targetNationalIdLast4,t.row_ver AS targetRowVersion,
+           (SELECT COUNT(*) FROM dbo.appointments WHERE patient_id=@source_id) AS sourceAppointments,
+           (SELECT COUNT(*) FROM dbo.encounters WHERE patient_id=@source_id AND status='SIGNED') AS sourceSignedEncounters,
+           (SELECT COUNT(*) FROM dbo.invoices WHERE patient_id=@source_id) AS sourceInvoices,
+           (SELECT COUNT(*) FROM dbo.user_patient_access WHERE patient_id=@source_id AND status='ACTIVE') AS sourceActiveLinks,
+           (SELECT COUNT(*) FROM dbo.patient_allergies WHERE patient_id=@source_id AND is_active=1) AS sourceActiveAllergies,
+           (SELECT COUNT(*) FROM dbo.patient_conditions WHERE patient_id=@source_id AND status<>'RESOLVED') AS sourceOpenConditions,
+           (SELECT COUNT(*) FROM dbo.patient_emergency_contacts WHERE patient_id=@source_id AND is_active=1) AS sourceActiveContacts,
+           CONVERT(bit,CASE WHEN s.date_of_birth=t.date_of_birth AND s.gender=t.gender AND
+             (s.national_id_normalized IS NULL OR t.national_id_normalized IS NULL OR
+              s.national_id_normalized=t.national_id_normalized) THEN 1 ELSE 0 END) AS identityCompatible,
+           CONVERT(bit,CASE WHEN EXISTS(SELECT 1 FROM dbo.appointments WHERE patient_id=@source_id
+               AND status IN ('PENDING','CONFIRMED','CHECKED_IN','IN_PROGRESS')) OR
+             EXISTS(SELECT 1 FROM dbo.encounters WHERE patient_id=@source_id
+               AND status NOT IN ('SIGNED','CANCELLED')) OR
+             EXISTS(SELECT 1 FROM dbo.patient_access_requests WHERE patient_id=@source_id AND status='PENDING') OR
+             EXISTS(SELECT 1 FROM dbo.user_patient_access WHERE patient_id=@source_id AND status='PENDING')
+               THEN 1 ELSE 0 END) AS hasOpenWork,
+           CONVERT(bit,CASE WHEN EXISTS(SELECT 1 FROM dbo.patients WHERE merged_into_patient_id=@source_id)
+               THEN 1 ELSE 0 END) AS hasInboundMerge,
+           CONVERT(bit,CASE WHEN EXISTS(SELECT 1 FROM dbo.user_patient_access a
+               JOIN dbo.user_patient_access b ON b.user_id=a.user_id AND b.patient_id=@target_id
+               WHERE a.patient_id=@source_id AND a.status='ACTIVE'
+                 AND (b.status<>'ACTIVE' OR b.relationship_type<>a.relationship_type))
+             OR (SELECT COUNT(DISTINCT user_id) FROM dbo.user_patient_access
+               WHERE patient_id IN (@source_id,@target_id) AND relationship_type='SELF' AND status='ACTIVE')>1
+               THEN 1 ELSE 0 END) AS hasLinkConflict,
+           CONVERT(bit,CASE WHEN EXISTS(SELECT 1 FROM dbo.patient_emergency_contacts
+               WHERE patient_id=@source_id AND is_active=1)
+             AND EXISTS(SELECT 1 FROM dbo.patient_emergency_contacts
+               WHERE patient_id=@target_id AND is_active=1)
+               THEN 1 ELSE 0 END) AS hasContactConflict
+    FROM dbo.patients s JOIN dbo.patients t ON t.patient_id=@target_id
+    LEFT JOIN dbo.branches sb ON sb.branch_id=s.registration_branch_id
+    LEFT JOIN dbo.branches tb ON tb.branch_id=t.registration_branch_id
+    WHERE s.patient_id=@source_id;
+    DECLARE @entity_id varchar(100)=CONVERT(varchar(36),@source_public_id);
+    EXEC dbo.sp_write_audit @actor_user_id,NULL,'PATIENT_MERGE_PREVIEW_READ','PATIENT',
+        @entity_id=@entity_id;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_clinic_merge_patients
+    @actor_user_id bigint,
+    @source_public_id uniqueidentifier,
+    @target_public_id uniqueidentifier,
+    @source_row_ver binary(8),
+    @target_row_ver binary(8),
+    @reason nvarchar(500)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    EXEC dbo.sp_assert_permission @actor_user_id,'PATIENTS_MERGE',NULL;
+    IF @source_public_id=@target_public_id THROW 53660,N'Chọn hai hồ sơ khác nhau.',1;
+    IF LEN(TRIM(COALESCE(@reason,N'')))<20 OR LEN(@reason)>500
+        THROW 53661,N'Cần lý do gộp hồ sơ từ 20 đến 500 ký tự.',1;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        DECLARE @source_id bigint,@target_id bigint,@source_version binary(8),@target_version binary(8),
+                @source_dob date,@target_dob date,@source_gender varchar(10),@target_gender varchar(10),
+                @source_national varchar(30),@source_national_raw varchar(30),
+                @target_national varchar(30),
+                @source_branch_id bigint,@target_branch_id bigint,@source_code varchar(30),@target_code varchar(30),
+                @lock_result int,@range_count bigint;
+        EXEC @lock_result=sys.sp_getapplock @Resource=N'patient-merge',@LockMode='Exclusive',
+            @LockOwner='Transaction',@LockTimeout=10000;
+        IF @lock_result<0 THROW 53662,N'Không lấy được khóa gộp hồ sơ.',1;
+        SELECT @source_id=patient_id,@source_version=row_ver,@source_dob=date_of_birth,@source_gender=gender,
+               @source_national=national_id_normalized,@source_national_raw=national_id,
+               @source_branch_id=registration_branch_id,
+               @source_code=patient_code
+        FROM dbo.patients WITH (UPDLOCK,HOLDLOCK)
+        WHERE public_id=@source_public_id AND status='ACTIVE';
+        SELECT @target_id=patient_id,@target_version=row_ver,@target_dob=date_of_birth,@target_gender=gender,
+               @target_national=national_id_normalized,@target_branch_id=registration_branch_id,
+               @target_code=patient_code
+        FROM dbo.patients WITH (UPDLOCK,HOLDLOCK)
+        WHERE public_id=@target_public_id AND status='ACTIVE';
+        IF @source_id IS NULL OR @target_id IS NULL THROW 53635,N'Không tìm thấy hồ sơ đang hoạt động.',1;
+        IF @source_row_ver IS NULL OR @target_row_ver IS NULL OR
+           @source_version<>@source_row_ver OR @target_version<>@target_row_ver
+            THROW 53636,N'Hồ sơ đã thay đổi; tải lại trước khi gộp.',1;
+        IF @source_dob<>@target_dob OR @source_gender<>@target_gender OR
+           (@source_national IS NOT NULL AND @target_national IS NOT NULL AND @source_national<>@target_national)
+            THROW 53663,N'Ngày sinh, giới tính hoặc định danh không khớp; cần đối chiếu ngoài luồng.',1;
+        IF EXISTS(SELECT 1 FROM dbo.patients WHERE merged_into_patient_id=@source_id)
+            THROW 53664,N'Nguồn đã có hồ sơ gộp vào; hãy chọn hồ sơ chuẩn khác.',1;
+        SELECT @range_count=COUNT_BIG(*) FROM dbo.user_patient_access WITH
+            (UPDLOCK,HOLDLOCK,INDEX(IX_user_patient_access_patient))
+            WHERE patient_id IN (@source_id,@target_id);
+        SELECT @range_count=COUNT_BIG(*) FROM dbo.patient_access_requests WITH
+            (UPDLOCK,HOLDLOCK,INDEX(IX_patient_access_requests_patient_status))
+            WHERE patient_id=@source_id;
+        IF EXISTS(SELECT 1 FROM dbo.appointments WITH (UPDLOCK,HOLDLOCK)
+                  WHERE patient_id=@source_id AND status IN ('PENDING','CONFIRMED','CHECKED_IN','IN_PROGRESS'))
+           OR EXISTS(SELECT 1 FROM dbo.encounters WITH (UPDLOCK,HOLDLOCK)
+                     WHERE patient_id=@source_id AND status NOT IN ('SIGNED','CANCELLED'))
+           OR EXISTS(SELECT 1 FROM dbo.patient_access_requests WHERE patient_id=@source_id AND status='PENDING')
+           OR EXISTS(SELECT 1 FROM dbo.user_patient_access WHERE patient_id=@source_id AND status='PENDING')
+            THROW 53665,N'Hồ sơ nguồn còn lịch, lượt khám hoặc yêu cầu liên kết chưa kết thúc.',1;
+        IF EXISTS(SELECT 1 FROM dbo.user_patient_access a WITH (UPDLOCK,HOLDLOCK)
+                  JOIN dbo.user_patient_access b WITH (UPDLOCK,HOLDLOCK)
+                    ON b.user_id=a.user_id AND b.patient_id=@target_id
+                  WHERE a.patient_id=@source_id AND a.status='ACTIVE'
+                    AND (b.status<>'ACTIVE' OR b.relationship_type<>a.relationship_type))
+           OR EXISTS(SELECT 1 FROM dbo.user_patient_access a
+                     JOIN dbo.user_patient_access b ON b.patient_id=@target_id
+                       AND b.relationship_type='SELF' AND b.status='ACTIVE' AND b.user_id<>a.user_id
+                     WHERE a.patient_id=@source_id AND a.relationship_type='SELF' AND a.status='ACTIVE')
+           OR (SELECT COUNT(DISTINCT user_id) FROM dbo.user_patient_access
+               WHERE patient_id IN (@source_id,@target_id) AND relationship_type='SELF' AND status='ACTIVE')>1
+            THROW 53666,N'Liên kết tài khoản giữa hai hồ sơ xung đột; cần xử lý trước khi gộp.',1;
+        IF EXISTS(SELECT 1 FROM dbo.patient_emergency_contacts WITH
+                      (UPDLOCK,HOLDLOCK,INDEX(IX_patient_emergency_contacts_patient_active))
+                  WHERE patient_id=@source_id AND is_active=1)
+           AND EXISTS(SELECT 1 FROM dbo.patient_emergency_contacts WITH
+                      (UPDLOCK,HOLDLOCK,INDEX(IX_patient_emergency_contacts_patient_active))
+                      WHERE patient_id=@target_id AND is_active=1)
+            THROW 53667,N'Cả hai hồ sơ có liên hệ khẩn cấp; cần xử lý trước khi gộp.',1;
+        DECLARE @source_snapshot nvarchar(max)=(SELECT public_id AS publicId,patient_code AS code,
+            full_name AS fullName,date_of_birth AS dateOfBirth,gender,national_id AS nationalId,
+            health_insurance_no AS healthInsuranceNo,phone,email,address_line AS addressLine,
+            province,status,registration_branch_id AS registrationBranchId
+            FROM dbo.patients WHERE patient_id=@source_id
+            FOR JSON PATH,INCLUDE_NULL_VALUES,WITHOUT_ARRAY_WRAPPER);
+        IF NOT EXISTS(SELECT 1 FROM dbo.patient_emergency_contacts WHERE patient_id=@target_id AND is_active=1)
+            INSERT dbo.patient_emergency_contacts(patient_id,full_name,relationship_name,phone,is_primary)
+            SELECT @target_id,full_name,relationship_name,phone,is_primary
+            FROM dbo.patient_emergency_contacts WHERE patient_id=@source_id AND is_active=1;
+        INSERT dbo.user_patient_access(user_id,patient_id,relationship_type,status,is_booking_allowed,
+            verified_by_user_id,verified_branch_id,verified_at_utc)
+        SELECT a.user_id,@target_id,a.relationship_type,'ACTIVE',a.is_booking_allowed,
+               a.verified_by_user_id,a.verified_branch_id,a.verified_at_utc
+        FROM dbo.user_patient_access a
+        WHERE a.patient_id=@source_id AND a.status='ACTIVE'
+          AND NOT EXISTS(SELECT 1 FROM dbo.user_patient_access b
+                         WHERE b.user_id=a.user_id AND b.patient_id=@target_id);
+        UPDATE dbo.user_patient_access SET status='REVOKED',revoked_at_utc=SYSUTCDATETIME(),
+            revoked_by_user_id=@actor_user_id,revocation_reason=N'Gộp vào hồ sơ '+@target_code
+        WHERE patient_id=@source_id AND status='ACTIVE';
+        UPDATE dbo.patients SET status='MERGED',merged_into_patient_id=@target_id,
+            national_id=CASE WHEN @target_national IS NULL THEN NULL ELSE national_id END,
+            updated_at_utc=SYSUTCDATETIME()
+        WHERE patient_id=@source_id;
+        UPDATE t SET national_id=COALESCE(t.national_id,@source_national_raw),
+            health_insurance_no=COALESCE(t.health_insurance_no,s.health_insurance_no),
+            phone=COALESCE(t.phone,s.phone),email=COALESCE(t.email,s.email),
+            address_line=COALESCE(t.address_line,s.address_line),province=COALESCE(t.province,s.province),
+            blood_type=COALESCE(t.blood_type,s.blood_type),occupation=COALESCE(t.occupation,s.occupation),
+            updated_at_utc=SYSUTCDATETIME()
+        FROM dbo.patients t JOIN dbo.patients s ON s.patient_id=@source_id
+        WHERE t.patient_id=@target_id;
+        INSERT dbo.patient_merge_history(source_patient_id,target_patient_id,performed_by_user_id,reason,source_snapshot_json)
+        VALUES(@source_id,@target_id,@actor_user_id,TRIM(@reason),@source_snapshot);
+        DECLARE @audit_json nvarchar(max)=CONCAT(N'{"sourcePublicId":"',CONVERT(varchar(36),@source_public_id),
+            N'","targetPublicId":"',CONVERT(varchar(36),@target_public_id),N'","reason":"',
+            STRING_ESCAPE(TRIM(@reason),'json'),N'"}');
+        DECLARE @entity_id varchar(100)=CONVERT(varchar(36),@source_public_id);
+        EXEC dbo.sp_write_audit @actor_user_id,@target_branch_id,'PATIENT_MERGED','PATIENT',
+            @entity_id=@entity_id,@new_values_json=@audit_json;
+        COMMIT TRANSACTION;
+        SELECT CONVERT(varchar(36),@source_public_id) AS sourcePublicId,@source_code AS sourceCode,
+               CONVERT(varchar(36),@target_public_id) AS targetPublicId,@target_code AS targetCode,
+               SYSUTCDATETIME() AS mergedAtUtc;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_clinic_list_patient_merge_history
+    @actor_user_id bigint,
+    @target_public_id uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    EXEC dbo.sp_assert_permission @actor_user_id,'PATIENTS_MERGE',NULL;
+    DECLARE @target_id bigint=(SELECT patient_id FROM dbo.patients
+        WHERE public_id=@target_public_id AND status='ACTIVE');
+    IF @target_id IS NULL THROW 53635,N'Không tìm thấy hồ sơ chuẩn đang hoạt động.',1;
+    SELECT CONVERT(varchar(36),source.public_id) AS sourcePublicId,source.patient_code AS sourceCode,
+           JSON_VALUE(history.source_snapshot_json,'$.fullName') AS sourceName,
+           CONVERT(varchar(36),target.public_id) AS targetPublicId,target.patient_code AS targetCode,
+           history.reason,history.merged_at_utc AS mergedAtUtc,
+           CONVERT(varchar(36),actor.public_id) AS performedByPublicId,
+           actor.display_name AS performedByName
+    FROM dbo.patient_merge_history history
+    JOIN dbo.patients source ON source.patient_id=history.source_patient_id
+    JOIN dbo.patients target ON target.patient_id=history.target_patient_id
+    JOIN dbo.users actor ON actor.user_id=history.performed_by_user_id
+    WHERE history.target_patient_id=@target_id
+    ORDER BY history.merged_at_utc DESC,history.patient_merge_id DESC;
+    DECLARE @entity_id varchar(100)=CONVERT(varchar(36),@target_public_id);
+    EXEC dbo.sp_write_audit @actor_user_id,NULL,'PATIENT_MERGE_HISTORY_READ','PATIENT',@entity_id=@entity_id;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_clinic_replace_emergency_contacts
+    @actor_user_id bigint,
+    @branch_id bigint,
+    @patient_public_id uniqueidentifier,
+    @contacts_json nvarchar(max),
+    @expected_row_ver binary(8),
+    @patient_self bit=0
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    IF ISNULL(@patient_self,0)=1 EXEC dbo.sp_assert_actor @actor_user_id;
+    ELSE EXEC dbo.sp_assert_permission @actor_user_id,'PATIENTS_MANAGE',@branch_id;
+    IF ISJSON(@contacts_json)<>1 OR LEFT(LTRIM(@contacts_json),1)<>N'['
+        THROW 53637,N'Danh sách liên hệ khẩn cấp không hợp lệ.',1;
+    DECLARE @contacts TABLE(full_name nvarchar(200),relationship_name nvarchar(80),phone varchar(20),is_primary bit);
+    INSERT @contacts(full_name,relationship_name,phone,is_primary)
+    SELECT TRIM(full_name),NULLIF(TRIM(relationship_name),N''),TRIM(phone),is_primary
+    FROM OPENJSON(@contacts_json) WITH (
+        full_name nvarchar(200) '$.fullName',relationship_name nvarchar(80) '$.relationshipName',
+        phone varchar(20) '$.phone',is_primary bit '$.isPrimary');
+    IF (SELECT COUNT(*) FROM @contacts)>5 OR
+       (SELECT COUNT(*) FROM @contacts WHERE is_primary=1)<>CASE WHEN EXISTS(SELECT 1 FROM @contacts) THEN 1 ELSE 0 END OR
+       EXISTS(SELECT 1 FROM @contacts WHERE full_name IS NULL OR LEN(full_name)<2 OR
+           phone IS NULL OR LEN(phone)<7 OR PATINDEX('%[^0-9+(). -]%',phone)>0 OR is_primary IS NULL)
+        THROW 53637,N'Cần tối đa 5 liên hệ, đúng một liên hệ chính và tên/số điện thoại hợp lệ.',1;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        DECLARE @patient_id bigint,@stored_version binary(8);
+        SELECT @patient_id=patient_id,@stored_version=row_ver FROM dbo.patients WITH (UPDLOCK,HOLDLOCK)
+        WHERE public_id=@patient_public_id AND registration_branch_id=@branch_id AND status<>'MERGED';
+        IF @patient_id IS NULL THROW 53635,N'Không tìm thấy bệnh nhân trong chi nhánh.',1;
+        IF @patient_self=1 AND NOT EXISTS (
+            SELECT 1 FROM dbo.user_patient_access a WITH (HOLDLOCK)
+            JOIN dbo.user_roles ur ON ur.user_id=a.user_id AND ur.is_active=1
+            JOIN dbo.roles r ON r.role_id=ur.role_id AND r.role_code='PATIENT' AND r.is_active=1
+            WHERE a.user_id=@actor_user_id AND a.patient_id=@patient_id
+              AND a.relationship_type='SELF' AND a.status='ACTIVE'
+              AND a.verified_at_utc IS NOT NULL AND a.revoked_at_utc IS NULL
+              AND ur.valid_from_utc<=SYSUTCDATETIME()
+              AND (ur.valid_to_utc IS NULL OR ur.valid_to_utc>SYSUTCDATETIME())
+              AND (ur.branch_id IS NULL OR ur.branch_id=@branch_id)
+        ) THROW 51002,N'Không có quyền sửa liên hệ khẩn cấp của hồ sơ này.',1;
+        IF @expected_row_ver IS NULL OR @stored_version<>@expected_row_ver
+            THROW 53636,N'Hồ sơ đã được cập nhật bởi người khác.',1;
+        UPDATE dbo.patient_emergency_contacts SET is_active=0
+        WHERE patient_id=@patient_id AND is_active=1;
+        INSERT dbo.patient_emergency_contacts(patient_id,full_name,relationship_name,phone,is_primary)
+        SELECT @patient_id,full_name,relationship_name,phone,is_primary FROM @contacts;
+        UPDATE dbo.patients SET updated_at_utc=SYSUTCDATETIME() WHERE patient_id=@patient_id;
+        DECLARE @audit_json nvarchar(max)=CONCAT(N'{"contactCount":',(SELECT COUNT(*) FROM @contacts),N'}');
+        DECLARE @audit_entity_id varchar(100)=CONVERT(varchar(100),@patient_public_id);
+        EXEC dbo.sp_write_audit @actor_user_id,@branch_id,'PATIENT_EMERGENCY_CONTACTS_UPDATED','PATIENT',
+            @entity_id=@audit_entity_id,@new_values_json=@audit_json;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_clinic_get_my_emergency_contacts
+    @actor_user_id bigint,
+    @patient_public_id uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    EXEC dbo.sp_assert_actor @actor_user_id;
+    DECLARE @patient_id bigint,@branch_id bigint;
+    SELECT @patient_id=p.patient_id,@branch_id=p.registration_branch_id
+    FROM dbo.patients p
+    WHERE p.public_id=@patient_public_id AND p.status='ACTIVE';
+    IF @patient_id IS NULL THROW 53635,N'Không tìm thấy hồ sơ bệnh nhân.',1;
+    IF NOT EXISTS (
+        SELECT 1 FROM dbo.user_patient_access a
+        JOIN dbo.user_roles ur ON ur.user_id=a.user_id AND ur.is_active=1
+        JOIN dbo.roles r ON r.role_id=ur.role_id AND r.role_code='PATIENT' AND r.is_active=1
+        WHERE a.user_id=@actor_user_id AND a.patient_id=@patient_id
+          AND a.relationship_type='SELF' AND a.status='ACTIVE'
+          AND a.verified_at_utc IS NOT NULL AND a.revoked_at_utc IS NULL
+          AND ur.valid_from_utc<=SYSUTCDATETIME()
+          AND (ur.valid_to_utc IS NULL OR ur.valid_to_utc>SYSUTCDATETIME())
+          AND (ur.branch_id IS NULL OR ur.branch_id=@branch_id)
+    ) THROW 51002,N'Không có quyền xem liên hệ khẩn cấp của hồ sơ này.',1;
+    SELECT CONVERT(varchar(36),p.public_id) AS patientPublicId,p.row_ver AS rowVersion
+    FROM dbo.patients p WHERE p.patient_id=@patient_id;
+    SELECT ec.full_name AS fullName,ec.relationship_name AS relationshipName,
+           ec.phone,ec.is_primary AS isPrimary
+    FROM dbo.patient_emergency_contacts ec
+    WHERE ec.patient_id=@patient_id AND ec.is_active=1
+    ORDER BY ec.is_primary DESC,ec.emergency_contact_id;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_clinic_replace_my_emergency_contacts
+    @actor_user_id bigint,
+    @patient_public_id uniqueidentifier,
+    @contacts_json nvarchar(max),
+    @expected_row_ver binary(8)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @branch_id bigint;
+    SELECT @branch_id=registration_branch_id FROM dbo.patients
+    WHERE public_id=@patient_public_id AND status='ACTIVE';
+    IF @branch_id IS NULL THROW 53635,N'Không tìm thấy hồ sơ bệnh nhân.',1;
+    EXEC dbo.sp_clinic_replace_emergency_contacts
+        @actor_user_id=@actor_user_id,@branch_id=@branch_id,
+        @patient_public_id=@patient_public_id,@contacts_json=@contacts_json,
+        @expected_row_ver=@expected_row_ver,@patient_self=1;
 END;
 GO
 
@@ -7242,18 +8013,18 @@ BEGIN
 END;
 GO
 
-CREATE OR ALTER PROCEDURE dbo.sp_clinic_get_patient_clinical_summary
+CREATE OR ALTER PROCEDURE dbo.sp_clinic_assert_patient_care
     @actor_user_id bigint,
     @branch_id bigint,
-    @patient_public_id uniqueidentifier
+    @patient_public_id uniqueidentifier,
+    @patient_id bigint OUTPUT
 AS
 BEGIN
     SET NOCOUNT ON;
-    SET XACT_ABORT ON;
     EXEC dbo.sp_assert_permission @actor_user_id,'ENCOUNTERS_CLINICAL',@branch_id;
-    DECLARE @patient_id bigint=(SELECT patient_id FROM dbo.patients WHERE public_id=@patient_public_id AND status='ACTIVE');
+    SELECT @patient_id=patient_id FROM dbo.patients
+    WHERE public_id=@patient_public_id AND status='ACTIVE';
     IF @patient_id IS NULL THROW 53635,N'Không tìm thấy bệnh nhân.',1;
-    -- Chỉ bác sĩ phụ trách hoặc điều dưỡng đã trực tiếp tạo lượt khám đang mở.
     IF NOT EXISTS (
         SELECT 1 FROM dbo.encounters en
         WHERE en.patient_id=@patient_id AND en.branch_id=@branch_id
@@ -7264,6 +8035,19 @@ BEGIN
                     SELECT 1 FROM dbo.v_clinic_principal_v1 pr WHERE pr.user_id=@actor_user_id
                       AND pr.role_code='NURSE' AND (pr.role_branch_id IS NULL OR pr.role_branch_id=@branch_id))))
     ) THROW 53650,N'Không có quan hệ chăm sóc đang hiệu lực với bệnh nhân.',1;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_clinic_get_patient_clinical_summary
+    @actor_user_id bigint,
+    @branch_id bigint,
+    @patient_public_id uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    DECLARE @patient_id bigint;
+    EXEC dbo.sp_clinic_assert_patient_care @actor_user_id,@branch_id,@patient_public_id,@patient_id OUTPUT;
     BEGIN TRANSACTION;
     DECLARE @clinical_entity_id varchar(100)=CONVERT(varchar(100),@patient_public_id);
     EXEC dbo.sp_write_audit @actor_user_id,@branch_id,'PATIENT_CLINICAL_SUMMARY_READ','PATIENT',
@@ -7271,10 +8055,16 @@ BEGIN
     SELECT CONVERT(varchar(36),public_id) AS publicId,patient_code AS code,full_name AS fullName,
         date_of_birth AS dateOfBirth,gender
     FROM dbo.patients WHERE patient_id=@patient_id;
-    SELECT allergen_name AS allergenName,allergy_type AS type,severity,reaction,noted_at AS notedAt
-    FROM dbo.patient_allergies WHERE patient_id=@patient_id AND is_active=1 ORDER BY severity DESC,created_at_utc DESC;
-    SELECT condition_code AS code,condition_name AS name,diagnosed_date AS diagnosedDate,status,notes
-    FROM dbo.patient_conditions WHERE patient_id=@patient_id AND status<>'RESOLVED' ORDER BY created_at_utc DESC;
+    SELECT CONVERT(varchar(36),public_id) AS publicId,allergen_name AS allergenName,
+        allergy_type AS type,severity,reaction,noted_at AS notedAt
+    FROM dbo.patient_allergies WHERE patient_id IN
+      (SELECT patient_id FROM dbo.v_patient_identity_members WHERE canonical_patient_id=@patient_id)
+      AND is_active=1 ORDER BY severity DESC,created_at_utc DESC;
+    SELECT CONVERT(varchar(36),public_id) AS publicId,condition_code AS code,
+        condition_name AS name,diagnosed_date AS diagnosedDate,status,notes
+    FROM dbo.patient_conditions WHERE patient_id IN
+      (SELECT patient_id FROM dbo.v_patient_identity_members WHERE canonical_patient_id=@patient_id)
+      AND status<>'RESOLVED' ORDER BY created_at_utc DESC;
     COMMIT TRANSACTION;
 END;
 GO
@@ -7414,7 +8204,8 @@ BEGIN
        AND EXISTS
        (
            SELECT 1 FROM dbo.user_patient_access
-           WHERE user_id = @actor_user_id AND patient_id = @patient_id
+           WHERE user_id = @actor_user_id AND patient_id =
+             (SELECT canonical_patient_id FROM dbo.v_patient_identity_members WHERE patient_id=@patient_id)
              AND status = 'ACTIVE' AND is_booking_allowed = 1 AND revoked_at_utc IS NULL
        )
        AND EXISTS
@@ -7457,7 +8248,7 @@ BEGIN
     SET XACT_ABORT ON;
     EXEC dbo.sp_assert_permission @actor_user_id, 'SCHEDULES_MANAGE', @branch_id;
     IF @weekday_iso NOT BETWEEN 1 AND 7 OR @local_start_time>=@local_end_time
-       OR @slot_duration_min NOT BETWEEN 5 AND 240
+       OR @slot_duration_min NOT BETWEEN 5 AND 480
        OR (@effective_to IS NOT NULL AND @effective_to<@effective_from)
         THROW 53700, N'Ca làm việc có ngày, giờ hoặc thời lượng slot không hợp lệ.', 1;
     IF @breaks_json IS NOT NULL AND ISJSON(@breaks_json)<>1
@@ -7516,11 +8307,11 @@ BEGIN
         INSERT dbo.doctor_working_schedules
             (doctor_id, branch_id, room_id, weekday_iso, local_start_time, local_end_time,
              slot_duration_min, booking_horizon_days, effective_from, effective_to,
-             is_active, created_by_user_id)
+             is_active, workflow_status, created_by_user_id)
         VALUES
             (@doctor_id, @branch_id, @room_id, @weekday_iso, @local_start_time, @local_end_time,
              @slot_duration_min, @booking_horizon_days, @effective_from, @effective_to,
-             1, @actor_user_id);
+             0, 'PROPOSED', @actor_user_id);
         SET @working_schedule_id = SCOPE_IDENTITY();
         SELECT @working_schedule_public_id=public_id
         FROM dbo.doctor_working_schedules WHERE working_schedule_id=@working_schedule_id;
@@ -7535,7 +8326,7 @@ BEGIN
         ) b;
 
         DECLARE @entity_id varchar(100) = CONVERT(varchar(100), @working_schedule_public_id);
-        EXEC dbo.sp_write_audit @actor_user_id, @branch_id, 'WORKING_SCHEDULE_CREATED',
+        EXEC dbo.sp_write_audit @actor_user_id, @branch_id, 'WORKING_SCHEDULE_PROPOSED',
              'WORKING_SCHEDULE', @entity_id;
         COMMIT TRANSACTION;
     END TRY
@@ -7575,7 +8366,8 @@ BEGIN
         @horizon = COALESCE(w.booking_horizon_days, b.booking_horizon_days)
     FROM dbo.doctor_working_schedules w
     JOIN dbo.branches b ON b.branch_id = w.branch_id
-    WHERE w.working_schedule_id = @working_schedule_id AND w.is_active = 1;
+    WHERE w.working_schedule_id = @working_schedule_id AND w.is_active = 1
+      AND w.workflow_status = 'PUBLISHED';
     IF @doctor_id IS NULL THROW 53104, N'Ca làm việc không tồn tại hoặc đã ngừng.', 1;
     IF @actor_user_id IS NULL
     BEGIN
@@ -7778,6 +8570,7 @@ BEGIN
         FROM @expired_on_slot;
 
         IF @slot_status IN ('BLOCKED','CANCELLED')
+           OR EXISTS (SELECT 1 FROM dbo.appointment_slots WHERE slot_id=@slot_id AND walk_in_encounter_id IS NOT NULL)
            OR EXISTS (SELECT 1 FROM dbo.appointments WITH (UPDLOCK,HOLDLOCK)
                       WHERE slot_id = @slot_id AND occupies_slot = 1)
             THROW 53112, N'Slot đã được giữ/đặt hoặc không còn khả dụng.', 1;
@@ -7806,6 +8599,12 @@ BEGIN
            OR NOT EXISTS (SELECT 1 FROM dbo.rooms WHERE room_id=@room_id AND branch_id=@branch_id AND is_active=1)
            OR NOT EXISTS (SELECT 1 FROM dbo.branches WHERE branch_id=@branch_id AND is_active=1)
             THROW 53116, N'Dịch vụ không hợp lệ hoặc bác sĩ không thực hiện dịch vụ.', 1;
+        IF NOT EXISTS
+        (
+            SELECT 1 FROM dbo.doctor_services ds JOIN dbo.services svc ON svc.service_id=ds.service_id
+            WHERE ds.doctor_id=@doctor_id AND ds.service_id=@service_id
+              AND COALESCE(ds.custom_duration_min,svc.default_duration_min)<=DATEDIFF(MINUTE,@starts_utc,@ends_utc)
+        ) THROW 53116,N'Thời lượng dịch vụ dài hơn slot; vui lòng chọn giờ khác.',1;
         IF EXISTS
         (
             SELECT 1 FROM dbo.appointments WITH (UPDLOCK,HOLDLOCK)
@@ -8139,6 +8938,7 @@ BEGIN
         IF @new_doctor_id IS NULL OR @new_branch_id <> @branch_id
             THROW 53129, N'Slot mới không tồn tại hoặc không cùng chi nhánh.', 1;
         IF @new_status <> 'OPEN'
+           OR EXISTS (SELECT 1 FROM dbo.appointment_slots WHERE slot_id=@new_slot_id AND walk_in_encounter_id IS NOT NULL)
            OR EXISTS (SELECT 1 FROM dbo.appointments WITH (UPDLOCK,HOLDLOCK)
                       WHERE slot_id = @new_slot_id AND occupies_slot = 1)
             THROW 53130, N'Slot mới không còn khả dụng.', 1;
@@ -8162,6 +8962,12 @@ BEGIN
                           WHERE sl.slot_id=@new_slot_id AND r.branch_id=@branch_id AND r.is_active=1)
            OR NOT EXISTS (SELECT 1 FROM dbo.branches WHERE branch_id=@branch_id AND is_active=1)
             THROW 53132, N'Bác sĩ mới không thực hiện dịch vụ đã chọn.', 1;
+        IF NOT EXISTS
+        (
+            SELECT 1 FROM dbo.doctor_services ds JOIN dbo.services svc ON svc.service_id=ds.service_id
+            WHERE ds.doctor_id=@new_doctor_id AND ds.service_id=@new_service_id
+              AND COALESCE(ds.custom_duration_min,svc.default_duration_min)<=DATEDIFF(MINUTE,@new_start,@new_end)
+        ) THROW 53132,N'Thời lượng dịch vụ dài hơn slot mới; vui lòng chọn giờ khác.',1;
         IF @is_staff=0 AND NOT EXISTS(
             SELECT 1 FROM dbo.doctors d
             JOIN dbo.service_branch_prices bp ON bp.service_id=@new_service_id AND bp.branch_id=@branch_id
@@ -8297,7 +9103,8 @@ BEGIN
            w.weekday_iso AS weekdayIso,CONVERT(char(5),w.local_start_time,108) AS localStartTime,
            CONVERT(char(5),w.local_end_time,108) AS localEndTime,w.slot_duration_min AS slotDurationMinutes,
            w.booking_horizon_days AS bookingHorizonDays,w.effective_from AS effectiveFrom,
-           w.effective_to AS effectiveTo,w.is_active AS isActive,w.row_ver AS rowVersion,
+           w.effective_to AS effectiveTo,w.is_active AS isActive,w.workflow_status AS workflowStatus,
+           w.decision_note AS decisionNote,w.row_ver AS rowVersion,
            JSON_QUERY(COALESCE((SELECT CONVERT(char(5),br.local_start_time,108) AS localStartTime,
                CONVERT(char(5),br.local_end_time,108) AS localEndTime,br.break_name AS breakName
                FROM dbo.doctor_schedule_breaks br WHERE br.working_schedule_id=w.working_schedule_id
@@ -8309,6 +9116,156 @@ BEGIN
     JOIN dbo.rooms r ON r.room_id=w.room_id
     WHERE w.branch_id=@branch_id
     ORDER BY w.is_active DESC,w.weekday_iso,w.local_start_time,e.full_name;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_clinic_add_patient_allergy
+    @actor_user_id bigint,@branch_id bigint,@patient_public_id uniqueidentifier,
+    @allergen_name nvarchar(200),@allergy_type varchar(20),@severity varchar(20),
+    @reaction nvarchar(500)=NULL,@noted_at date=NULL,
+    @allergy_public_id uniqueidentifier OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON; SET XACT_ABORT ON;
+    SET @allergen_name=TRIM(@allergen_name);
+    IF @allergen_name IS NULL OR LEN(@allergen_name)<2 OR
+       @allergy_type IS NULL OR @allergy_type NOT IN ('DRUG','FOOD','ENVIRONMENT','OTHER') OR
+       @severity IS NULL OR @severity NOT IN ('MILD','MODERATE','SEVERE','UNKNOWN')
+        THROW 53638,N'Dữ liệu dị ứng không hợp lệ.',1;
+    DECLARE @business_date date;
+    EXEC dbo.sp_get_branch_business_date @branch_id,NULL,@business_date OUTPUT;
+    IF @noted_at>@business_date THROW 53638,N'Ngày ghi nhận dị ứng không được ở tương lai.',1;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        DECLARE @patient_id bigint,@allergen_id bigint=NULL;
+        EXEC dbo.sp_clinic_assert_patient_care @actor_user_id,@branch_id,@patient_public_id,@patient_id OUTPUT;
+        IF EXISTS(SELECT 1 FROM dbo.patient_allergies WITH (UPDLOCK,HOLDLOCK)
+            WHERE patient_id IN (SELECT patient_id FROM dbo.v_patient_identity_members
+                                 WHERE canonical_patient_id=@patient_id)
+              AND allergy_type=@allergy_type AND allergen_name=@allergen_name AND is_active=1)
+            THROW 53639,N'Dị ứng đang hiệu lực đã tồn tại.',1;
+        IF @allergy_type='DRUG'
+        BEGIN
+            SELECT @allergen_id=allergen_id FROM dbo.allergens WITH (UPDLOCK,HOLDLOCK)
+            WHERE canonical_name=@allergen_name AND allergen_type='DRUG';
+            IF @allergen_id IS NULL
+            BEGIN
+                INSERT dbo.allergens(canonical_name,allergen_type) VALUES(@allergen_name,'DRUG');
+                SET @allergen_id=SCOPE_IDENTITY();
+            END;
+            UPDATE dbo.allergens SET is_active=1 WHERE allergen_id=@allergen_id AND is_active=0;
+        END;
+        INSERT dbo.patient_allergies(patient_id,allergen_name,allergen_id,allergy_type,severity,
+            reaction,noted_at,recorded_by_user_id)
+        VALUES(@patient_id,@allergen_name,@allergen_id,@allergy_type,@severity,
+            @reaction,@noted_at,@actor_user_id);
+        SELECT @allergy_public_id=public_id FROM dbo.patient_allergies WHERE patient_allergy_id=SCOPE_IDENTITY();
+        DECLARE @entity_id varchar(100)=CONVERT(varchar(100),@patient_public_id);
+        DECLARE @audit_json nvarchar(max)=CONCAT(N'{"allergyPublicId":"',CONVERT(varchar(36),@allergy_public_id),N'"}');
+        EXEC dbo.sp_write_audit @actor_user_id,@branch_id,'PATIENT_ALLERGY_ADDED','PATIENT',
+            @entity_id=@entity_id,@new_values_json=@audit_json;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH IF XACT_STATE()<>0 ROLLBACK TRANSACTION; THROW; END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_clinic_deactivate_patient_allergy
+    @actor_user_id bigint,@branch_id bigint,@patient_public_id uniqueidentifier,
+    @allergy_public_id uniqueidentifier,@reason nvarchar(500)
+AS
+BEGIN
+    SET NOCOUNT ON; SET XACT_ABORT ON;
+    IF LEN(TRIM(COALESCE(@reason,N'')))<10 THROW 53638,N'Cần lý do tối thiểu 10 ký tự.',1;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        DECLARE @patient_id bigint;
+        EXEC dbo.sp_clinic_assert_patient_care @actor_user_id,@branch_id,@patient_public_id,@patient_id OUTPUT;
+        IF NOT EXISTS(SELECT 1 FROM dbo.patient_allergies WITH (UPDLOCK,HOLDLOCK)
+            WHERE patient_id IN (SELECT patient_id FROM dbo.v_patient_identity_members
+                                 WHERE canonical_patient_id=@patient_id)
+              AND public_id=@allergy_public_id AND is_active=1)
+            THROW 53641,N'Không tìm thấy dị ứng đang hiệu lực.',1;
+        UPDATE dbo.patient_allergies SET is_active=0
+        WHERE patient_id IN (SELECT patient_id FROM dbo.v_patient_identity_members
+                             WHERE canonical_patient_id=@patient_id)
+          AND public_id=@allergy_public_id;
+        DECLARE @entity_id varchar(100)=CONVERT(varchar(100),@patient_public_id);
+        DECLARE @audit_json nvarchar(max)=CONCAT(N'{"allergyPublicId":"',CONVERT(varchar(36),@allergy_public_id),
+            N'","reason":"',STRING_ESCAPE(TRIM(@reason),'json'),N'"}');
+        EXEC dbo.sp_write_audit @actor_user_id,@branch_id,'PATIENT_ALLERGY_DEACTIVATED','PATIENT',
+            @entity_id=@entity_id,@new_values_json=@audit_json;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH IF XACT_STATE()<>0 ROLLBACK TRANSACTION; THROW; END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_clinic_add_patient_condition
+    @actor_user_id bigint,@branch_id bigint,@patient_public_id uniqueidentifier,
+    @condition_code varchar(30)=NULL,@condition_name nvarchar(200),@diagnosed_date date=NULL,
+    @status varchar(20)='ACTIVE',@notes nvarchar(1000)=NULL,
+    @condition_public_id uniqueidentifier OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON; SET XACT_ABORT ON;
+    SET @condition_name=TRIM(@condition_name);
+    IF @condition_name IS NULL OR LEN(@condition_name)<2 OR @status IS NULL OR @status NOT IN ('ACTIVE','CONTROLLED')
+        THROW 53638,N'Dữ liệu bệnh nền không hợp lệ.',1;
+    DECLARE @business_date date;
+    EXEC dbo.sp_get_branch_business_date @branch_id,NULL,@business_date OUTPUT;
+    IF @diagnosed_date>@business_date THROW 53638,N'Ngày chẩn đoán không được ở tương lai.',1;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        DECLARE @patient_id bigint;
+        EXEC dbo.sp_clinic_assert_patient_care @actor_user_id,@branch_id,@patient_public_id,@patient_id OUTPUT;
+        IF EXISTS(SELECT 1 FROM dbo.patient_conditions WITH (UPDLOCK,HOLDLOCK)
+            WHERE patient_id IN (SELECT patient_id FROM dbo.v_patient_identity_members
+                                 WHERE canonical_patient_id=@patient_id)
+              AND condition_name=@condition_name AND status<>'RESOLVED')
+            THROW 53640,N'Bệnh nền đang hiệu lực đã tồn tại.',1;
+        INSERT dbo.patient_conditions(patient_id,condition_code,condition_name,diagnosed_date,
+            status,notes,recorded_by_user_id)
+        VALUES(@patient_id,@condition_code,@condition_name,@diagnosed_date,@status,@notes,@actor_user_id);
+        SELECT @condition_public_id=public_id FROM dbo.patient_conditions WHERE patient_condition_id=SCOPE_IDENTITY();
+        DECLARE @entity_id varchar(100)=CONVERT(varchar(100),@patient_public_id);
+        DECLARE @audit_json nvarchar(max)=CONCAT(N'{"conditionPublicId":"',CONVERT(varchar(36),@condition_public_id),N'"}');
+        EXEC dbo.sp_write_audit @actor_user_id,@branch_id,'PATIENT_CONDITION_ADDED','PATIENT',
+            @entity_id=@entity_id,@new_values_json=@audit_json;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH IF XACT_STATE()<>0 ROLLBACK TRANSACTION; THROW; END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_clinic_resolve_patient_condition
+    @actor_user_id bigint,@branch_id bigint,@patient_public_id uniqueidentifier,
+    @condition_public_id uniqueidentifier,@reason nvarchar(500)
+AS
+BEGIN
+    SET NOCOUNT ON; SET XACT_ABORT ON;
+    IF LEN(TRIM(COALESCE(@reason,N'')))<10 THROW 53638,N'Cần lý do tối thiểu 10 ký tự.',1;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        DECLARE @patient_id bigint;
+        EXEC dbo.sp_clinic_assert_patient_care @actor_user_id,@branch_id,@patient_public_id,@patient_id OUTPUT;
+        IF NOT EXISTS(SELECT 1 FROM dbo.patient_conditions WITH (UPDLOCK,HOLDLOCK)
+            WHERE patient_id IN (SELECT patient_id FROM dbo.v_patient_identity_members
+                                 WHERE canonical_patient_id=@patient_id)
+              AND public_id=@condition_public_id AND status<>'RESOLVED')
+            THROW 53641,N'Không tìm thấy bệnh nền đang hiệu lực.',1;
+        UPDATE dbo.patient_conditions SET status='RESOLVED'
+        WHERE patient_id IN (SELECT patient_id FROM dbo.v_patient_identity_members
+                             WHERE canonical_patient_id=@patient_id)
+          AND public_id=@condition_public_id;
+        DECLARE @entity_id varchar(100)=CONVERT(varchar(100),@patient_public_id);
+        DECLARE @audit_json nvarchar(max)=CONCAT(N'{"conditionPublicId":"',CONVERT(varchar(36),@condition_public_id),
+            N'","reason":"',STRING_ESCAPE(TRIM(@reason),'json'),N'"}');
+        EXEC dbo.sp_write_audit @actor_user_id,@branch_id,'PATIENT_CONDITION_RESOLVED','PATIENT',
+            @entity_id=@entity_id,@new_values_json=@audit_json;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH IF XACT_STATE()<>0 ROLLBACK TRANSACTION; THROW; END CATCH;
 END;
 GO
 
@@ -8344,6 +9301,135 @@ BEGIN
 END;
 GO
 
+CREATE OR ALTER PROCEDURE dbo.sp_clinic_list_my_working_schedules
+    @actor_user_id bigint
+AS
+BEGIN
+    SET NOCOUNT ON;
+    EXEC dbo.sp_assert_actor @actor_user_id;
+    IF NOT EXISTS (
+        SELECT 1 FROM dbo.doctors d
+        JOIN dbo.employees e ON e.employee_id=d.employee_id
+        WHERE e.user_id=@actor_user_id AND e.employee_type='DOCTOR'
+          AND e.is_active=1 AND e.employment_status='ACTIVE' AND d.is_active=1
+    ) THROW 51002,N'Tài khoản không phải bác sĩ đang hoạt động.',1;
+
+    SELECT CONVERT(varchar(36),w.public_id) AS publicId,
+           CONVERT(varchar(36),b.public_id) AS branchPublicId,b.branch_name AS branchName,
+           b.timezone_name AS timezoneName,r.room_name AS roomName,
+           w.weekday_iso AS weekdayIso,CONVERT(char(5),w.local_start_time,108) AS localStartTime,
+           CONVERT(char(5),w.local_end_time,108) AS localEndTime,w.slot_duration_min AS slotDurationMinutes,
+           w.effective_from AS effectiveFrom,w.effective_to AS effectiveTo,
+           w.workflow_status AS workflowStatus,w.decision_note AS decisionNote,
+           JSON_QUERY(COALESCE((SELECT CONVERT(char(5),br.local_start_time,108) AS localStartTime,
+               CONVERT(char(5),br.local_end_time,108) AS localEndTime,br.break_name AS breakName
+               FROM dbo.doctor_schedule_breaks br WHERE br.working_schedule_id=w.working_schedule_id
+               ORDER BY br.local_start_time FOR JSON PATH),N'[]')) AS breaksJson
+    FROM dbo.doctor_working_schedules w
+    JOIN dbo.doctors d ON d.doctor_id=w.doctor_id
+    JOIN dbo.employees e ON e.employee_id=d.employee_id
+    JOIN dbo.branches b ON b.branch_id=w.branch_id
+    JOIN dbo.rooms r ON r.room_id=w.room_id
+    WHERE e.user_id=@actor_user_id
+    ORDER BY CASE w.workflow_status WHEN 'PROPOSED' THEN 0 WHEN 'DOCTOR_CONFIRMED' THEN 1
+             WHEN 'PUBLISHED' THEN 2 ELSE 3 END,w.effective_from DESC,w.weekday_iso;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_clinic_decide_working_schedule
+    @actor_user_id bigint,
+    @working_schedule_public_id uniqueidentifier,
+    @decision varchar(10),
+    @reason nvarchar(500)=NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    EXEC dbo.sp_assert_actor @actor_user_id;
+    IF @decision IS NULL OR @decision NOT IN ('CONFIRM','REJECT')
+       OR (@decision='REJECT' AND LEN(LTRIM(RTRIM(COALESCE(@reason,N''))))<3)
+        THROW 53751,N'Quyết định hoặc lý do từ chối không hợp lệ.',1;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        DECLARE @schedule_id bigint,@branch_id bigint,@doctor_user_id bigint,@status varchar(20);
+        SELECT @schedule_id=w.working_schedule_id,@branch_id=w.branch_id,@status=w.workflow_status,
+               @doctor_user_id=e.user_id
+        FROM dbo.doctor_working_schedules w WITH (UPDLOCK,HOLDLOCK)
+        JOIN dbo.doctors d ON d.doctor_id=w.doctor_id AND d.is_active=1
+        JOIN dbo.employees e ON e.employee_id=d.employee_id AND e.is_active=1 AND e.employment_status='ACTIVE'
+        WHERE w.public_id=@working_schedule_public_id;
+        IF @schedule_id IS NULL THROW 53742,N'Ca làm việc không tồn tại.',1;
+        IF @doctor_user_id IS NULL OR @doctor_user_id<>@actor_user_id
+            THROW 51002,N'Bác sĩ chỉ được quyết định ca của chính mình.',1;
+        IF @status<>'PROPOSED' THROW 53750,N'Ca làm việc đã được quyết định.',1;
+        UPDATE dbo.doctor_working_schedules
+        SET workflow_status=CASE WHEN @decision='CONFIRM' THEN 'DOCTOR_CONFIRMED' ELSE 'REJECTED' END,
+            decision_note=CASE WHEN @decision='REJECT' THEN LTRIM(RTRIM(@reason)) ELSE NULL END,
+            doctor_confirmed_at_utc=CASE WHEN @decision='CONFIRM' THEN SYSUTCDATETIME() ELSE NULL END,
+            updated_at_utc=SYSUTCDATETIME()
+        WHERE working_schedule_id=@schedule_id;
+        DECLARE @decision_action varchar(100)=CASE WHEN @decision='CONFIRM'
+            THEN 'WORKING_SCHEDULE_CONFIRMED' ELSE 'WORKING_SCHEDULE_REJECTED' END;
+        DECLARE @decision_entity varchar(100)=CONVERT(varchar(36),@working_schedule_public_id);
+        EXEC dbo.sp_write_audit @actor_user_id,@branch_id,@decision_action,'WORKING_SCHEDULE',@decision_entity;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_clinic_publish_working_schedule
+    @actor_user_id bigint,
+    @working_schedule_public_id uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    DECLARE @schedule_id bigint,@branch_id bigint,@doctor_id bigint,@room_id bigint,@weekday_iso tinyint,
+            @start time(0),@end time(0),@effective_from date,@effective_to date,@status varchar(20);
+    SELECT @schedule_id=working_schedule_id,@branch_id=branch_id,@doctor_id=doctor_id,@room_id=room_id,
+           @weekday_iso=weekday_iso,@start=local_start_time,@end=local_end_time,
+           @effective_from=effective_from,@effective_to=effective_to,@status=workflow_status
+    FROM dbo.doctor_working_schedules WHERE public_id=@working_schedule_public_id;
+    IF @schedule_id IS NULL THROW 53742,N'Ca làm việc không tồn tại.',1;
+    EXEC dbo.sp_assert_permission @actor_user_id,'SCHEDULES_MANAGE',@branch_id;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        DECLARE @lock_result int,@resource nvarchar(255)=CONCAT(N'schedule-doctor:',@doctor_id,N':',@weekday_iso);
+        EXEC @lock_result=sys.sp_getapplock @Resource=@resource,@LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000;
+        IF @lock_result<0 THROW 53102,N'Không thể khóa lịch bác sĩ.',1;
+        SET @resource=CONCAT(N'schedule-room:',@room_id,N':',@weekday_iso);
+        EXEC @lock_result=sys.sp_getapplock @Resource=@resource,@LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000;
+        IF @lock_result<0 THROW 53102,N'Không thể khóa lịch phòng.',1;
+        SELECT @status=workflow_status FROM dbo.doctor_working_schedules WITH (UPDLOCK,HOLDLOCK)
+        WHERE working_schedule_id=@schedule_id;
+        IF @status<>'DOCTOR_CONFIRMED' THROW 53750,N'Bác sĩ chưa xác nhận hoặc ca đã công bố.',1;
+        IF EXISTS (
+            SELECT 1 FROM dbo.doctor_working_schedules w WITH (UPDLOCK,HOLDLOCK)
+            WHERE w.working_schedule_id<>@schedule_id AND w.is_active=1 AND w.weekday_iso=@weekday_iso
+              AND (w.doctor_id=@doctor_id OR w.room_id=@room_id)
+              AND w.local_start_time<@end AND w.local_end_time>@start
+              AND w.effective_from<=COALESCE(@effective_to,CONVERT(date,'99991231'))
+              AND (w.effective_to IS NULL OR w.effective_to>=@effective_from)
+        ) THROW 53704,N'Ca làm việc chồng lịch bác sĩ hoặc phòng.',1;
+        UPDATE dbo.doctor_working_schedules
+        SET workflow_status='PUBLISHED',is_active=1,published_at_utc=SYSUTCDATETIME(),updated_at_utc=SYSUTCDATETIME()
+        WHERE working_schedule_id=@schedule_id;
+        DECLARE @published_entity varchar(100)=CONVERT(varchar(36),@working_schedule_public_id);
+        EXEC dbo.sp_write_audit @actor_user_id,@branch_id,'WORKING_SCHEDULE_PUBLISHED',
+             'WORKING_SCHEDULE',@published_entity;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
 CREATE OR ALTER PROCEDURE dbo.sp_clinic_generate_slots
     @actor_user_id bigint,
     @working_schedule_public_id uniqueidentifier,
@@ -8359,6 +9445,160 @@ BEGIN
     EXEC dbo.sp_generate_doctor_slots @actor_user_id=@actor_user_id,
         @working_schedule_id=@working_schedule_id,@from_date_local=@from_date_local,
         @to_date_local=@to_date_local,@created_count=@created_count OUTPUT;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_clinic_request_time_off
+    @actor_user_id bigint,
+    @branch_public_id uniqueidentifier,
+    @service_date_local date,
+    @local_start_time time(0),
+    @local_end_time time(0),
+    @reason nvarchar(500),
+    @time_off_public_id uniqueidentifier OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    EXEC dbo.sp_assert_actor @actor_user_id;
+    DECLARE @branch_id bigint,@timezone_name sysname,@doctor_id bigint,@starts_utc datetime2(3),@ends_utc datetime2(3);
+    SELECT @branch_id=branch_id,@timezone_name=timezone_name FROM dbo.branches
+    WHERE public_id=@branch_public_id AND is_active=1;
+    SELECT @doctor_id=d.doctor_id FROM dbo.doctors d
+    JOIN dbo.employees e ON e.employee_id=d.employee_id
+    WHERE e.user_id=@actor_user_id AND e.employee_type='DOCTOR' AND e.is_active=1
+      AND e.employment_status='ACTIVE' AND d.is_active=1;
+    IF @branch_id IS NULL OR @doctor_id IS NULL THROW 51002,N'Bác sĩ hoặc chi nhánh không hợp lệ.',1;
+    IF @local_start_time IS NULL OR @local_end_time IS NULL OR @local_start_time>=@local_end_time
+       OR LEN(LTRIM(RTRIM(COALESCE(@reason,N''))))<3
+        THROW 53751,N'Khoảng giờ hoặc lý do nghỉ không hợp lệ.',1;
+    IF NOT EXISTS (SELECT 1 FROM dbo.doctor_branch_assignments a WHERE a.doctor_id=@doctor_id
+                   AND a.branch_id=@branch_id AND a.is_active=1 AND a.effective_from<=@service_date_local
+                   AND (a.effective_to IS NULL OR a.effective_to>=@service_date_local))
+        THROW 51002,N'Bác sĩ không làm việc tại chi nhánh vào ngày này.',1;
+    DECLARE @local_start datetime2(0)=DATEADD(MINUTE,DATEDIFF(MINUTE,CONVERT(time(0),'00:00'),@local_start_time),
+                                               CONVERT(datetime2(0),@service_date_local)),
+            @local_end datetime2(0)=DATEADD(MINUTE,DATEDIFF(MINUTE,CONVERT(time(0),'00:00'),@local_end_time),
+                                             CONVERT(datetime2(0),@service_date_local));
+    SELECT @starts_utc=CONVERT(datetime2(3),@local_start AT TIME ZONE @timezone_name AT TIME ZONE 'UTC'),
+           @ends_utc=CONVERT(datetime2(3),@local_end AT TIME ZONE @timezone_name AT TIME ZONE 'UTC');
+    IF @starts_utc<=SYSUTCDATETIME() THROW 53752,N'Chỉ được báo bận cho thời gian tương lai.',1;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        IF EXISTS (SELECT 1 FROM dbo.doctor_time_off WITH (UPDLOCK,HOLDLOCK)
+                   WHERE doctor_id=@doctor_id AND (branch_id=@branch_id OR branch_id IS NULL)
+                     AND status IN ('PENDING','APPROVED') AND starts_at_utc<@ends_utc AND ends_at_utc>@starts_utc)
+            THROW 53753,N'Đã có yêu cầu nghỉ trùng thời gian.',1;
+        INSERT dbo.doctor_time_off(doctor_id,branch_id,starts_at_utc,ends_at_utc,reason,requested_by_user_id)
+        VALUES(@doctor_id,@branch_id,@starts_utc,@ends_utc,LTRIM(RTRIM(@reason)),@actor_user_id);
+        SELECT @time_off_public_id=public_id FROM dbo.doctor_time_off WHERE doctor_time_off_id=SCOPE_IDENTITY();
+        DECLARE @request_entity varchar(100)=CONVERT(varchar(36),@time_off_public_id);
+        EXEC dbo.sp_write_audit @actor_user_id,@branch_id,'DOCTOR_TIME_OFF_REQUESTED','DOCTOR_TIME_OFF',@request_entity;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_clinic_list_time_off
+    @actor_user_id bigint,
+    @branch_public_id uniqueidentifier=NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    EXEC dbo.sp_assert_actor @actor_user_id;
+    DECLARE @branch_id bigint=NULL,@doctor_id bigint=NULL;
+    IF @branch_public_id IS NOT NULL
+    BEGIN
+        SELECT @branch_id=branch_id FROM dbo.branches WHERE public_id=@branch_public_id AND is_active=1;
+        IF @branch_id IS NULL THROW 53740,N'Chi nhánh không tồn tại.',1;
+        EXEC dbo.sp_assert_permission @actor_user_id,'SCHEDULES_MANAGE',@branch_id;
+    END
+    ELSE
+    BEGIN
+        SELECT @doctor_id=d.doctor_id FROM dbo.doctors d
+        JOIN dbo.employees e ON e.employee_id=d.employee_id
+        WHERE e.user_id=@actor_user_id AND e.employee_type='DOCTOR' AND e.is_active=1
+          AND e.employment_status='ACTIVE' AND d.is_active=1;
+        IF @doctor_id IS NULL THROW 51002,N'Tài khoản không phải bác sĩ đang hoạt động.',1;
+    END;
+    SELECT CONVERT(varchar(36),t.public_id) AS publicId,CONVERT(varchar(36),b.public_id) AS branchPublicId,
+           b.branch_name AS branchName,e.full_name AS doctorName,
+           CONVERT(char(10),t.starts_at_utc AT TIME ZONE 'UTC' AT TIME ZONE b.timezone_name,23) AS serviceDate,
+           CONVERT(char(5),t.starts_at_utc AT TIME ZONE 'UTC' AT TIME ZONE b.timezone_name,108) AS localStartTime,
+           CONVERT(char(5),t.ends_at_utc AT TIME ZONE 'UTC' AT TIME ZONE b.timezone_name,108) AS localEndTime,
+           t.reason,t.decision_note AS decisionNote,t.status,
+           (SELECT COUNT(*) FROM dbo.appointments a WHERE a.doctor_id=t.doctor_id AND a.branch_id=t.branch_id
+              AND a.occupies_slot=1 AND a.scheduled_start_utc<t.ends_at_utc
+              AND a.scheduled_end_utc>t.starts_at_utc) AS appointmentConflictCount
+    FROM dbo.doctor_time_off t
+    JOIN dbo.doctors d ON d.doctor_id=t.doctor_id
+    JOIN dbo.employees e ON e.employee_id=d.employee_id
+    JOIN dbo.branches b ON b.branch_id=t.branch_id
+    WHERE (@branch_id IS NOT NULL AND t.branch_id=@branch_id)
+       OR (@doctor_id IS NOT NULL AND t.doctor_id=@doctor_id)
+    ORDER BY CASE t.status WHEN 'PENDING' THEN 0 ELSE 1 END,t.starts_at_utc DESC;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_clinic_decide_time_off
+    @actor_user_id bigint,
+    @time_off_public_id uniqueidentifier,
+    @decision varchar(10),
+    @decision_note nvarchar(500)=NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    EXEC dbo.sp_assert_actor @actor_user_id;
+    IF @decision IS NULL OR @decision NOT IN ('APPROVE','REJECT','CANCEL')
+       OR (@decision='REJECT' AND LEN(LTRIM(RTRIM(COALESCE(@decision_note,N''))))<3)
+        THROW 53751,N'Quyết định hoặc lý do từ chối không hợp lệ.',1;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        DECLARE @time_off_id bigint,@branch_id bigint,@requester_id bigint,@status varchar(20);
+        SELECT @time_off_id=doctor_time_off_id,@branch_id=branch_id,
+               @requester_id=requested_by_user_id,@status=status
+        FROM dbo.doctor_time_off WITH (UPDLOCK,HOLDLOCK) WHERE public_id=@time_off_public_id;
+        IF @time_off_id IS NULL THROW 53742,N'Yêu cầu nghỉ không tồn tại.',1;
+        IF @status<>'PENDING' THROW 53750,N'Yêu cầu nghỉ đã được xử lý.',1;
+        IF @decision='CANCEL'
+        BEGIN
+            IF @requester_id<>@actor_user_id THROW 51002,N'Chỉ bác sĩ đã yêu cầu được hủy.',1;
+        END
+        ELSE EXEC dbo.sp_assert_permission @actor_user_id,'SCHEDULES_MANAGE',@branch_id;
+        IF @decision='APPROVE'
+        BEGIN
+            -- Lock each open slot before the approval trigger checks appointments.
+            -- Booking takes an update lock on the same slot, so a concurrent booking
+            -- either finishes first and is reported as a conflict, or sees BLOCKED.
+            UPDATE s SET status='BLOCKED',blocked_reason=N'Bác sĩ nghỉ đã được duyệt',
+                         updated_at_utc=SYSUTCDATETIME()
+            FROM dbo.appointment_slots s
+            JOIN dbo.doctor_time_off t ON t.doctor_time_off_id=@time_off_id
+              AND s.doctor_id=t.doctor_id AND s.branch_id=t.branch_id
+              AND s.starts_at_utc<t.ends_at_utc AND s.ends_at_utc>t.starts_at_utc
+            WHERE s.status='OPEN' AND s.walk_in_encounter_id IS NULL;
+        END;
+        UPDATE dbo.doctor_time_off
+        SET status=CASE @decision WHEN 'APPROVE' THEN 'APPROVED' WHEN 'REJECT' THEN 'REJECTED' ELSE 'CANCELLED' END,
+            decision_note=CASE WHEN @decision='REJECT' THEN LTRIM(RTRIM(@decision_note)) ELSE NULL END,
+            approved_by_user_id=CASE WHEN @decision='APPROVE' THEN @actor_user_id ELSE NULL END,
+            approved_at_utc=CASE WHEN @decision='APPROVE' THEN SYSUTCDATETIME() ELSE NULL END
+        WHERE doctor_time_off_id=@time_off_id;
+        DECLARE @time_off_action varchar(100)=CASE @decision WHEN 'APPROVE' THEN 'DOCTOR_TIME_OFF_APPROVED'
+            WHEN 'REJECT' THEN 'DOCTOR_TIME_OFF_REJECTED' ELSE 'DOCTOR_TIME_OFF_CANCELLED' END;
+        DECLARE @time_off_entity varchar(100)=CONVERT(varchar(36),@time_off_public_id);
+        EXEC dbo.sp_write_audit @actor_user_id,@branch_id,@time_off_action,'DOCTOR_TIME_OFF',@time_off_entity;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
 END;
 GO
 
@@ -8396,7 +9636,7 @@ BEGIN
         DECLARE schedule_cursor CURSOR LOCAL FAST_FORWARD FOR
             SELECT w.working_schedule_id,w.branch_id,COALESCE(w.booking_horizon_days,b.booking_horizon_days)
             FROM dbo.doctor_working_schedules w JOIN dbo.branches b ON b.branch_id=w.branch_id
-            WHERE w.is_active=1 AND b.is_active=1;
+            WHERE w.is_active=1 AND w.workflow_status='PUBLISHED' AND b.is_active=1;
         OPEN schedule_cursor;
         FETCH NEXT FROM schedule_cursor INTO @schedule_id,@branch_id,@horizon;
         WHILE @@FETCH_STATUS=0
@@ -8522,13 +9762,51 @@ BEGIN
         CONVERT(varchar(36),svc.public_id) AS servicePublicId,svc.service_code AS serviceCode,svc.service_name AS serviceName,
         r.room_name AS roomName,a.row_ver AS rowVersion
     FROM dbo.appointments a
-    JOIN dbo.user_patient_access ua ON ua.patient_id=a.patient_id AND ua.user_id=@actor_user_id
+    JOIN dbo.v_patient_identity_members identity_member ON identity_member.patient_id=a.patient_id
+    JOIN dbo.user_patient_access ua ON ua.patient_id=identity_member.canonical_patient_id AND ua.user_id=@actor_user_id
         AND ua.status='ACTIVE' AND ua.is_booking_allowed=1 AND ua.revoked_at_utc IS NULL
     JOIN dbo.appointment_slots sl ON sl.slot_id=a.slot_id JOIN dbo.branches b ON b.branch_id=a.branch_id
-    JOIN dbo.patients p ON p.patient_id=a.patient_id JOIN dbo.doctors d ON d.doctor_id=a.doctor_id
+    JOIN dbo.patients p ON p.patient_id=identity_member.canonical_patient_id JOIN dbo.doctors d ON d.doctor_id=a.doctor_id
     JOIN dbo.employees e ON e.employee_id=d.employee_id JOIN dbo.services svc ON svc.service_id=a.service_id
     JOIN dbo.rooms r ON r.room_id=sl.room_id
     ORDER BY a.scheduled_start_utc DESC;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_clinic_list_admin_available_slots
+    @actor_user_id bigint,@branch_public_id uniqueidentifier,@service_public_id uniqueidentifier,
+    @service_date_local date
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @branch_id bigint=(SELECT branch_id FROM dbo.branches WHERE public_id=@branch_public_id),
+            @service_id bigint=(SELECT service_id FROM dbo.services WHERE public_id=@service_public_id);
+    IF @branch_id IS NULL OR @service_id IS NULL THROW 53740,N'Chi nhánh hoặc dịch vụ không tồn tại.',1;
+    EXEC dbo.sp_assert_permission @actor_user_id,'APPOINTMENTS_MANAGE',@branch_id;
+    SELECT s.public_id AS slot_public_id,b.public_id AS branch_public_id,b.branch_code,b.branch_name,b.timezone_name,
+           d.public_id AS doctor_public_id,e.full_name AS doctor_name,r.public_id AS room_public_id,
+           r.room_code,r.room_name,svc.public_id AS service_public_id,svc.service_code,svc.service_name,
+           CONVERT(varchar(30),bp.price_amount) AS price_amount,bp.currency_code,s.service_date_local,
+           s.start_time_local,s.end_time_local,s.starts_at_utc,s.ends_at_utc
+    FROM dbo.appointment_slots s
+    JOIN dbo.branches b ON b.branch_id=s.branch_id AND b.is_active=1
+    JOIN dbo.doctors d ON d.doctor_id=s.doctor_id AND d.is_active=1
+    JOIN dbo.employees e ON e.employee_id=d.employee_id AND e.is_active=1 AND e.employment_status='ACTIVE'
+    JOIN dbo.doctor_branch_assignments dba ON dba.doctor_id=d.doctor_id AND dba.branch_id=s.branch_id
+      AND dba.is_active=1 AND dba.effective_from<=s.service_date_local
+      AND (dba.effective_to IS NULL OR dba.effective_to>=s.service_date_local)
+    JOIN dbo.rooms r ON r.room_id=s.room_id AND r.is_active=1
+    JOIN dbo.doctor_services ds ON ds.doctor_id=d.doctor_id AND ds.service_id=@service_id AND ds.is_active=1
+    JOIN dbo.services svc ON svc.service_id=ds.service_id AND svc.is_active=1
+    JOIN dbo.service_branch_prices bp ON bp.branch_id=s.branch_id AND bp.service_id=svc.service_id
+      AND bp.is_available=1 AND bp.effective_from<=s.service_date_local
+      AND (bp.effective_to IS NULL OR bp.effective_to>=s.service_date_local)
+    WHERE s.branch_id=@branch_id AND s.service_date_local=@service_date_local AND s.status='OPEN'
+      AND s.starts_at_utc>SYSUTCDATETIME()
+      AND s.walk_in_encounter_id IS NULL
+      AND COALESCE(ds.custom_duration_min,svc.default_duration_min)<=DATEDIFF(MINUTE,s.starts_at_utc,s.ends_at_utc)
+      AND NOT EXISTS (SELECT 1 FROM dbo.appointments a WHERE a.slot_id=s.slot_id AND a.occupies_slot=1)
+    ORDER BY s.start_time_local,e.full_name;
 END;
 GO
 
@@ -8877,6 +10155,26 @@ BEGIN
           AND effective_from<=@business_date AND (effective_to IS NULL OR effective_to>=@business_date)
         ORDER BY effective_from DESC;
         IF @unit_price IS NULL THROW 53218,N'Dịch vụ không có giá hiệu lực tại chi nhánh.',1;
+        DECLARE @slot_id bigint,@slot_start_utc datetime2(3),
+                @max_wait_minutes smallint=(SELECT walk_in_max_wait_minutes FROM dbo.branches WHERE branch_id=@branch_id);
+        SELECT TOP (1) @slot_id=s.slot_id,@slot_start_utc=s.starts_at_utc
+        FROM dbo.appointment_slots s WITH (UPDLOCK,READPAST,ROWLOCK)
+        JOIN dbo.doctor_services ds ON ds.doctor_id=s.doctor_id AND ds.service_id=@service_id AND ds.is_active=1
+        JOIN dbo.services svc ON svc.service_id=ds.service_id AND svc.is_active=1
+        WHERE s.branch_id=@branch_id AND s.doctor_id=@doctor_id AND s.room_id=@room_id
+          AND s.service_date_local=@business_date AND s.status='OPEN'
+          AND s.walk_in_encounter_id IS NULL
+          AND s.starts_at_utc>=SYSUTCDATETIME()
+          AND s.starts_at_utc<=DATEADD(MINUTE,@max_wait_minutes,SYSUTCDATETIME())
+          AND COALESCE(ds.custom_duration_min,svc.default_duration_min)<=DATEDIFF(MINUTE,s.starts_at_utc,s.ends_at_utc)
+          AND NOT EXISTS(SELECT 1 FROM dbo.appointments a WHERE a.slot_id=s.slot_id AND a.occupies_slot=1)
+        ORDER BY s.starts_at_utc,s.slot_id;
+        IF @slot_id IS NULL
+            THROW 53268,N'Không còn giờ trống phù hợp trong thời gian chờ cho phép; hãy chọn bác sĩ/phòng khác hoặc đặt lịch.',1;
+        IF EXISTS(SELECT 1 FROM dbo.appointments a WHERE a.patient_id=@patient_id AND a.occupies_slot=1
+                  AND a.scheduled_start_utc<=(SELECT ends_at_utc FROM dbo.appointment_slots WHERE slot_id=@slot_id)
+                  AND a.scheduled_end_utc>@slot_start_utc)
+            THROW 53269,N'Bệnh nhân đã có lịch hẹn trong giờ này.',1;
         DECLARE @encounter_code varchar(40);
         EXEC dbo.sp_next_document_number @branch_id,'ENCOUNTER',@business_date,'LK',@encounter_code OUTPUT;
         INSERT dbo.encounters
@@ -8887,6 +10185,10 @@ BEGIN
             (@encounter_code,NULL,@branch_id,@patient_id,@doctor_id,@room_id,
              'WALK_IN','WAITING',SYSUTCDATETIME(),@chief_complaint,@actor_user_id,1,0);
         SET @encounter_id=SCOPE_IDENTITY();
+        UPDATE dbo.appointment_slots
+           SET walk_in_encounter_id=@encounter_id,updated_at_utc=SYSUTCDATETIME()
+         WHERE slot_id=@slot_id AND status='OPEN' AND walk_in_encounter_id IS NULL;
+        IF @@ROWCOUNT<>1 THROW 53268,N'Giờ tiếp nhận vừa hết chỗ; vui lòng tải lại.',1;
 
         INSERT dbo.encounter_services
             (encounter_id,service_id,service_code_snapshot,service_name_snapshot,
@@ -8953,9 +10255,23 @@ BEGIN
         FROM dbo.queue_tickets qt WITH (UPDLOCK,READPAST,ROWLOCK)
         JOIN dbo.queue_sessions qs ON qs.queue_session_id=qt.queue_session_id
         JOIN dbo.encounters e ON e.encounter_id=qt.encounter_id AND e.status='WAITING'
+        LEFT JOIN dbo.appointments a ON a.appointment_id=e.appointment_id
+        LEFT JOIN dbo.appointment_slots ws ON ws.walk_in_encounter_id=e.encounter_id
         WHERE qs.branch_id=@branch_id AND qs.queue_date_local=@business_date
           AND qs.queue_type=@queue_type AND qs.status='OPEN' AND qt.status='WAITING'
-        ORDER BY qt.priority_level DESC,qt.issued_at_utc,qt.queue_number;
+          AND (@queue_type<>'GENERAL' OR COALESCE(a.scheduled_start_utc,ws.starts_at_utc,qt.issued_at_utc)
+               <=DATEADD(MINUTE,10,SYSUTCDATETIME()))
+          AND (@queue_type<>'GENERAL' OR NOT EXISTS
+              (SELECT 1 FROM dbo.queue_tickets busy
+               JOIN dbo.encounters active_encounter ON active_encounter.encounter_id=busy.encounter_id
+               JOIN dbo.queue_sessions busy_session ON busy_session.queue_session_id=busy.queue_session_id
+               WHERE active_encounter.attending_doctor_id=e.attending_doctor_id
+                 AND busy.queue_ticket_id<>qt.queue_ticket_id AND busy.status='CALLED'
+                 AND busy_session.queue_date_local=@business_date AND busy_session.branch_id=@branch_id))
+        ORDER BY qt.priority_level DESC,
+                 CASE WHEN a.appointment_id IS NOT NULL THEN 0 ELSE 1 END,
+                 COALESCE(a.scheduled_start_utc,ws.starts_at_utc,qt.issued_at_utc),
+                 qt.issued_at_utc,qt.queue_number;
 
         IF @queue_ticket_id IS NOT NULL
         BEGIN
@@ -9052,6 +10368,15 @@ BEGIN
             IF LEN(@queue_bypass_reason)<10
                 THROW 53265,N'Bắt buộc nhập lý do tối thiểu 10 ký tự khi bỏ qua bước gọi số.',1;
             EXEC dbo.sp_assert_permission @actor_user_id,'ENCOUNTERS_QUEUE_BYPASS',@branch_id;
+            IF EXISTS
+            (
+                SELECT 1 FROM dbo.encounters due_encounter
+                LEFT JOIN dbo.appointments due_appointment ON due_appointment.appointment_id=due_encounter.appointment_id
+                LEFT JOIN dbo.appointment_slots due_slot ON due_slot.walk_in_encounter_id=due_encounter.encounter_id
+                WHERE due_encounter.encounter_id=@encounter_id
+                  AND COALESCE(due_appointment.scheduled_start_utc,due_slot.starts_at_utc,due_encounter.arrived_at_utc)
+                      >DATEADD(MINUTE,10,SYSUTCDATETIME())
+            ) THROW 53270,N'Chưa đến giờ gọi số của lượt khám.',1;
 
             DECLARE @next_queue_ticket_id bigint;
             SELECT TOP (1) @next_queue_ticket_id=qt.queue_ticket_id
@@ -9060,8 +10385,15 @@ BEGIN
               AND next_session.status='OPEN' AND next_session.queue_date_local=@business_date
             JOIN dbo.encounters next_encounter ON next_encounter.encounter_id=qt.encounter_id
               AND next_encounter.status='WAITING'
+            LEFT JOIN dbo.appointments next_appointment ON next_appointment.appointment_id=next_encounter.appointment_id
+            LEFT JOIN dbo.appointment_slots next_slot ON next_slot.walk_in_encounter_id=next_encounter.encounter_id
             WHERE qt.queue_session_id=@queue_session_id AND qt.status='WAITING'
-            ORDER BY qt.priority_level DESC,qt.issued_at_utc,qt.queue_number;
+              AND COALESCE(next_appointment.scheduled_start_utc,next_slot.starts_at_utc,qt.issued_at_utc)
+                  <=DATEADD(MINUTE,10,SYSUTCDATETIME())
+            ORDER BY qt.priority_level DESC,
+                     CASE WHEN next_appointment.appointment_id IS NOT NULL THEN 0 ELSE 1 END,
+                     COALESCE(next_appointment.scheduled_start_utc,next_slot.starts_at_utc,qt.issued_at_utc),
+                     qt.issued_at_utc,qt.queue_number;
             IF @next_queue_ticket_id IS NULL OR @next_queue_ticket_id<>@queue_ticket_id
                 THROW 53266,N'Không thể bỏ qua lượt có mức ưu tiên hoặc thứ tự FIFO cao hơn.',1;
 
@@ -9139,12 +10471,18 @@ BEGIN
            b.timezone_name AS timezoneName,b.medical_license_no AS medicalLicenseNo,
            b.phone,b.email,b.address_line AS addressLine,b.ward,b.district,b.province,
            @business_date AS businessDate,b.check_in_early_minutes AS checkInEarlyMinutes,
-           b.check_in_late_minutes AS checkInLateMinutes
+           b.check_in_late_minutes AS checkInLateMinutes,b.walk_in_max_wait_minutes AS walkInMaxWaitMinutes
     FROM dbo.branches b WHERE b.branch_id=@branch_id;
 
     SELECT CONVERT(varchar(36),qt.public_id) AS publicId,CONVERT(varchar(36),e.public_id) AS encounterPublicId,
            qt.display_number AS displayNumber,qt.priority_level AS priorityLevel,qt.status,
            qt.issued_at_utc AS issuedAtUtc,qt.called_at_utc AS calledAtUtc,
+           COALESCE(a.scheduled_start_utc,walk_slot.starts_at_utc) AS plannedStartUtc,
+           CONVERT(char(5),COALESCE(appointment_slot.start_time_local,walk_slot.start_time_local),108) AS plannedStartTimeLocal,
+           CASE WHEN COALESCE(a.scheduled_start_utc,walk_slot.starts_at_utc,qt.issued_at_utc)<=DATEADD(MINUTE,10,SYSUTCDATETIME())
+                THEN CONVERT(bit,1) ELSE CONVERT(bit,0) END AS eligibleToCall,
+           CASE WHEN COALESCE(a.scheduled_start_utc,walk_slot.starts_at_utc,qt.issued_at_utc)<=SYSUTCDATETIME() THEN 0
+                ELSE DATEDIFF(MINUTE,SYSUTCDATETIME(),COALESCE(a.scheduled_start_utc,walk_slot.starts_at_utc,qt.issued_at_utc)) END AS estimatedWaitMinutes,
            qt.service_started_at_utc AS serviceStartedAtUtc,e.encounter_code AS encounterCode,
            e.encounter_source AS encounterSource,a.booking_channel AS bookingChannel,
            CONVERT(varchar(36),p.public_id) AS patientPublicId,p.patient_code AS patientCode,
@@ -9158,6 +10496,8 @@ BEGIN
     JOIN dbo.encounters e ON e.encounter_id=qt.encounter_id JOIN dbo.patients p ON p.patient_id=e.patient_id
     JOIN dbo.doctors d ON d.doctor_id=e.attending_doctor_id JOIN dbo.employees emp ON emp.employee_id=d.employee_id
     LEFT JOIN dbo.appointments a ON a.appointment_id=e.appointment_id
+    LEFT JOIN dbo.appointment_slots appointment_slot ON appointment_slot.slot_id=a.slot_id
+    LEFT JOIN dbo.appointment_slots walk_slot ON walk_slot.walk_in_encounter_id=e.encounter_id
     LEFT JOIN dbo.rooms r ON r.room_id=e.room_id
     OUTER APPLY
     (
@@ -9172,9 +10512,9 @@ BEGIN
         ORDER BY es.ordered_at_utc,es.encounter_service_id
     ) initial_service
     WHERE qs.branch_id=@branch_id AND qs.queue_date_local=@business_date AND qs.queue_type='GENERAL'
-      AND qs.status='OPEN' AND qt.status IN ('WAITING','CALLED','SERVING')
-    ORDER BY CASE qt.status WHEN 'SERVING' THEN 0 WHEN 'CALLED' THEN 1 ELSE 2 END,
-             qt.priority_level DESC,qt.issued_at_utc,qt.queue_number;
+      AND qs.status='OPEN' AND qt.status IN ('WAITING','CALLED','SERVING','SKIPPED')
+    ORDER BY CASE qt.status WHEN 'SERVING' THEN 0 WHEN 'CALLED' THEN 1 WHEN 'WAITING' THEN 2 ELSE 3 END,
+             qt.priority_level DESC,COALESCE(a.scheduled_start_utc,walk_slot.starts_at_utc),qt.issued_at_utc,qt.queue_number;
 
     SELECT CONVERT(varchar(36),a.public_id) AS publicId,a.appointment_code AS code,
            CONVERT(varchar(36),p.public_id) AS patientPublicId,p.patient_code AS patientCode,p.full_name AS patientName,
@@ -9219,6 +10559,33 @@ BEGIN
       AND EXISTS(SELECT 1 FROM dbo.doctor_branch_assignments a WHERE a.doctor_id=d.doctor_id
           AND a.branch_id=@branch_id AND a.is_active=1 AND a.effective_from<=@business_date
           AND (a.effective_to IS NULL OR a.effective_to>=@business_date));
+
+    SELECT CONVERT(varchar(36),d.public_id) AS doctorPublicId,
+           CONVERT(varchar(36),r.public_id) AS roomPublicId,
+           CONVERT(varchar(36),svc.public_id) AS servicePublicId,
+           s.starts_at_utc AS startsAtUtc,
+           CONVERT(char(5),s.start_time_local,108) AS startTimeLocal
+    FROM dbo.appointment_slots s
+    JOIN dbo.branches b ON b.branch_id=s.branch_id AND b.is_active=1
+    JOIN dbo.doctors d ON d.doctor_id=s.doctor_id AND d.is_active=1
+      AND (d.license_issued_date IS NULL OR d.license_issued_date<=@business_date)
+      AND (d.license_expiry_date IS NULL OR d.license_expiry_date>=@business_date)
+    JOIN dbo.employees emp ON emp.employee_id=d.employee_id AND emp.is_active=1 AND emp.employment_status='ACTIVE'
+    JOIN dbo.doctor_branch_assignments dba ON dba.doctor_id=d.doctor_id AND dba.branch_id=@branch_id
+      AND dba.is_active=1 AND dba.effective_from<=@business_date
+      AND (dba.effective_to IS NULL OR dba.effective_to>=@business_date)
+    JOIN dbo.rooms r ON r.room_id=s.room_id AND r.is_active=1
+    JOIN dbo.doctor_services ds ON ds.doctor_id=d.doctor_id AND ds.is_active=1
+    JOIN dbo.services svc ON svc.service_id=ds.service_id AND svc.is_active=1
+    WHERE s.branch_id=@branch_id AND s.service_date_local=@business_date AND s.status='OPEN'
+      AND s.walk_in_encounter_id IS NULL AND s.starts_at_utc>=SYSUTCDATETIME()
+      AND s.starts_at_utc<=DATEADD(MINUTE,b.walk_in_max_wait_minutes,SYSUTCDATETIME())
+      AND COALESCE(ds.custom_duration_min,svc.default_duration_min)<=DATEDIFF(MINUTE,s.starts_at_utc,s.ends_at_utc)
+      AND EXISTS(SELECT 1 FROM dbo.service_branch_prices bp WHERE bp.branch_id=@branch_id
+          AND bp.service_id=svc.service_id AND bp.is_available=1 AND bp.effective_from<=@business_date
+          AND (bp.effective_to IS NULL OR bp.effective_to>=@business_date))
+      AND NOT EXISTS(SELECT 1 FROM dbo.appointments a WHERE a.slot_id=s.slot_id AND a.occupies_slot=1)
+    ORDER BY s.starts_at_utc,d.public_id,r.public_id,svc.public_id;
 END;
 GO
 
@@ -9318,9 +10685,79 @@ BEGIN
 END;
 GO
 
+CREATE OR ALTER PROCEDURE dbo.sp_clinic_change_queue_ticket_status
+    @actor_user_id bigint,
+    @queue_ticket_public_id uniqueidentifier,
+    @action varchar(10),
+    @reason nvarchar(500)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    IF @action IS NULL OR @action NOT IN ('SKIP','RECALL') OR LEN(TRIM(COALESCE(@reason,N'')))<10
+       OR LEN(@reason)>500
+        THROW 53760,N'Hành động hoặc lý do điều phối số không hợp lệ.',1;
+    DECLARE @branch_id bigint,@encounter_id bigint;
+    SELECT @branch_id=e.branch_id,@encounter_id=e.encounter_id
+    FROM dbo.queue_tickets qt JOIN dbo.encounters e ON e.encounter_id=qt.encounter_id
+    WHERE qt.public_id=@queue_ticket_public_id;
+    IF @encounter_id IS NULL THROW 53761,N'Không tìm thấy số hàng đợi.',1;
+    EXEC dbo.sp_assert_permission @actor_user_id,'QUEUE_MANAGE',@branch_id;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        DECLARE @encounter_status varchar(20),@ticket_status varchar(20),@ticket_id bigint,
+                @display_number varchar(20),@session_status varchar(20),@session_date date,
+                @business_date date,@encounter_public_id uniqueidentifier;
+        SELECT @encounter_status=status,@encounter_public_id=public_id
+        FROM dbo.encounters WITH (UPDLOCK,HOLDLOCK) WHERE encounter_id=@encounter_id;
+        SELECT @ticket_id=qt.queue_ticket_id,@ticket_status=qt.status,
+               @display_number=qt.display_number,@session_status=qs.status,
+               @session_date=qs.queue_date_local
+        FROM dbo.queue_tickets qt WITH (UPDLOCK,HOLDLOCK)
+        JOIN dbo.queue_sessions qs ON qs.queue_session_id=qt.queue_session_id
+        WHERE qt.public_id=@queue_ticket_public_id AND qt.encounter_id=@encounter_id;
+        EXEC dbo.sp_get_branch_business_date @branch_id,NULL,@business_date OUTPUT;
+        IF @encounter_status<>'WAITING' OR @session_status<>'OPEN' OR @session_date<>@business_date
+           OR (@action='SKIP' AND @ticket_status<>'CALLED')
+           OR (@action='RECALL' AND @ticket_status<>'SKIPPED')
+            THROW 53762,N'Số hoặc lượt khám đã đổi trạng thái; tải lại hàng đợi.',1;
+        IF @action='SKIP'
+            UPDATE dbo.queue_tickets SET status='SKIPPED',notes=TRIM(@reason)
+            WHERE queue_ticket_id=@ticket_id AND status='CALLED';
+        ELSE
+            UPDATE dbo.queue_tickets SET status='CALLED',called_at_utc=SYSUTCDATETIME(),
+                called_by_user_id=@actor_user_id,notes=TRIM(@reason)
+            WHERE queue_ticket_id=@ticket_id AND status='SKIPPED';
+        IF @@ROWCOUNT<>1 THROW 53762,N'Số đã đổi trạng thái; tải lại hàng đợi.',1;
+        DECLARE @new_status varchar(20)=CASE WHEN @action='SKIP' THEN 'SKIPPED' ELSE 'CALLED' END;
+        DECLARE @event_type varchar(50)=CASE WHEN @action='SKIP' THEN 'QUEUE_TICKET_SKIPPED'
+            ELSE 'QUEUE_TICKET_RECALLED' END;
+        INSERT dbo.outbox_events(aggregate_type,aggregate_id,event_type,payload_json)
+        VALUES('QUEUE_TICKET',CONVERT(varchar(36),@queue_ticket_public_id),@event_type,
+            CONCAT(N'{"queueTicketPublicId":"',CONVERT(varchar(36),@queue_ticket_public_id),
+                N'","encounterPublicId":"',CONVERT(varchar(36),@encounter_public_id),
+                N'","displayNumber":"',STRING_ESCAPE(@display_number,'json'),N'"}'));
+        DECLARE @entity_id varchar(100)=CONVERT(varchar(36),@queue_ticket_public_id);
+        DECLARE @audit_json nvarchar(max)=CONCAT(N'{"from":"',@ticket_status,N'","to":"',
+            @new_status,N'","reason":"',STRING_ESCAPE(TRIM(@reason),'json'),N'"}');
+        EXEC dbo.sp_write_audit @actor_user_id,@branch_id,@event_type,'QUEUE_TICKET',
+            @entity_id=@entity_id,@new_values_json=@audit_json;
+        COMMIT TRANSACTION;
+        SELECT CONVERT(varchar(36),@queue_ticket_public_id) AS queueTicketPublicId,
+            CONVERT(varchar(36),@encounter_public_id) AS encounterPublicId,
+            @display_number AS displayNumber,@new_status AS status;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
 CREATE OR ALTER PROCEDURE dbo.sp_update_encounter_clinical_notes
     @actor_user_id bigint,
     @encounter_id bigint,
+    @expected_row_ver binary(8),
     @history_of_present_illness nvarchar(max)=NULL,
     @physical_examination nvarchar(max)=NULL,
     @clinical_assessment nvarchar(max)=NULL,
@@ -9347,8 +10784,13 @@ BEGIN
                clinical_assessment=@clinical_assessment,treatment_plan=@treatment_plan,
                follow_up_instructions=@follow_up_instructions,follow_up_date=@follow_up_date,
                updated_at_utc=SYSUTCDATETIME()
-         WHERE encounter_id=@encounter_id AND status='IN_PROGRESS';
-        IF @@ROWCOUNT=0 THROW 53223,N'Lượt khám không ở trạng thái IN_PROGRESS.',1;
+         WHERE encounter_id=@encounter_id AND status='IN_PROGRESS' AND row_ver=@expected_row_ver;
+        IF @@ROWCOUNT=0
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM dbo.encounters WHERE encounter_id=@encounter_id AND status='IN_PROGRESS')
+                THROW 53223,N'Lượt khám không ở trạng thái IN_PROGRESS.',1;
+            THROW 53930,N'Nội dung khám đã được cập nhật ở phiên khác.',1;
+        END;
         DECLARE @entity_id varchar(100);
         SELECT @entity_id=CONVERT(varchar(36),public_id) FROM dbo.encounters WHERE encounter_id=@encounter_id;
         EXEC dbo.sp_write_audit @actor_user_id,@branch_id,'ENCOUNTER_CLINICAL_UPDATED','ENCOUNTER',@entity_id;
@@ -9652,7 +11094,7 @@ BEGIN
          WHERE encounter_id=@encounter_id AND ended_at_utc IS NULL;
         UPDATE dbo.queue_tickets
            SET status='COMPLETED',completed_at_utc=SYSUTCDATETIME()
-         WHERE encounter_id=@encounter_id AND status IN ('WAITING','CALLED','SERVING');
+         WHERE encounter_id=@encounter_id AND status IN ('WAITING','CALLED','SERVING','SKIPPED');
         IF @appointment_id IS NOT NULL
             UPDATE dbo.appointments
                SET status='COMPLETED',occupies_slot=0,updated_at_utc=SYSUTCDATETIME()
@@ -10112,7 +11554,7 @@ BEGIN
            e.chief_complaint AS chiefComplaint,e.history_of_present_illness AS historyOfPresentIllness,
            e.physical_examination AS physicalExamination,e.clinical_assessment AS clinicalAssessment,
            e.treatment_plan AS treatmentPlan,e.follow_up_instructions AS followUpInstructions,
-           e.follow_up_date AS followUpDate,
+           e.follow_up_date AS followUpDate,e.row_ver AS rowVersion,
            CONVERT(varchar(36),p.public_id) AS patientPublicId,p.patient_code AS patientCode,
            p.full_name AS patientName,p.date_of_birth AS patientDateOfBirth,p.gender AS patientGender,
            CONVERT(varchar(36),d.public_id) AS doctorPublicId,emp.full_name AS doctorName,
@@ -10190,7 +11632,7 @@ END;
 GO
 
 CREATE OR ALTER PROCEDURE dbo.sp_clinic_update_encounter_clinical_notes
-    @actor_user_id bigint,@encounter_public_id uniqueidentifier,
+    @actor_user_id bigint,@encounter_public_id uniqueidentifier,@expected_row_ver binary(8),
     @history_of_present_illness nvarchar(max)=NULL,@physical_examination nvarchar(max)=NULL,
     @clinical_assessment nvarchar(max)=NULL,@treatment_plan nvarchar(max)=NULL,
     @follow_up_instructions nvarchar(max)=NULL,@follow_up_date date=NULL
@@ -10200,6 +11642,7 @@ BEGIN
     DECLARE @encounter_id bigint=(SELECT encounter_id FROM dbo.encounters WHERE public_id=@encounter_public_id);
     IF @encounter_id IS NULL THROW 53802,N'Lượt khám không tồn tại.',1;
     EXEC dbo.sp_update_encounter_clinical_notes @actor_user_id=@actor_user_id,@encounter_id=@encounter_id,
+        @expected_row_ver=@expected_row_ver,
         @history_of_present_illness=@history_of_present_illness,@physical_examination=@physical_examination,
         @clinical_assessment=@clinical_assessment,@treatment_plan=@treatment_plan,
         @follow_up_instructions=@follow_up_instructions,@follow_up_date=@follow_up_date;
@@ -10387,7 +11830,9 @@ BEGIN
         UPDATE dbo.encounter_staff_assignments SET ended_at_utc=SYSUTCDATETIME()
          WHERE encounter_id=@encounter_id AND ended_at_utc IS NULL;
         UPDATE dbo.queue_tickets SET status='CANCELLED',completed_at_utc=SYSUTCDATETIME()
-         WHERE encounter_id=@encounter_id AND status IN ('WAITING','CALLED','SERVING');
+         WHERE encounter_id=@encounter_id AND status IN ('WAITING','CALLED','SERVING','SKIPPED');
+        UPDATE dbo.appointment_slots SET walk_in_encounter_id=NULL,updated_at_utc=SYSUTCDATETIME()
+         WHERE walk_in_encounter_id=@encounter_id;
         DECLARE @appointment_cancelled bit=0;
         IF @appointment_id IS NOT NULL
         BEGIN
@@ -10525,7 +11970,9 @@ BEGIN
       WHERE dx.encounter_id=e.encounter_id AND dx.is_primary=1
       ORDER BY dx.encounter_diagnosis_id
     ) primary_dx
-    WHERE e.patient_id=@patient_id AND e.status='SIGNED'
+    WHERE e.patient_id IN (SELECT patient_id FROM dbo.v_patient_identity_members
+                           WHERE canonical_patient_id=@patient_id)
+      AND e.status='SIGNED'
     ORDER BY e.arrived_at_utc DESC,e.encounter_id DESC;
 
     DECLARE @patient_entity_id varchar(100)=CONVERT(varchar(36),@patient_public_id);
@@ -10545,8 +11992,11 @@ BEGIN
     DECLARE @encounter_id bigint;
     SELECT @encounter_id=e.encounter_id
     FROM dbo.encounters e
-    JOIN dbo.patients p ON p.patient_id=e.patient_id AND p.public_id=@patient_public_id
-    JOIN dbo.user_patient_access access_link ON access_link.patient_id=e.patient_id
+    JOIN dbo.patients p ON p.patient_id=e.patient_id
+    JOIN dbo.v_patient_identity_members member ON member.patient_id=e.patient_id
+    JOIN dbo.patients canonical ON canonical.patient_id=member.canonical_patient_id
+      AND canonical.public_id=@patient_public_id AND canonical.status='ACTIVE'
+    JOIN dbo.user_patient_access access_link ON access_link.patient_id=canonical.patient_id
     JOIN dbo.clinical_record_releases release_state ON release_state.encounter_id=e.encounter_id
     WHERE e.public_id=@encounter_public_id AND e.status='SIGNED'
       AND access_link.user_id=@actor_user_id AND access_link.status='ACTIVE'
@@ -11606,7 +13056,10 @@ BEGIN
     LEFT JOIN dbo.dispensation_item_reversals r ON r.dispensation_item_id=di.dispensation_item_id
     WHERE d.prescription_id=@prescription_id ORDER BY di.dispensed_at_utc DESC;
     SELECT a.allergen_name AS allergenName,a.severity,a.reaction
-    FROM dbo.patient_allergies a JOIN dbo.prescriptions p ON p.patient_id=a.patient_id
+    FROM dbo.patient_allergies a
+    JOIN dbo.v_patient_identity_members am ON am.patient_id=a.patient_id
+    JOIN dbo.v_patient_identity_members pm ON pm.canonical_patient_id=am.canonical_patient_id
+    JOIN dbo.prescriptions p ON p.patient_id=pm.patient_id
     WHERE p.prescription_id=@prescription_id AND a.is_active=1 AND a.allergy_type='DRUG';
     SELECT CONVERT(varchar(36),pi.public_id) AS prescriptionItemPublicId,
            CONVERT(varchar(36),m.public_id) AS medicinePublicId,
@@ -11617,7 +13070,9 @@ BEGIN
     JOIN dbo.medicines m ON m.medicine_id=pi.medicine_id
     JOIN dbo.medicine_allergens ma ON ma.medicine_id=m.medicine_id AND ma.is_active=1
     JOIN dbo.allergens a ON a.allergen_id=ma.allergen_id AND a.is_active=1
-    JOIN dbo.patient_allergies pa ON pa.patient_id=p.patient_id AND pa.is_active=1
+    JOIN dbo.v_patient_identity_members pm ON pm.patient_id=p.patient_id
+    JOIN dbo.v_patient_identity_members am ON am.canonical_patient_id=pm.canonical_patient_id
+    JOIN dbo.patient_allergies pa ON pa.patient_id=am.patient_id AND pa.is_active=1
       AND pa.allergy_type='DRUG'
       AND (pa.allergen_id=a.allergen_id OR (pa.allergen_id IS NULL AND TRIM(pa.allergen_name)=a.canonical_name))
     WHERE p.prescription_id=@prescription_id
@@ -11762,7 +13217,10 @@ BEGIN
     SELECT TOP(1) @allergen=a.canonical_name
     FROM dbo.medicine_allergens ma
     JOIN dbo.allergens a ON a.allergen_id=ma.allergen_id AND a.is_active=1
-    JOIN dbo.patient_allergies pa ON pa.patient_id=@patient_id AND pa.is_active=1
+    JOIN dbo.patient_allergies pa ON pa.patient_id IN
+      (SELECT patient_id FROM dbo.v_patient_identity_members WHERE canonical_patient_id=
+        (SELECT canonical_patient_id FROM dbo.v_patient_identity_members WHERE patient_id=@patient_id))
+      AND pa.is_active=1
       AND pa.allergy_type='DRUG'
       AND (pa.allergen_id=a.allergen_id OR (pa.allergen_id IS NULL AND TRIM(pa.allergen_name)=a.canonical_name))
     WHERE ma.medicine_id=@medicine_id AND ma.is_active=1
@@ -11778,7 +13236,10 @@ BEGIN
         SELECT TOP(1) @allergen=a.canonical_name
         FROM dbo.medicine_allergens ma
         JOIN dbo.allergens a ON a.allergen_id=ma.allergen_id AND a.is_active=1
-        JOIN dbo.patient_allergies pa ON pa.patient_id=@patient_id AND pa.is_active=1
+        JOIN dbo.patient_allergies pa ON pa.patient_id IN
+          (SELECT patient_id FROM dbo.v_patient_identity_members WHERE canonical_patient_id=
+            (SELECT canonical_patient_id FROM dbo.v_patient_identity_members WHERE patient_id=@patient_id))
+          AND pa.is_active=1
           AND pa.allergy_type='DRUG'
           AND (pa.allergen_id=a.allergen_id OR (pa.allergen_id IS NULL AND TRIM(pa.allergen_name)=a.canonical_name))
         WHERE ma.medicine_id=@medicine_id AND ma.is_active=1
@@ -11954,7 +13415,10 @@ BEGIN
     SELECT TOP(1) @allergen=a.canonical_name
     FROM dbo.medicine_allergens ma
     JOIN dbo.allergens a ON a.allergen_id=ma.allergen_id AND a.is_active=1
-    JOIN dbo.patient_allergies pa ON pa.patient_id=@patient_id AND pa.is_active=1
+    JOIN dbo.patient_allergies pa ON pa.patient_id IN
+      (SELECT patient_id FROM dbo.v_patient_identity_members WHERE canonical_patient_id=
+        (SELECT canonical_patient_id FROM dbo.v_patient_identity_members WHERE patient_id=@patient_id))
+      AND pa.is_active=1
       AND pa.allergy_type='DRUG'
       AND (pa.allergen_id=a.allergen_id OR (pa.allergen_id IS NULL AND TRIM(pa.allergen_name)=a.canonical_name))
     WHERE ma.medicine_id=@medicine_id AND ma.is_active=1
@@ -11983,7 +13447,10 @@ BEGIN
         SELECT TOP(1) @allergen=a.canonical_name
         FROM dbo.medicine_allergens ma
         JOIN dbo.allergens a ON a.allergen_id=ma.allergen_id AND a.is_active=1
-        JOIN dbo.patient_allergies pa ON pa.patient_id=@patient_id AND pa.is_active=1
+        JOIN dbo.patient_allergies pa ON pa.patient_id IN
+          (SELECT patient_id FROM dbo.v_patient_identity_members WHERE canonical_patient_id=
+            (SELECT canonical_patient_id FROM dbo.v_patient_identity_members WHERE patient_id=@patient_id))
+          AND pa.is_active=1
           AND pa.allergy_type='DRUG'
           AND (pa.allergen_id=a.allergen_id OR (pa.allergen_id IS NULL AND TRIM(pa.allergen_name)=a.canonical_name))
         WHERE ma.medicine_id=@medicine_id AND ma.is_active=1
@@ -13005,7 +14472,13 @@ BEGIN
       (SELECT COUNT_BIG(*) FROM dbo.encounters e WHERE e.branch_id=@branch_id AND e.arrived_at_utc>=@from_utc AND e.arrived_at_utc<@to_utc AND e.status IN ('COMPLETED','SIGNED')) AS completedEncounterCount,
       (SELECT CONVERT(decimal(10,1),AVG(CONVERT(decimal(18,2),DATEDIFF(SECOND,e.arrived_at_utc,e.started_at_utc)/60.0)))
          FROM dbo.encounters e WHERE e.branch_id=@branch_id AND e.arrived_at_utc>=@from_utc AND e.arrived_at_utc<@to_utc
-           AND e.started_at_utc IS NOT NULL AND e.started_at_utc>=e.arrived_at_utc) AS averageWaitMinutes;
+           AND e.started_at_utc IS NOT NULL AND e.started_at_utc>=e.arrived_at_utc) AS averageWaitMinutes,
+      (SELECT TOP (1) CONVERT(decimal(10,1),PERCENTILE_CONT(0.9) WITHIN GROUP
+           (ORDER BY DATEDIFF(SECOND,e.arrived_at_utc,e.started_at_utc)/60.0) OVER ())
+         FROM dbo.encounters e WHERE e.branch_id=@branch_id AND e.arrived_at_utc>=@from_utc AND e.arrived_at_utc<@to_utc
+           AND e.started_at_utc IS NOT NULL AND e.started_at_utc>=e.arrived_at_utc) AS p90WaitMinutes,
+      (SELECT COUNT_BIG(*) FROM dbo.encounters e WHERE e.branch_id=@branch_id AND e.arrived_at_utc>=@from_utc
+           AND e.arrived_at_utc<@to_utc AND e.encounter_source='WALK_IN') AS walkInEncounterCount;
 
     ;WITH report_dates AS
     (
@@ -13559,6 +15032,12 @@ REVOKE EXECUTE ON OBJECT::dbo.sp_auth_decide_patient_link_request FROM clinic_ap
 REVOKE EXECUTE ON OBJECT::dbo.sp_auth_revoke_patient_link FROM clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_auth_list_patient_link_requests FROM clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_create_room TO clinic_api_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_catalog_create_branch TO clinic_api_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_catalog_update_branch TO clinic_api_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_catalog_create_specialty TO clinic_api_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_catalog_update_specialty TO clinic_api_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_catalog_create_category TO clinic_api_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_catalog_update_category TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_update_room TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_create_service TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_update_service TO clinic_api_executor;
@@ -13569,11 +15048,21 @@ REVOKE EXECUTE ON OBJECT::dbo.sp_grant_user_role FROM clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_revoke_user_role FROM clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_create_patient TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_update_patient TO clinic_api_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_clinic_replace_emergency_contacts TO clinic_api_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_clinic_preview_patient_merge TO clinic_api_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_clinic_merge_patients TO clinic_api_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_clinic_list_patient_merge_history TO clinic_api_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_clinic_get_my_emergency_contacts TO clinic_api_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_clinic_replace_my_emergency_contacts TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_clinic_patient_branches TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_clinic_search_patients TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_clinic_find_patient_duplicates TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_clinic_get_patient TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_clinic_get_patient_clinical_summary TO clinic_api_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_clinic_add_patient_allergy TO clinic_api_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_clinic_deactivate_patient_allergy TO clinic_api_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_clinic_add_patient_condition TO clinic_api_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_clinic_resolve_patient_condition TO clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_create_patient_portal_account FROM clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_link_user_patient FROM clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_create_doctor_working_schedule FROM clinic_api_executor;
@@ -13585,7 +15074,13 @@ REVOKE EXECUTE ON OBJECT::dbo.sp_reschedule_appointment FROM clinic_api_executor
 REVOKE EXECUTE ON OBJECT::dbo.sp_mark_appointment_no_show FROM clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_clinic_get_scheduling TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_clinic_create_working_schedule TO clinic_api_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_clinic_list_my_working_schedules TO clinic_api_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_clinic_decide_working_schedule TO clinic_api_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_clinic_publish_working_schedule TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_clinic_generate_slots TO clinic_api_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_clinic_request_time_off TO clinic_api_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_clinic_list_time_off TO clinic_api_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_clinic_decide_time_off TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_clinic_book_appointment TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_clinic_reschedule_appointment TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_clinic_confirm_appointment TO clinic_api_executor;
@@ -13593,6 +15088,7 @@ GRANT EXECUTE ON OBJECT::dbo.sp_clinic_cancel_appointment TO clinic_api_executor
 GRANT EXECUTE ON OBJECT::dbo.sp_clinic_mark_appointment_no_show TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_clinic_list_my_appointments TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_clinic_list_admin_appointments TO clinic_api_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_clinic_list_admin_available_slots TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_clinic_get_appointment TO clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_check_in_appointment FROM clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_create_walk_in_encounter FROM clinic_api_executor;
@@ -13603,6 +15099,7 @@ GRANT EXECUTE ON OBJECT::dbo.sp_clinic_search_reception_patients TO clinic_api_e
 GRANT EXECUTE ON OBJECT::dbo.sp_clinic_check_in_appointment TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_clinic_create_walk_in_encounter TO clinic_api_executor;
 GRANT EXECUTE ON OBJECT::dbo.sp_clinic_call_next_queue_ticket TO clinic_api_executor;
+GRANT EXECUTE ON OBJECT::dbo.sp_clinic_change_queue_ticket_status TO clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_start_encounter FROM clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_update_encounter_clinical_notes FROM clinic_api_executor;
 REVOKE EXECUTE ON OBJECT::dbo.sp_add_vital_signs FROM clinic_api_executor;

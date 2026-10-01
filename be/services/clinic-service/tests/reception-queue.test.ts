@@ -22,10 +22,13 @@ const workspace: ReceptionWorkspace = {
   branch: { publicId: branchId, code: 'MAIN', name: 'Chi nhánh chính', timezoneName: 'SE Asia Standard Time',
     medicalLicenseNo: 'GPHĐ-001', phone: '02812345678', email: 'main@clinic.test', addressLine: '1 Nguyễn Huệ',
     ward: 'Bến Nghé', district: 'Quận 1', province: 'TP.HCM',
-    businessDate: '2026-09-13', checkInEarlyMinutes: 120, checkInLateMinutes: 180 },
+    businessDate: '2026-09-13', checkInEarlyMinutes: 120, checkInLateMinutes: 180,
+    walkInMaxWaitMinutes: 45 },
   queue: [{ publicId: randomUUID(), encounterPublicId: randomUUID(), displayNumber: 'A0001',
     priorityLevel: 0, status: 'WAITING',
     issuedAtUtc: '2026-09-13T01:00:00.000Z', calledAtUtc: null, serviceStartedAtUtc: null,
+    plannedStartUtc: '2026-09-13T02:00:00.000Z', plannedStartTimeLocal: '09:00',
+    eligibleToCall: false, estimatedWaitMinutes: 60,
     encounterCode: 'LK-1', encounterSource: 'APPOINTMENT', bookingChannel: 'ONLINE',
     patient: { publicId: patientId, code: 'BN-1', fullName: 'Nguyễn An', dateOfBirth: '1990-01-02',
       gender: 'FEMALE', phone: '0900000000' },
@@ -40,10 +43,13 @@ const workspace: ReceptionWorkspace = {
   doctors: [{ publicId: doctorId, fullName: 'BS Bình' }], rooms: [{ publicId: roomId, code: 'P01', name: 'Phòng 1' }],
   services: [{ publicId: serviceId, code: 'CONSULT', name: 'Khám', priceAmount: '200000.00', currencyCode: 'VND' }],
   doctorServices: [{ doctorPublicId: doctorId, servicePublicId: serviceId }],
+  walkInSlots: [{ doctorPublicId: doctorId, roomPublicId: roomId, servicePublicId: serviceId,
+    startsAtUtc: '2026-09-13T02:00:00.000Z', startTimeLocal: '09:00' }],
 };
 
 class MemoryReception implements ReceptionRepository {
-  denied = false; checkInError?: number; cancelError?: number; calls = [result('A0002'), result('A0003')];
+  denied = false; checkInError?: number; walkInError?: number; cancelError?: number; calls = [result('A0002'), result('A0003')];
+  ticketStatus: 'CALLED' | 'SKIPPED' = 'CALLED'; queueActionError?: number;
   cancelled: { encounterId: string; reason: string } | null = null;
   idempotency = new Map<string, { payload: string; result: QueueCommandResult }>();
   branches() { return Promise.resolve([{ publicId: branchId, code: 'MAIN', name: 'Chi nhánh chính',
@@ -58,9 +64,20 @@ class MemoryReception implements ReceptionRepository {
     return this.once(key, JSON.stringify({ publicId, priority }), 'A0004');
   }
   createWalkIn(_actor: ClinicPrincipal, input: WalkInInput, key: string) {
+    if (this.walkInError) return Promise.reject({ number: this.walkInError });
     return this.once(key, JSON.stringify(input), 'A0005');
   }
   callNext() { return Promise.resolve(this.calls.shift() ?? null); }
+  changeTicketStatus(_actor: ClinicPrincipal, ticketId: string, action: 'SKIP' | 'RECALL', reason: string) {
+    if (this.queueActionError) return Promise.reject({ number: this.queueActionError });
+    if (ticketId !== workspace.queue[0]!.publicId ||
+      (action === 'SKIP' && this.ticketStatus !== 'CALLED') ||
+      (action === 'RECALL' && this.ticketStatus !== 'SKIPPED')) return Promise.reject({ number: 53762 });
+    this.ticketStatus = action === 'SKIP' ? 'SKIPPED' : 'CALLED';
+    void reason;
+    return Promise.resolve({ queueTicketPublicId: ticketId, encounterPublicId: workspace.queue[0]!.encounterPublicId,
+      displayNumber: 'A0001', status: this.ticketStatus });
+  }
   cancelEncounter(_actor: ClinicPrincipal, encounterId: string, reason: string) {
     if (this.cancelError) return Promise.reject({ number: this.cancelError });
     this.cancelled = { encounterId, reason }; return Promise.resolve();
@@ -96,6 +113,7 @@ describe('reception and queue vertical slice', () => {
     expect(response.body.data.queue[0].bookingChannel).toBe('ONLINE');
     expect(response.body.data.queue[0].patient.dateOfBirth).toBe('1990-01-02');
     expect(response.body.data.queue[0].initialService).toMatchObject({ code: 'CONSULT', lineTotal: '200000.00' });
+    expect(response.body.data.walkInSlots[0]).toMatchObject({ doctorPublicId: doctorId, roomPublicId: roomId });
     expect(response.body.data.queue[0]).not.toHaveProperty('queueTicketId');
   });
 
@@ -145,6 +163,37 @@ describe('reception and queue vertical slice', () => {
     ]);
     expect(first.status).toBe(200); expect(second.status).toBe(200);
     expect(new Set([first.body.data.queueTicketPublicId, second.body.data.queueTicketPublicId]).size).toBe(2);
+  });
+
+  it('explains when walk-in capacity is full', async () => {
+    repository.walkInError = 53268;
+    const response = await request(app(repository)).post('/api/v1/check-ins/walk-ins').set(auth)
+      .set('idempotency-key', randomUUID()).send({ branchPublicId: branchId, patientPublicId: patientId,
+        doctorPublicId: doctorId, roomPublicId: roomId, servicePublicId: serviceId, priorityLevel: 0 });
+    expect(response.status).toBe(409);
+    expect(response.body.error.code).toBe('WALK_IN_CAPACITY_FULL');
+  });
+
+  it('skips and recalls a called ticket with a reason and rejects stale actions', async () => {
+    const path = `/api/v1/queues/${workspace.queue[0]!.publicId}`;
+    const invalid = await request(app(repository)).post(`${path}/skip`).set(auth).send({ reason: 'Ngắn' });
+    const skipped = await request(app(repository)).post(`${path}/skip`).set(auth)
+      .send({ reason: 'Bệnh nhân tạm thời chưa có mặt.' });
+    const stale = await request(app(repository)).post(`${path}/skip`).set(auth)
+      .send({ reason: 'Bệnh nhân tạm thời chưa có mặt.' });
+    const recalled = await request(app(repository)).post(`${path}/recall`).set(auth)
+      .send({ reason: 'Bệnh nhân đã quay lại phòng khám.' });
+    expect(invalid.status).toBe(400);
+    expect(skipped.body.data.status).toBe('SKIPPED');
+    expect(stale.status).toBe(409); expect(stale.body.error.code).toBe('QUEUE_STATE_CONFLICT');
+    expect(recalled.body.data.status).toBe('CALLED');
+  });
+
+  it('rejects queue actions outside the staff branch scope', async () => {
+    repository.queueActionError = 51002;
+    const response = await request(app(repository)).post(`/api/v1/queues/${workspace.queue[0]!.publicId}/skip`)
+      .set(auth).send({ reason: 'Bệnh nhân chưa có mặt tại quầy.' });
+    expect(response.status).toBe(403); expect(response.body.error.code).toBe('FORBIDDEN');
   });
 
   it('cancels an encounter by public id with a mandatory reason', async () => {

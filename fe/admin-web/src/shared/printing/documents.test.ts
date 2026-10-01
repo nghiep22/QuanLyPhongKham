@@ -25,6 +25,8 @@ describe('print document business rules', () => {
     const ticket: QueueTicket = {
       publicId: '21111111-1111-4111-8111-111111111111', encounterPublicId: '31111111-1111-4111-8111-111111111111',
       displayNumber: 'A001', priorityLevel: 0, status: 'WAITING', issuedAtUtc: '2026-09-18T01:00:00Z',
+      plannedStartUtc: '2026-09-18T01:30:00Z', plannedStartTimeLocal: '08:30',
+      eligibleToCall: false, estimatedWaitMinutes: 30,
       calledAtUtc: null, serviceStartedAtUtc: null, encounterCode: 'LK-001', encounterSource: 'APPOINTMENT',
       bookingChannel: 'ONLINE', patient: { publicId: '41111111-1111-4111-8111-111111111111', code: 'BN001',
         fullName: 'Nguyễn An', dateOfBirth: '1990-01-02', gender: 'MALE', phone: '0900000000' },
@@ -44,6 +46,7 @@ describe('print document business rules', () => {
   it('marks completed clinical results as unsigned drafts', () => {
     const encounter: ClinicalEncounterDetail = {
       publicId: '71111111-1111-4111-8111-111111111111', code: 'LK-002', source: 'WALK_IN', status: 'COMPLETED',
+      rowVersion: 'AAAAAAAAAAE=',
       arrivedAtUtc: '2026-09-18T01:00:00Z', startedAtUtc: '2026-09-18T01:10:00Z', completedAtUtc: '2026-09-18T01:30:00Z',
       chiefComplaint: 'Đau đầu', patient: { publicId: '81111111-1111-4111-8111-111111111111', code: 'BN002',
         fullName: 'Lê Minh', dateOfBirth: '1988-03-04', gender: 'FEMALE' },

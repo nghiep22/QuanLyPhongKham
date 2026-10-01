@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AuthenticatedUser } from '@clinic/generated-api-types'
-import { getAdminAccess } from './admin-access'
+import { canOpenAdminPath, getAdminAccess, hasStaffRole } from './admin-access'
 
 function user(permissions: string[] = [], roleCodes: string[] = []): AuthenticatedUser {
   return {
@@ -29,6 +29,13 @@ describe('getAdminAccess', () => {
     expect(access.canUsePharmacy).toBe(false)
   })
 
+  it('shows clinical only for a doctor assigned to a branch', () => {
+    expect(getAdminAccess(user(['ENCOUNTERS_CLINICAL'], ['ADMIN'])).canUseClinical).toBe(false)
+    const doctor = user(['ENCOUNTERS_CLINICAL'], ['DOCTOR'])
+    doctor.roles[0]!.branchId = '1'
+    expect(getAdminAccess(doctor).canUseClinical).toBe(true)
+  })
+
   it('enables a module when any accepted permission is present', () => {
     const access = getAdminAccess(user(['ENCOUNTERS_CREATE', 'PAYMENT_COLLECT']))
 
@@ -47,5 +54,30 @@ describe('getAdminAccess', () => {
 
   it('returns no access for a missing session', () => {
     expect(Object.values(getAdminAccess(null)).every((value) => value === false)).toBe(true)
+  })
+})
+
+describe('hasStaffRole', () => {
+  it('keeps patient-only accounts out of the staff workspace', () => {
+    expect(hasStaffRole(user(['APPOINTMENTS_SELF'], ['PATIENT']))).toBe(false)
+    expect(hasStaffRole(user())).toBe(false)
+  })
+
+  it('allows staff accounts even when they also have a patient role', () => {
+    expect(hasStaffRole(user([], ['PATIENT', 'DOCTOR']))).toBe(true)
+    expect(hasStaffRole(user([], ['RECEPTIONIST']))).toBe(true)
+  })
+})
+
+describe('canOpenAdminPath', () => {
+  it('does not show modules outside the signed-in staff member’s permissions', () => {
+    const receptionist = user(['QUEUE_MANAGE'], ['RECEPTIONIST'])
+    expect(canOpenAdminPath(receptionist, '/reception')).toBe(true)
+    expect(canOpenAdminPath(receptionist, '/reports')).toBe(false)
+    expect(canOpenAdminPath(receptionist, '/dashboard')).toBe(true)
+  })
+
+  it('does not expose the staff workspace to patient-only accounts', () => {
+    expect(canOpenAdminPath(user([], ['PATIENT']), '/dashboard')).toBe(false)
   })
 })

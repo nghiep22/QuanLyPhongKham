@@ -13,7 +13,11 @@ BEGIN TRY
         SELECT 1 FROM (VALUES
           (N'sp_create_patient'),(N'sp_update_patient'),(N'sp_clinic_patient_branches'),
           (N'sp_clinic_search_patients'),(N'sp_clinic_find_patient_duplicates'),
-          (N'sp_clinic_get_patient'),(N'sp_clinic_get_patient_clinical_summary')
+          (N'sp_clinic_get_patient'),(N'sp_clinic_get_patient_clinical_summary'),
+          (N'sp_clinic_replace_emergency_contacts'),(N'sp_clinic_get_my_emergency_contacts'),
+          (N'sp_clinic_replace_my_emergency_contacts'),(N'sp_clinic_add_patient_allergy'),
+          (N'sp_clinic_deactivate_patient_allergy'),(N'sp_clinic_add_patient_condition'),
+          (N'sp_clinic_resolve_patient_condition')
         ) v(name)
         WHERE NOT EXISTS (
             SELECT 1 FROM sys.database_permissions dp
@@ -87,15 +91,34 @@ BEGIN TRY
         encounter_source,status,arrived_at_utc,created_by_user_id)
     VALUES(CONCAT('PE',LEFT(@suffix,17)),@main_id,@patient_id,@doctor_id,
         'WALK_IN','WAITING',SYSUTCDATETIME(),@reception_id);
-    INSERT dbo.patient_allergies(patient_id,allergen_name,allergy_type,severity)
-    VALUES(@patient_id,N'Penicillin','DRUG','SEVERE');
-    INSERT dbo.patient_conditions(patient_id,condition_name,status)
-    VALUES(@patient_id,N'Tăng huyết áp','ACTIVE');
+    DECLARE @allergy_public_id uniqueidentifier,@condition_public_id uniqueidentifier;
+    EXEC dbo.sp_clinic_add_patient_allergy @actor_user_id=@doctor_user_id,@branch_id=@main_id,
+        @patient_public_id=@patient_public_id,@allergen_name=N'Penicillin',@allergy_type='DRUG',
+        @severity='SEVERE',@allergy_public_id=@allergy_public_id OUTPUT;
+    EXEC dbo.sp_clinic_add_patient_condition @actor_user_id=@doctor_user_id,@branch_id=@main_id,
+        @patient_public_id=@patient_public_id,@condition_name=N'Tăng huyết áp',@status='ACTIVE',
+        @condition_public_id=@condition_public_id OUTPUT;
+    IF NOT EXISTS(SELECT 1 FROM dbo.patient_allergies pa JOIN dbo.allergens a ON a.allergen_id=pa.allergen_id
+        WHERE pa.public_id=@allergy_public_id AND a.canonical_name=N'Penicillin')
+        THROW 55717,N'Dị ứng thuốc chưa nối danh mục dị nguyên.',1;
     EXEC dbo.sp_clinic_get_patient_clinical_summary @actor_user_id=@doctor_user_id,
         @branch_id=@main_id,@patient_public_id=@patient_public_id;
     IF NOT EXISTS(SELECT 1 FROM dbo.audit_logs WHERE action_code='PATIENT_CLINICAL_SUMMARY_READ'
         AND actor_user_id=@doctor_user_id AND entity_id=CONVERT(varchar(36),@patient_public_id))
         THROW 55709,N'Lần đọc lâm sàng không được audit.',1;
+    EXEC dbo.sp_clinic_deactivate_patient_allergy @actor_user_id=@doctor_user_id,@branch_id=@main_id,
+        @patient_public_id=@patient_public_id,@allergy_public_id=@allergy_public_id,
+        @reason=N'Đã đối chiếu hồ sơ và loại trừ dị ứng thuốc';
+    EXEC dbo.sp_clinic_resolve_patient_condition @actor_user_id=@doctor_user_id,@branch_id=@main_id,
+        @patient_public_id=@patient_public_id,@condition_public_id=@condition_public_id,
+        @reason=N'Đã tái khám và xác nhận bệnh được giải quyết';
+    IF EXISTS(SELECT 1 FROM dbo.patient_allergies WHERE public_id=@allergy_public_id AND is_active=1)
+       OR EXISTS(SELECT 1 FROM dbo.patient_conditions WHERE public_id=@condition_public_id AND status<>'RESOLVED')
+       OR NOT EXISTS(SELECT 1 FROM dbo.audit_logs WHERE action_code='PATIENT_ALLERGY_DEACTIVATED'
+          AND entity_id=CONVERT(varchar(36),@patient_public_id))
+       OR NOT EXISTS(SELECT 1 FROM dbo.audit_logs WHERE action_code='PATIENT_CONDITION_RESOLVED'
+          AND entity_id=CONVERT(varchar(36),@patient_public_id))
+        THROW 55718,N'Ngừng dị ứng/giải quyết bệnh nền không đúng hoặc thiếu audit.',1;
 
     DECLARE @version binary(8)=(SELECT row_ver FROM dbo.patients WHERE patient_id=@patient_id);
     EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=@reception_id;
@@ -106,6 +129,62 @@ BEGIN TRY
         THROW 55710,N'Cập nhật hành chính thất bại.',1;
     IF NOT EXISTS(SELECT 1 FROM dbo.audit_logs WHERE action_code='PATIENT_UPDATED' AND actor_user_id=@reception_id)
         THROW 55711,N'Cập nhật hành chính không được audit.',1;
+    SET @version=(SELECT row_ver FROM dbo.patients WHERE patient_id=@patient_id);
+    EXEC dbo.sp_clinic_replace_emergency_contacts @actor_user_id=@reception_id,@branch_id=@main_id,
+        @patient_public_id=@patient_public_id,
+        @contacts_json=N'[{"fullName":"Người nhà A","relationshipName":"Cha","phone":"0901234567","isPrimary":true}]',
+        @expected_row_ver=@version;
+    IF NOT EXISTS(SELECT 1 FROM dbo.patient_emergency_contacts
+        WHERE patient_id=@patient_id AND is_active=1 AND full_name=N'Người nhà A' AND is_primary=1)
+        THROW 55715,N'Không lưu được liên hệ khẩn cấp.',1;
+    SET @version=(SELECT row_ver FROM dbo.patients WHERE patient_id=@patient_id);
+    EXEC dbo.sp_clinic_replace_emergency_contacts @actor_user_id=@reception_id,@branch_id=@main_id,
+        @patient_public_id=@patient_public_id,
+        @contacts_json=N'[{"fullName":"Người nhà B","relationshipName":"Mẹ","phone":"0907654321","isPrimary":true}]',
+        @expected_row_ver=@version;
+    IF (SELECT COUNT(*) FROM dbo.patient_emergency_contacts WHERE patient_id=@patient_id AND is_active=1)<>1
+       OR NOT EXISTS(SELECT 1 FROM dbo.patient_emergency_contacts WHERE patient_id=@patient_id AND is_active=0)
+       OR NOT EXISTS(SELECT 1 FROM dbo.audit_logs WHERE action_code='PATIENT_EMERGENCY_CONTACTS_UPDATED'
+           AND entity_id=CONVERT(varchar(36),@patient_public_id))
+        THROW 55716,N'Thay liên hệ không giữ lịch sử hoặc thiếu audit.',1;
+    INSERT dbo.users(username,password_hash,display_name,status)
+    VALUES(CONCAT(N'patient-registry-self-',@suffix),REPLICATE('x',60),N'Bệnh nhân test','ACTIVE');
+    DECLARE @patient_user_id bigint=SCOPE_IDENTITY();
+    INSERT dbo.user_roles(user_id,role_id,branch_id,granted_by_user_id)
+    SELECT @patient_user_id,role_id,NULL,@admin_id FROM dbo.roles WHERE role_code='PATIENT';
+    INSERT dbo.user_patient_access(user_id,patient_id,relationship_type,status,verified_by_user_id,
+        verified_branch_id,verified_at_utc)
+    VALUES(@patient_user_id,@patient_id,'SELF','ACTIVE',@reception_id,@main_id,SYSUTCDATETIME());
+    INSERT dbo.users(username,password_hash,display_name,status)
+    VALUES(CONCAT(N'patient-registry-guardian-',@suffix),REPLICATE('x',60),N'Người giám hộ test','ACTIVE');
+    DECLARE @guardian_user_id bigint=SCOPE_IDENTITY();
+    INSERT dbo.user_roles(user_id,role_id,branch_id,granted_by_user_id)
+    SELECT @guardian_user_id,role_id,NULL,@admin_id FROM dbo.roles WHERE role_code='PATIENT';
+    INSERT dbo.user_patient_access(user_id,patient_id,relationship_type,status,verified_by_user_id,
+        verified_branch_id,verified_at_utc)
+    VALUES(@guardian_user_id,@patient_id,'GUARDIAN','ACTIVE',@reception_id,@main_id,SYSUTCDATETIME());
+    EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=@guardian_user_id;
+    DECLARE @guardian_error int=0;
+    BEGIN TRY
+        EXEC dbo.sp_clinic_get_my_emergency_contacts @actor_user_id=@guardian_user_id,
+            @patient_public_id=@patient_public_id;
+    END TRY BEGIN CATCH SET @guardian_error=ERROR_NUMBER(); END CATCH;
+    IF @guardian_error<>51002 THROW 55720,N'Người giám hộ đọc được liên hệ dành riêng cho chủ hồ sơ.',1;
+    EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=@patient_user_id;
+    EXEC dbo.sp_clinic_get_my_emergency_contacts @actor_user_id=@patient_user_id,
+        @patient_public_id=@patient_public_id;
+    SET @version=(SELECT row_ver FROM dbo.patients WHERE patient_id=@patient_id);
+    EXEC dbo.sp_clinic_replace_my_emergency_contacts @actor_user_id=@patient_user_id,
+        @patient_public_id=@patient_public_id,
+        @contacts_json=N'[{"fullName":"Người nhà C","relationshipName":"Anh","phone":"0903332222","isPrimary":true}]',
+        @expected_row_ver=@version;
+    IF NOT EXISTS(SELECT 1 FROM dbo.patient_emergency_contacts
+        WHERE patient_id=@patient_id AND is_active=1 AND full_name=N'Người nhà C')
+       OR NOT EXISTS(SELECT 1 FROM dbo.audit_logs WHERE actor_user_id=@patient_user_id
+          AND action_code='PATIENT_EMERGENCY_CONTACTS_UPDATED'
+          AND entity_id=CONVERT(varchar(36),@patient_public_id))
+        THROW 55719,N'Bệnh nhân tự sửa liên hệ không thành công hoặc thiếu audit.',1;
+    EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=@reception_id;
     DECLARE @overridden_id bigint,@overridden_public_id uniqueidentifier;
     EXEC dbo.sp_create_patient @actor_user_id=@reception_id,@branch_id=@main_id,
         @full_name=N'Hồ Sơ Trùng Có Xác Nhận',@date_of_birth='1990-05-14',@gender='FEMALE',
@@ -115,7 +194,15 @@ BEGIN TRY
         WHERE actor_user_id=@reception_id AND action_code='PATIENT_CREATED'
           AND new_values_json LIKE '%"duplicateOverride":true%')
         THROW 55713,N'Tạo hồ sơ trùng có lý do không thành công hoặc thiếu audit.',1;
-    ROLLBACK TRANSACTION;
+    SET @version=(SELECT row_ver FROM dbo.patients WHERE patient_id=@patient_id);
+    EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=@guardian_user_id;
+    SET @guardian_error=0;
+    BEGIN TRY
+        EXEC dbo.sp_clinic_replace_my_emergency_contacts @actor_user_id=@guardian_user_id,
+            @patient_public_id=@patient_public_id,@contacts_json=N'[]',@expected_row_ver=@version;
+    END TRY BEGIN CATCH SET @guardian_error=ERROR_NUMBER(); END CATCH;
+    IF XACT_STATE()<>0 ROLLBACK TRANSACTION;
+    IF @guardian_error<>51002 THROW 55721,N'Người giám hộ sửa được liên hệ dành riêng cho chủ hồ sơ.',1;
 
     BEGIN TRANSACTION;
     INSERT dbo.users(username,password_hash,display_name,status)

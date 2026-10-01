@@ -94,6 +94,7 @@ export function receptionSlipPrintDocument(
     fields: [
       { label: 'Số thứ tự', value: ticket.displayNumber, emphasis: true },
       { label: 'Thời điểm cấp số', value: formatViDateTime(ticket.issuedAtUtc, branch.timezoneName) },
+      { label: 'Giờ khám dự kiến', value: ticket.plannedStartUtc ? formatViDateTime(ticket.plannedStartUtc, branch.timezoneName) : null },
       { label: 'Bệnh nhân', value: ticket.patient.fullName },
       { label: 'Mã bệnh nhân', value: ticket.patient.code },
       { label: 'Ngày sinh', value: formatViDate(ticket.patient.dateOfBirth) },
@@ -113,6 +114,7 @@ export function receptionSlipPrintDocument(
       ],
     }],
     notes: [
+      'Giờ khám dự kiến có thể thay đổi khi phát sinh ca cấp cứu hoặc buổi khám kéo dài.',
       'Số tiền trên phiếu chỉ là tạm tính cho dịch vụ ban đầu, chưa bao gồm chỉ định thêm, thuốc, BHYT, giảm trừ hoặc hoàn tiền.',
       'Số tiền cần thanh toán chính thức được xác định trên bảng kê chi phí tại quầy thu ngân.',
     ],

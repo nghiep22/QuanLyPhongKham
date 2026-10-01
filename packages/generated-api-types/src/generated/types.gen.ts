@@ -46,6 +46,138 @@ export type CreatePatientRequest = PatientDuplicateRequest & {
     duplicateReason?: string;
 };
 
+export type PatientMergePreviewRequest = {
+    targetPatientId: string;
+};
+
+export type PatientMergeRequest = {
+    targetPatientId: string;
+    targetRowVersion: string;
+    reason: string;
+};
+
+export type PatientMergePreview = {
+    sourcePublicId: string;
+    sourceCode: string;
+    sourceName: string;
+    sourceDateOfBirth: string;
+    sourceGender: 'MALE' | 'FEMALE' | 'OTHER';
+    sourceBranchPublicId: string | null;
+    sourceBranchName: string | null;
+    sourceNationalIdLast4: string | null;
+    sourceRowVersion: string;
+    targetPublicId: string;
+    targetCode: string;
+    targetName: string;
+    targetDateOfBirth: string;
+    targetGender: 'MALE' | 'FEMALE' | 'OTHER';
+    targetBranchPublicId: string | null;
+    targetBranchName: string | null;
+    targetNationalIdLast4: string | null;
+    targetRowVersion: string;
+    sourceAppointments: number;
+    sourceSignedEncounters: number;
+    sourceInvoices: number;
+    sourceActiveLinks: number;
+    sourceActiveAllergies: number;
+    sourceOpenConditions: number;
+    sourceActiveContacts: number;
+    identityCompatible: boolean;
+    hasOpenWork: boolean;
+    hasInboundMerge: boolean;
+    hasLinkConflict: boolean;
+    hasContactConflict: boolean;
+};
+
+export type PatientMergePreviewResponse = {
+    data: PatientMergePreview;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type PatientMergeResult = {
+    sourcePublicId: string;
+    sourceCode: string;
+    targetPublicId: string;
+    targetCode: string;
+    mergedAtUtc: string;
+};
+
+export type PatientMergeResultResponse = {
+    data: PatientMergeResult;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type PatientMergeHistoryItem = {
+    sourcePublicId: string;
+    sourceCode: string;
+    sourceName: string;
+    targetPublicId: string;
+    targetCode: string;
+    reason: string;
+    mergedAtUtc: string;
+    performedByPublicId: string;
+    performedByName: string;
+};
+
+export type PatientMergeHistoryResponse = {
+    data: Array<PatientMergeHistoryItem>;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type PatientEmergencyContact = {
+    fullName: string;
+    relationshipName: string | null;
+    phone: string;
+    isPrimary: boolean;
+};
+
+export type PatientEmergencyContactsRequest = {
+    contacts: Array<PatientEmergencyContact>;
+};
+
+export type MyEmergencyContacts = {
+    patientPublicId: string;
+    rowVersion: string;
+    contacts: Array<PatientEmergencyContact>;
+};
+
+export type MyEmergencyContactsResponse = {
+    data: MyEmergencyContacts;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type PatientAllergyRequest = {
+    allergenName: string;
+    type: 'DRUG' | 'FOOD' | 'ENVIRONMENT' | 'OTHER';
+    severity: 'MILD' | 'MODERATE' | 'SEVERE' | 'UNKNOWN';
+    reaction?: string | null;
+    notedAt?: string | null;
+};
+
+export type PatientConditionRequest = {
+    code?: string | null;
+    name: string;
+    diagnosedDate?: string | null;
+    status: 'ACTIVE' | 'CONTROLLED';
+    notes?: string | null;
+};
+
+export type PatientHealthReasonRequest = {
+    reason: string;
+};
+
+export type PatientHealthRecordActionResponse = {
+    data: {
+        publicId: string;
+    };
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
 export type PatientSummary = {
     publicId: string;
     code: string;
@@ -65,6 +197,7 @@ export type PatientDetail = PatientSummary & {
     email: string | null;
     addressLine: string | null;
     province: string | null;
+    emergencyContacts: Array<PatientEmergencyContact>;
 };
 
 export type PatientSummaryListResponse = {
@@ -88,6 +221,7 @@ export type PatientClinicalSummary = {
         gender: 'MALE' | 'FEMALE' | 'OTHER';
     };
     allergies: Array<{
+        publicId: string;
         allergenName: string;
         type: string;
         severity: string;
@@ -95,6 +229,7 @@ export type PatientClinicalSummary = {
         notedAt: string | null;
     }>;
     conditions: Array<{
+        publicId: string;
         code: string | null;
         name: string;
         diagnosedDate: string | null;
@@ -742,6 +877,109 @@ export type PublicDoctorListResponse = {
     requestId: RequestId;
 };
 
+export type OrganizationBranchFields = {
+    name: string;
+    addressLine: string;
+    ward: string | null;
+    district: string | null;
+    province: string | null;
+    phone: string | null;
+    email: string | null;
+    medicalLicenseNo: string | null;
+    timezoneName: string;
+    bookingHorizonDays: number;
+    onlineHoldMinutes: number;
+    cancellationDeadlineMinutes: number;
+    checkInEarlyMinutes: number;
+    checkInLateMinutes: number;
+    walkInMaxWaitMinutes: number;
+};
+
+export type CreateOrganizationBranchRequest = OrganizationBranchFields & {
+    code: string;
+};
+
+export type UpdateOrganizationBranchRequest = OrganizationBranchFields & {
+    isActive: boolean;
+};
+
+export type OrganizationBranch = OrganizationBranchFields & {
+    publicId: string;
+    code: string;
+    isActive: boolean;
+    rowVersion: string;
+};
+
+export type OrganizationSpecialty = {
+    publicId: string;
+    code: string;
+    name: string;
+    description: string | null;
+    isActive: boolean;
+    rowVersion: string;
+};
+
+export type OrganizationCategory = {
+    publicId: string;
+    code: string;
+    name: string;
+    displayOrder: number;
+    isActive: boolean;
+    rowVersion: string;
+};
+
+export type CreateOrganizationSpecialtyRequest = {
+    code: string;
+    name: string;
+    description: string | null;
+};
+
+export type UpdateOrganizationSpecialtyRequest = {
+    name: string;
+    description: string | null;
+    isActive: boolean;
+};
+
+export type CreateOrganizationCategoryRequest = {
+    code: string;
+    name: string;
+    displayOrder: number;
+};
+
+export type UpdateOrganizationCategoryRequest = {
+    name: string;
+    displayOrder: number;
+    isActive: boolean;
+};
+
+export type OrganizationCatalogResponse = {
+    data: {
+        branches: Array<OrganizationBranch>;
+        specialties: Array<OrganizationSpecialty>;
+        categories: Array<OrganizationCategory>;
+    };
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type OrganizationBranchResponse = {
+    data: OrganizationBranch;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type OrganizationSpecialtyResponse = {
+    data: OrganizationSpecialty;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type OrganizationCategoryResponse = {
+    data: OrganizationCategory;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
 export type CatalogReferenceData = {
     branches: Array<CatalogReference>;
     categories: Array<CatalogReference>;
@@ -1011,6 +1249,59 @@ export type ScheduleBreak = {
     breakName?: string | null;
 };
 
+export type ScheduleWorkflowStatus = 'PROPOSED' | 'DOCTOR_CONFIRMED' | 'REJECTED' | 'PUBLISHED';
+
+export type DoctorWorkingSchedule = {
+    publicId: string;
+    branchPublicId: string;
+    branchName: string;
+    timezoneName: string;
+    roomName: string;
+    weekdayIso: number;
+    localStartTime: string;
+    localEndTime: string;
+    slotDurationMinutes: number;
+    effectiveFrom: string;
+    effectiveTo: string | null;
+    workflowStatus: ScheduleWorkflowStatus;
+    decisionNote: string | null;
+    breaks: Array<ScheduleBreak>;
+};
+
+export type DoctorWorkingSchedulesResponse = {
+    data: Array<DoctorWorkingSchedule>;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
+export type RequestDoctorTimeOff = {
+    branchPublicId: string;
+    serviceDate: string;
+    localStartTime: string;
+    localEndTime: string;
+    reason: string;
+};
+
+export type DoctorTimeOff = {
+    publicId: string;
+    branchPublicId: string;
+    branchName: string;
+    doctorName: string;
+    serviceDate: string;
+    localStartTime: string;
+    localEndTime: string;
+    reason: string;
+    decisionNote: string | null;
+    status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+    appointmentConflictCount: number;
+};
+
+export type DoctorTimeOffListResponse = {
+    data: Array<DoctorTimeOff>;
+    meta: ResponseMeta;
+    requestId: RequestId;
+};
+
 export type CreateWorkingScheduleRequest = {
     branchPublicId: string;
     doctorPublicId: string;
@@ -1059,6 +1350,8 @@ export type SchedulingData = {
         effectiveFrom: string;
         effectiveTo: string | null;
         isActive: boolean;
+        workflowStatus: ScheduleWorkflowStatus;
+        decisionNote: string | null;
         breaks: Array<ScheduleBreak>;
         slotCount: number;
         rowVersion: string;
@@ -1112,7 +1405,7 @@ export type ReceptionBranchListResponse = {
     requestId: RequestId;
 };
 
-export type QueueStatus = 'WAITING' | 'CALLED' | 'SERVING';
+export type QueueStatus = 'WAITING' | 'CALLED' | 'SERVING' | 'SKIPPED';
 
 export type QueueTicket = {
     publicId: string;
@@ -1122,6 +1415,10 @@ export type QueueTicket = {
     status: QueueStatus;
     issuedAtUtc: string;
     calledAtUtc: string | null;
+    plannedStartUtc: string | null;
+    plannedStartTimeLocal: string | null;
+    eligibleToCall: boolean;
+    estimatedWaitMinutes: number | null;
     serviceStartedAtUtc: string | null;
     encounterCode: string;
     encounterSource: 'APPOINTMENT' | 'WALK_IN';
@@ -1212,8 +1509,16 @@ export type ReceptionWorkspace = {
         businessDate: string;
         checkInEarlyMinutes: number;
         checkInLateMinutes: number;
+        walkInMaxWaitMinutes: number;
     };
     queue: Array<QueueTicket>;
+    walkInSlots: Array<{
+        doctorPublicId: string;
+        roomPublicId: string;
+        servicePublicId: string;
+        startsAtUtc: string;
+        startTimeLocal: string;
+    }>;
     appointments: Array<CheckInCandidate>;
     doctors: Array<{
         publicId: string;
@@ -1259,6 +1564,23 @@ export type CreateWalkInRequest = {
 
 export type CallNextQueueRequest = {
     branchPublicId: string;
+};
+
+export type QueueActionRequest = {
+    reason: string;
+};
+
+export type QueueActionResult = {
+    queueTicketPublicId: string;
+    encounterPublicId: string;
+    displayNumber: string;
+    status: 'SKIPPED' | 'CALLED';
+};
+
+export type QueueActionResponse = {
+    data: QueueActionResult;
+    meta: ResponseMeta;
+    requestId: RequestId;
 };
 
 export type QueueCommandResult = {
@@ -1396,6 +1718,7 @@ export type ClinicalAmendmentRequest = {
 };
 
 export type ClinicalEncounterDetail = ClinicalEncounterSummary & {
+    rowVersion: string;
     signedAtUtc: string | null;
     patientRelease: {
         releasedAtUtc: string;
@@ -2050,6 +2373,8 @@ export type OperationsReportSummary = {
     encounterCount: number;
     completedEncounterCount: number;
     averageWaitMinutes: number | null;
+    p90WaitMinutes: number | null;
+    walkInEncounterCount: number;
 };
 
 export type OperationsReportDay = {
@@ -2178,6 +2503,10 @@ export type CreateStaffRequestWritable = {
     specialtyPublicId?: string;
 };
 
+export type WorkingScheduleId = string;
+
+export type TimeOffId = string;
+
 export type InvoiceId = string;
 
 export type PaymentAllocationId = string;
@@ -2207,6 +2536,11 @@ export type IfMatch = string;
  * Strong ETag containing the Base64 rowversion of a catalog resource.
  */
 export type CatalogIfMatch = string;
+
+/**
+ * Strong ETag containing the Base64 encounter rowversion.
+ */
+export type ClinicalIfMatch = string;
 
 export type BranchPublicIdQuery = string;
 
@@ -3588,6 +3922,454 @@ export type UpdatePatientResponses = {
 
 export type UpdatePatientResponse = UpdatePatientResponses[keyof UpdatePatientResponses];
 
+export type PreviewPatientMergeData = {
+    body: PatientMergePreviewRequest;
+    path: {
+        patientId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/patients/{patientId}/merge-preview';
+};
+
+export type PreviewPatientMergeErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+};
+
+export type PreviewPatientMergeError = PreviewPatientMergeErrors[keyof PreviewPatientMergeErrors];
+
+export type PreviewPatientMergeResponses = {
+    /**
+     * Source, target and impacted record counts.
+     */
+    200: PatientMergePreviewResponse;
+};
+
+export type PreviewPatientMergeResponse = PreviewPatientMergeResponses[keyof PreviewPatientMergeResponses];
+
+export type MergePatientsData = {
+    body: PatientMergeRequest;
+    headers: {
+        /**
+         * Strong ETag containing the Base64 rowversion of a catalog resource.
+         */
+        'If-Match': string;
+    };
+    path: {
+        patientId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/patients/{patientId}/merge';
+};
+
+export type MergePatientsErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+    /**
+     * The If-Match precondition is required for this update.
+     */
+    428: ApiErrorResponse;
+    /**
+     * A required registration dependency is unavailable.
+     */
+    503: ApiErrorResponse;
+};
+
+export type MergePatientsError = MergePatientsErrors[keyof MergePatientsErrors];
+
+export type MergePatientsResponses = {
+    /**
+     * Merge completed and audited.
+     */
+    200: PatientMergeResultResponse;
+};
+
+export type MergePatientsResponse = MergePatientsResponses[keyof MergePatientsResponses];
+
+export type ListPatientMergeHistoryData = {
+    body?: never;
+    path: {
+        patientId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/patients/{patientId}/merge-history';
+};
+
+export type ListPatientMergeHistoryErrors = {
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+};
+
+export type ListPatientMergeHistoryError = ListPatientMergeHistoryErrors[keyof ListPatientMergeHistoryErrors];
+
+export type ListPatientMergeHistoryResponses = {
+    /**
+     * Merge events ordered from newest to oldest.
+     */
+    200: PatientMergeHistoryResponse;
+};
+
+export type ListPatientMergeHistoryResponse = ListPatientMergeHistoryResponses[keyof ListPatientMergeHistoryResponses];
+
+export type ReplacePatientEmergencyContactsData = {
+    body: PatientEmergencyContactsRequest;
+    headers: {
+        /**
+         * Strong ETag containing the Base64 rowversion of a catalog resource.
+         */
+        'If-Match': string;
+    };
+    path: {
+        patientId: string;
+    };
+    query: {
+        branchPublicId: string;
+    };
+    url: '/api/v1/admin/patients/{patientId}/emergency-contacts';
+};
+
+export type ReplacePatientEmergencyContactsErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+    /**
+     * The If-Match precondition is required for this update.
+     */
+    428: ApiErrorResponse;
+};
+
+export type ReplacePatientEmergencyContactsError = ReplacePatientEmergencyContactsErrors[keyof ReplacePatientEmergencyContactsErrors];
+
+export type ReplacePatientEmergencyContactsResponses = {
+    /**
+     * Active emergency contacts replaced.
+     */
+    200: PatientDetailResponse;
+};
+
+export type ReplacePatientEmergencyContactsResponse = ReplacePatientEmergencyContactsResponses[keyof ReplacePatientEmergencyContactsResponses];
+
+export type GetMyEmergencyContactsData = {
+    body?: never;
+    path: {
+        patientId: string;
+    };
+    query?: never;
+    url: '/api/v1/patients/{patientId}/my-emergency-contacts';
+};
+
+export type GetMyEmergencyContactsErrors = {
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+};
+
+export type GetMyEmergencyContactsError = GetMyEmergencyContactsErrors[keyof GetMyEmergencyContactsErrors];
+
+export type GetMyEmergencyContactsResponses = {
+    /**
+     * Current emergency contacts and patient version.
+     */
+    200: MyEmergencyContactsResponse;
+};
+
+export type GetMyEmergencyContactsResponse = GetMyEmergencyContactsResponses[keyof GetMyEmergencyContactsResponses];
+
+export type ReplaceMyEmergencyContactsData = {
+    body: PatientEmergencyContactsRequest;
+    headers: {
+        /**
+         * Strong ETag containing the Base64 rowversion of a catalog resource.
+         */
+        'If-Match': string;
+    };
+    path: {
+        patientId: string;
+    };
+    query?: never;
+    url: '/api/v1/patients/{patientId}/my-emergency-contacts';
+};
+
+export type ReplaceMyEmergencyContactsErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+    /**
+     * The If-Match precondition is required for this update.
+     */
+    428: ApiErrorResponse;
+};
+
+export type ReplaceMyEmergencyContactsError = ReplaceMyEmergencyContactsErrors[keyof ReplaceMyEmergencyContactsErrors];
+
+export type ReplaceMyEmergencyContactsResponses = {
+    /**
+     * Emergency contacts replaced.
+     */
+    200: MyEmergencyContactsResponse;
+};
+
+export type ReplaceMyEmergencyContactsResponse = ReplaceMyEmergencyContactsResponses[keyof ReplaceMyEmergencyContactsResponses];
+
+export type AddPatientAllergyData = {
+    body: PatientAllergyRequest;
+    path: {
+        patientId: string;
+    };
+    query: {
+        branchPublicId: string;
+    };
+    url: '/api/v1/patients/{patientId}/allergies';
+};
+
+export type AddPatientAllergyErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type AddPatientAllergyError = AddPatientAllergyErrors[keyof AddPatientAllergyErrors];
+
+export type AddPatientAllergyResponses = {
+    /**
+     * Allergy recorded.
+     */
+    201: PatientHealthRecordActionResponse;
+};
+
+export type AddPatientAllergyResponse = AddPatientAllergyResponses[keyof AddPatientAllergyResponses];
+
+export type DeactivatePatientAllergyData = {
+    body: PatientHealthReasonRequest;
+    path: {
+        patientId: string;
+        allergyId: string;
+    };
+    query: {
+        branchPublicId: string;
+    };
+    url: '/api/v1/patients/{patientId}/allergies/{allergyId}/deactivate';
+};
+
+export type DeactivatePatientAllergyErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+};
+
+export type DeactivatePatientAllergyError = DeactivatePatientAllergyErrors[keyof DeactivatePatientAllergyErrors];
+
+export type DeactivatePatientAllergyResponses = {
+    /**
+     * Allergy deactivated.
+     */
+    200: PatientHealthRecordActionResponse;
+};
+
+export type DeactivatePatientAllergyResponse = DeactivatePatientAllergyResponses[keyof DeactivatePatientAllergyResponses];
+
+export type AddPatientConditionData = {
+    body: PatientConditionRequest;
+    path: {
+        patientId: string;
+    };
+    query: {
+        branchPublicId: string;
+    };
+    url: '/api/v1/patients/{patientId}/conditions';
+};
+
+export type AddPatientConditionErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type AddPatientConditionError = AddPatientConditionErrors[keyof AddPatientConditionErrors];
+
+export type AddPatientConditionResponses = {
+    /**
+     * Condition recorded.
+     */
+    201: PatientHealthRecordActionResponse;
+};
+
+export type AddPatientConditionResponse = AddPatientConditionResponses[keyof AddPatientConditionResponses];
+
+export type ResolvePatientConditionData = {
+    body: PatientHealthReasonRequest;
+    path: {
+        patientId: string;
+        conditionId: string;
+    };
+    query: {
+        branchPublicId: string;
+    };
+    url: '/api/v1/patients/{patientId}/conditions/{conditionId}/resolve';
+};
+
+export type ResolvePatientConditionErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+};
+
+export type ResolvePatientConditionError = ResolvePatientConditionErrors[keyof ResolvePatientConditionErrors];
+
+export type ResolvePatientConditionResponses = {
+    /**
+     * Condition resolved.
+     */
+    200: PatientHealthRecordActionResponse;
+};
+
+export type ResolvePatientConditionResponse = ResolvePatientConditionResponses[keyof ResolvePatientConditionResponses];
+
 export type GetPatientClinicalSummaryData = {
     body?: never;
     path: {
@@ -3653,6 +4435,305 @@ export type GetCatalogReferenceDataResponses = {
 };
 
 export type GetCatalogReferenceDataResponse = GetCatalogReferenceDataResponses[keyof GetCatalogReferenceDataResponses];
+
+export type GetOrganizationCatalogData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/catalog/organization';
+};
+
+export type GetOrganizationCatalogErrors = {
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+};
+
+export type GetOrganizationCatalogError = GetOrganizationCatalogErrors[keyof GetOrganizationCatalogErrors];
+
+export type GetOrganizationCatalogResponses = {
+    /**
+     * Organization catalog including inactive records.
+     */
+    200: OrganizationCatalogResponse;
+};
+
+export type GetOrganizationCatalogResponse = GetOrganizationCatalogResponses[keyof GetOrganizationCatalogResponses];
+
+export type CreateOrganizationBranchData = {
+    body: CreateOrganizationBranchRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/catalog/branches';
+};
+
+export type CreateOrganizationBranchErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type CreateOrganizationBranchError = CreateOrganizationBranchErrors[keyof CreateOrganizationBranchErrors];
+
+export type CreateOrganizationBranchResponses = {
+    /**
+     * Created branch.
+     */
+    201: OrganizationBranchResponse;
+};
+
+export type CreateOrganizationBranchResponse = CreateOrganizationBranchResponses[keyof CreateOrganizationBranchResponses];
+
+export type UpdateOrganizationBranchData = {
+    body: UpdateOrganizationBranchRequest;
+    headers: {
+        /**
+         * Strong ETag containing the Base64 employee rowversion and optional doctor rowversion.
+         */
+        'If-Match': string;
+    };
+    path: {
+        branchId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/catalog/branches/{branchId}';
+};
+
+export type UpdateOrganizationBranchErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+    /**
+     * The If-Match precondition is required for this update.
+     */
+    428: ApiErrorResponse;
+};
+
+export type UpdateOrganizationBranchError = UpdateOrganizationBranchErrors[keyof UpdateOrganizationBranchErrors];
+
+export type UpdateOrganizationBranchResponses = {
+    /**
+     * Updated branch.
+     */
+    200: OrganizationBranchResponse;
+};
+
+export type UpdateOrganizationBranchResponse = UpdateOrganizationBranchResponses[keyof UpdateOrganizationBranchResponses];
+
+export type CreateOrganizationSpecialtyData = {
+    body: CreateOrganizationSpecialtyRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/catalog/specialties';
+};
+
+export type CreateOrganizationSpecialtyErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type CreateOrganizationSpecialtyError = CreateOrganizationSpecialtyErrors[keyof CreateOrganizationSpecialtyErrors];
+
+export type CreateOrganizationSpecialtyResponses = {
+    /**
+     * Created specialty.
+     */
+    201: OrganizationSpecialtyResponse;
+};
+
+export type CreateOrganizationSpecialtyResponse = CreateOrganizationSpecialtyResponses[keyof CreateOrganizationSpecialtyResponses];
+
+export type UpdateOrganizationSpecialtyData = {
+    body: UpdateOrganizationSpecialtyRequest;
+    headers: {
+        /**
+         * Strong ETag containing the Base64 employee rowversion and optional doctor rowversion.
+         */
+        'If-Match': string;
+    };
+    path: {
+        specialtyId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/catalog/specialties/{specialtyId}';
+};
+
+export type UpdateOrganizationSpecialtyErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+    /**
+     * The If-Match precondition is required for this update.
+     */
+    428: ApiErrorResponse;
+};
+
+export type UpdateOrganizationSpecialtyError = UpdateOrganizationSpecialtyErrors[keyof UpdateOrganizationSpecialtyErrors];
+
+export type UpdateOrganizationSpecialtyResponses = {
+    /**
+     * Updated specialty.
+     */
+    200: OrganizationSpecialtyResponse;
+};
+
+export type UpdateOrganizationSpecialtyResponse = UpdateOrganizationSpecialtyResponses[keyof UpdateOrganizationSpecialtyResponses];
+
+export type CreateOrganizationCategoryData = {
+    body: CreateOrganizationCategoryRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/catalog/categories';
+};
+
+export type CreateOrganizationCategoryErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type CreateOrganizationCategoryError = CreateOrganizationCategoryErrors[keyof CreateOrganizationCategoryErrors];
+
+export type CreateOrganizationCategoryResponses = {
+    /**
+     * Created category.
+     */
+    201: OrganizationCategoryResponse;
+};
+
+export type CreateOrganizationCategoryResponse = CreateOrganizationCategoryResponses[keyof CreateOrganizationCategoryResponses];
+
+export type UpdateOrganizationCategoryData = {
+    body: UpdateOrganizationCategoryRequest;
+    headers: {
+        /**
+         * Strong ETag containing the Base64 employee rowversion and optional doctor rowversion.
+         */
+        'If-Match': string;
+    };
+    path: {
+        categoryId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/catalog/categories/{categoryId}';
+};
+
+export type UpdateOrganizationCategoryErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+    /**
+     * The If-Match precondition is required for this update.
+     */
+    428: ApiErrorResponse;
+};
+
+export type UpdateOrganizationCategoryError = UpdateOrganizationCategoryErrors[keyof UpdateOrganizationCategoryErrors];
+
+export type UpdateOrganizationCategoryResponses = {
+    /**
+     * Updated category.
+     */
+    200: OrganizationCategoryResponse;
+};
+
+export type UpdateOrganizationCategoryResponse = UpdateOrganizationCategoryResponses[keyof UpdateOrganizationCategoryResponses];
 
 export type ListCatalogRoomsData = {
     body?: never;
@@ -4231,6 +5312,43 @@ export type BookStaffAppointmentResponses = {
 
 export type BookStaffAppointmentResponse = BookStaffAppointmentResponses[keyof BookStaffAppointmentResponses];
 
+export type ListAdminAppointmentAvailabilityData = {
+    body?: never;
+    path?: never;
+    query: {
+        branchPublicId: string;
+        servicePublicId: string;
+        serviceDate: string;
+    };
+    url: '/api/v1/admin/appointments/availability';
+};
+
+export type ListAdminAppointmentAvailabilityErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+};
+
+export type ListAdminAppointmentAvailabilityError = ListAdminAppointmentAvailabilityErrors[keyof ListAdminAppointmentAvailabilityErrors];
+
+export type ListAdminAppointmentAvailabilityResponses = {
+    /**
+     * Available staff booking slots.
+     */
+    200: AvailabilityListResponse;
+};
+
+export type ListAdminAppointmentAvailabilityResponse = ListAdminAppointmentAvailabilityResponses[keyof ListAdminAppointmentAvailabilityResponses];
+
 export type ConfirmAppointmentData = {
     body?: never;
     path: {
@@ -4470,12 +5588,351 @@ export type CreateWorkingScheduleError = CreateWorkingScheduleErrors[keyof Creat
 
 export type CreateWorkingScheduleResponses = {
     /**
-     * Working schedule created.
+     * Working schedule proposal created.
      */
     201: CreatedScheduleResponse;
 };
 
 export type CreateWorkingScheduleResponse = CreateWorkingScheduleResponses[keyof CreateWorkingScheduleResponses];
+
+export type ListMyWorkingSchedulesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/schedules/mine';
+};
+
+export type ListMyWorkingSchedulesErrors = {
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+};
+
+export type ListMyWorkingSchedulesError = ListMyWorkingSchedulesErrors[keyof ListMyWorkingSchedulesErrors];
+
+export type ListMyWorkingSchedulesResponses = {
+    /**
+     * Doctor's own schedule proposals and published schedules.
+     */
+    200: DoctorWorkingSchedulesResponse;
+};
+
+export type ListMyWorkingSchedulesResponse = ListMyWorkingSchedulesResponses[keyof ListMyWorkingSchedulesResponses];
+
+export type ListDoctorTimeOffData = {
+    body?: never;
+    path?: never;
+    query?: {
+        branchPublicId?: string;
+    };
+    url: '/api/v1/schedules/time-off';
+};
+
+export type ListDoctorTimeOffErrors = {
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+};
+
+export type ListDoctorTimeOffError = ListDoctorTimeOffErrors[keyof ListDoctorTimeOffErrors];
+
+export type ListDoctorTimeOffResponses = {
+    /**
+     * Time-off requests and current appointment conflicts.
+     */
+    200: DoctorTimeOffListResponse;
+};
+
+export type ListDoctorTimeOffResponse = ListDoctorTimeOffResponses[keyof ListDoctorTimeOffResponses];
+
+export type RequestDoctorTimeOffData = {
+    body: RequestDoctorTimeOff;
+    path?: never;
+    query?: never;
+    url: '/api/v1/schedules/time-off';
+};
+
+export type RequestDoctorTimeOffErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type RequestDoctorTimeOffError = RequestDoctorTimeOffErrors[keyof RequestDoctorTimeOffErrors];
+
+export type RequestDoctorTimeOffResponses = {
+    /**
+     * Time-off request created.
+     */
+    201: CreatedScheduleResponse;
+};
+
+export type RequestDoctorTimeOffResponse = RequestDoctorTimeOffResponses[keyof RequestDoctorTimeOffResponses];
+
+export type ApproveDoctorTimeOffData = {
+    body?: never;
+    path: {
+        timeOffId: string;
+    };
+    query?: never;
+    url: '/api/v1/schedules/time-off/{timeOffId}/approve';
+};
+
+export type ApproveDoctorTimeOffErrors = {
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type ApproveDoctorTimeOffError = ApproveDoctorTimeOffErrors[keyof ApproveDoctorTimeOffErrors];
+
+export type ApproveDoctorTimeOffResponses = {
+    /**
+     * Time off approved.
+     */
+    200: CreatedScheduleResponse;
+};
+
+export type ApproveDoctorTimeOffResponse = ApproveDoctorTimeOffResponses[keyof ApproveDoctorTimeOffResponses];
+
+export type RejectDoctorTimeOffData = {
+    body: AppointmentReasonRequest;
+    path: {
+        timeOffId: string;
+    };
+    query?: never;
+    url: '/api/v1/schedules/time-off/{timeOffId}/reject';
+};
+
+export type RejectDoctorTimeOffErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type RejectDoctorTimeOffError = RejectDoctorTimeOffErrors[keyof RejectDoctorTimeOffErrors];
+
+export type RejectDoctorTimeOffResponses = {
+    /**
+     * Time off rejected.
+     */
+    200: CreatedScheduleResponse;
+};
+
+export type RejectDoctorTimeOffResponse = RejectDoctorTimeOffResponses[keyof RejectDoctorTimeOffResponses];
+
+export type CancelMyDoctorTimeOffData = {
+    body?: never;
+    path: {
+        timeOffId: string;
+    };
+    query?: never;
+    url: '/api/v1/schedules/time-off/{timeOffId}/cancel';
+};
+
+export type CancelMyDoctorTimeOffErrors = {
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type CancelMyDoctorTimeOffError = CancelMyDoctorTimeOffErrors[keyof CancelMyDoctorTimeOffErrors];
+
+export type CancelMyDoctorTimeOffResponses = {
+    /**
+     * Pending time-off request cancelled.
+     */
+    200: CreatedScheduleResponse;
+};
+
+export type CancelMyDoctorTimeOffResponse = CancelMyDoctorTimeOffResponses[keyof CancelMyDoctorTimeOffResponses];
+
+export type ConfirmWorkingScheduleData = {
+    body?: never;
+    path: {
+        scheduleId: string;
+    };
+    query?: never;
+    url: '/api/v1/schedules/{scheduleId}/confirm';
+};
+
+export type ConfirmWorkingScheduleErrors = {
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type ConfirmWorkingScheduleError = ConfirmWorkingScheduleErrors[keyof ConfirmWorkingScheduleErrors];
+
+export type ConfirmWorkingScheduleResponses = {
+    /**
+     * Schedule confirmed by doctor, awaiting publication.
+     */
+    200: CreatedScheduleResponse;
+};
+
+export type ConfirmWorkingScheduleResponse = ConfirmWorkingScheduleResponses[keyof ConfirmWorkingScheduleResponses];
+
+export type RejectWorkingScheduleData = {
+    body: AppointmentReasonRequest;
+    path: {
+        scheduleId: string;
+    };
+    query?: never;
+    url: '/api/v1/schedules/{scheduleId}/reject';
+};
+
+export type RejectWorkingScheduleErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type RejectWorkingScheduleError = RejectWorkingScheduleErrors[keyof RejectWorkingScheduleErrors];
+
+export type RejectWorkingScheduleResponses = {
+    /**
+     * Schedule rejected by doctor.
+     */
+    200: CreatedScheduleResponse;
+};
+
+export type RejectWorkingScheduleResponse = RejectWorkingScheduleResponses[keyof RejectWorkingScheduleResponses];
+
+export type PublishWorkingScheduleData = {
+    body?: never;
+    path: {
+        scheduleId: string;
+    };
+    query?: never;
+    url: '/api/v1/schedules/{scheduleId}/publish';
+};
+
+export type PublishWorkingScheduleErrors = {
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type PublishWorkingScheduleError = PublishWorkingScheduleErrors[keyof PublishWorkingScheduleErrors];
+
+export type PublishWorkingScheduleResponses = {
+    /**
+     * Schedule published.
+     */
+    200: CreatedScheduleResponse;
+};
+
+export type PublishWorkingScheduleResponse = PublishWorkingScheduleResponses[keyof PublishWorkingScheduleResponses];
 
 export type GenerateWorkingScheduleSlotsData = {
     body: GenerateSlotsRequest;
@@ -4749,6 +6206,92 @@ export type CallNextQueueTicketResponses = {
 
 export type CallNextQueueTicketResponse = CallNextQueueTicketResponses[keyof CallNextQueueTicketResponses];
 
+export type SkipQueueTicketData = {
+    body: QueueActionRequest;
+    path: {
+        ticketId: string;
+    };
+    query?: never;
+    url: '/api/v1/queues/{ticketId}/skip';
+};
+
+export type SkipQueueTicketErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type SkipQueueTicketError = SkipQueueTicketErrors[keyof SkipQueueTicketErrors];
+
+export type SkipQueueTicketResponses = {
+    /**
+     * Ticket skipped.
+     */
+    200: QueueActionResponse;
+};
+
+export type SkipQueueTicketResponse = SkipQueueTicketResponses[keyof SkipQueueTicketResponses];
+
+export type RecallQueueTicketData = {
+    body: QueueActionRequest;
+    path: {
+        ticketId: string;
+    };
+    query?: never;
+    url: '/api/v1/queues/{ticketId}/recall';
+};
+
+export type RecallQueueTicketErrors = {
+    /**
+     * Request validation failed.
+     */
+    400: ApiErrorResponse;
+    /**
+     * Authentication data is missing, invalid, expired, reused, or revoked.
+     */
+    401: ApiErrorResponse;
+    /**
+     * The account is unavailable for login.
+     */
+    403: ApiErrorResponse;
+    /**
+     * The requested resource does not exist in the caller's scope.
+     */
+    404: ApiErrorResponse;
+    /**
+     * The operation conflicts with uniqueness, concurrency, or account safety rules.
+     */
+    409: ApiErrorResponse;
+};
+
+export type RecallQueueTicketError = RecallQueueTicketErrors[keyof RecallQueueTicketErrors];
+
+export type RecallQueueTicketResponses = {
+    /**
+     * Ticket called again.
+     */
+    200: QueueActionResponse;
+};
+
+export type RecallQueueTicketResponse = RecallQueueTicketResponses[keyof RecallQueueTicketResponses];
+
 export type CancelEncounterData = {
     body: EncounterCancellationRequest;
     path: {
@@ -4932,6 +6475,12 @@ export type StartClinicalEncounterResponse = StartClinicalEncounterResponses[key
 
 export type UpdateClinicalNotesData = {
     body: ClinicalNotesRequest;
+    headers: {
+        /**
+         * Strong ETag containing the Base64 encounter rowversion.
+         */
+        'If-Match': string;
+    };
     path: {
         encounterId: string;
     };
@@ -4956,6 +6505,10 @@ export type UpdateClinicalNotesErrors = {
      * The operation conflicts with uniqueness, concurrency, or account safety rules.
      */
     409: ApiErrorResponse;
+    /**
+     * The If-Match precondition is required for this update.
+     */
+    428: ApiErrorResponse;
 };
 
 export type UpdateClinicalNotesError = UpdateClinicalNotesErrors[keyof UpdateClinicalNotesErrors];

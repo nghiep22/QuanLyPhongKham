@@ -115,6 +115,8 @@ export function DashboardPage() {
     { to: '/pharmacy', code: 'NT', title: 'Nhà thuốc', description: 'Cấp thuốc, nhập kho và đối soát tồn.', allowed: access.canUsePharmacy },
     { to: '/billing', code: 'TN', title: 'Thu ngân', description: 'Phát hành hóa đơn, thu tiền và hoàn tiền.', allowed: access.canUseBilling },
     { to: '/schedules', code: 'CA', title: 'Ca & slot', description: 'Quản lý lịch làm việc và khung giờ khám.', allowed: access.canManageSchedules },
+    { to: '/my-schedules', code: 'BS', title: 'Lịch của tôi', description: 'Xác nhận hoặc từ chối ca khám được đề xuất.',
+      allowed: Boolean(user?.roles.some((role) => role.code === 'DOCTOR')) },
     { to: '/reports', code: 'BC', title: 'Báo cáo', description: 'Phân tích vận hành, doanh thu và tồn kho.', allowed: access.canViewReports },
     { to: '/staff', code: 'NS', title: 'Nhân sự', description: 'Tài khoản, bác sĩ và phân quyền chi nhánh.', allowed: access.canManageStaff },
     { to: '/catalog', code: 'DM', title: 'Danh mục', description: 'Phòng khám, dịch vụ và bảng giá áp dụng.', allowed: access.canManageCatalog },

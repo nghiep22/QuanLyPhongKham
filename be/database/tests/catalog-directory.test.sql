@@ -21,6 +21,9 @@ BEGIN TRY
         SELECT required.object_name,required.permission_name
         FROM (VALUES
           (N'sp_create_room',N'EXECUTE'),(N'sp_update_room',N'EXECUTE'),
+          (N'sp_catalog_create_branch',N'EXECUTE'),(N'sp_catalog_update_branch',N'EXECUTE'),
+          (N'sp_catalog_create_specialty',N'EXECUTE'),(N'sp_catalog_update_specialty',N'EXECUTE'),
+          (N'sp_catalog_create_category',N'EXECUTE'),(N'sp_catalog_update_category',N'EXECUTE'),
           (N'sp_create_service',N'EXECUTE'),(N'sp_update_service',N'EXECUTE'),
           (N'sp_set_branch_service_price',N'EXECUTE'),
           (N'v_clinic_principal_v1',N'SELECT'),(N'v_public_branches_v1',N'SELECT'),
@@ -59,6 +62,52 @@ BEGIN TRY
     EXEC sys.sp_set_session_context @key=N'request_id',@value=@request_id;
     EXEC sys.sp_set_session_context @key=N'actor_user_id',@value=@admin_id;
     EXEC sys.sp_set_session_context @key=N'branch_id',@value=@branch_id;
+
+    DECLARE @org_branch_id bigint,@org_specialty_id bigint,@org_category_id bigint;
+    DECLARE @org_branch_code varchar(20)=CONCAT('OB',LEFT(@suffix,18));
+    EXEC dbo.sp_catalog_create_branch @actor_user_id=@admin_id,@code=@org_branch_code,
+        @name=N'Chi nhánh catalog test',@address_line=N'Địa chỉ thử nghiệm',
+        @timezone_name=N'SE Asia Standard Time',@booking_horizon_days=60,
+        @online_hold_minutes=15,@cancellation_deadline_minutes=120,
+        @check_in_early_minutes=120,@check_in_late_minutes=180,
+        @branch_id=@org_branch_id OUTPUT;
+    DECLARE @org_branch_version binary(8)=(SELECT row_ver FROM dbo.branches WHERE branch_id=@org_branch_id);
+    EXEC dbo.sp_catalog_update_branch @actor_user_id=@admin_id,@branch_id=@org_branch_id,
+        @name=N'Chi nhánh catalog đã sửa',@address_line=N'Địa chỉ thử nghiệm',
+        @timezone_name=N'SE Asia Standard Time',@booking_horizon_days=90,
+        @online_hold_minutes=15,@cancellation_deadline_minutes=120,
+        @check_in_early_minutes=120,@check_in_late_minutes=180,@is_active=0,
+        @expected_row_ver=@org_branch_version;
+    IF NOT EXISTS (SELECT 1 FROM dbo.v_catalog_branches_v1 WHERE branch_id=@org_branch_id
+        AND booking_horizon_days=90 AND is_active=0 AND row_version<>@org_branch_version)
+        THROW 55615,N'Không tạo/sửa được chi nhánh có row version.',1;
+
+    DECLARE @org_specialty_code varchar(30)=CONCAT('OS',LEFT(@suffix,20));
+    EXEC dbo.sp_catalog_create_specialty @actor_user_id=@admin_id,@code=@org_specialty_code,
+        @name=N'Chuyên khoa catalog test',@description=N'Thử nghiệm',
+        @specialty_id=@org_specialty_id OUTPUT;
+    DECLARE @org_specialty_version binary(8)=(SELECT row_ver FROM dbo.specialties WHERE specialty_id=@org_specialty_id);
+    EXEC dbo.sp_catalog_update_specialty @actor_user_id=@admin_id,@specialty_id=@org_specialty_id,
+        @name=N'Chuyên khoa catalog đã sửa',@description=NULL,@is_active=0,
+        @expected_row_ver=@org_specialty_version;
+    IF NOT EXISTS (SELECT 1 FROM dbo.v_catalog_specialties_v1 WHERE specialty_id=@org_specialty_id
+        AND specialty_name=N'Chuyên khoa catalog đã sửa' AND is_active=0)
+        THROW 55616,N'Không tạo/sửa được chuyên khoa.',1;
+
+    DECLARE @org_category_code varchar(30)=CONCAT('OC',LEFT(@suffix,20));
+    EXEC dbo.sp_catalog_create_category @actor_user_id=@admin_id,@code=@org_category_code,
+        @name=N'Nhóm catalog test',@display_order=5,@category_id=@org_category_id OUTPUT;
+    DECLARE @org_category_version binary(8)=(SELECT row_ver FROM dbo.service_categories WHERE service_category_id=@org_category_id);
+    EXEC dbo.sp_catalog_update_category @actor_user_id=@admin_id,@category_id=@org_category_id,
+        @name=N'Nhóm catalog đã sửa',@display_order=6,@is_active=0,
+        @expected_row_ver=@org_category_version;
+    IF NOT EXISTS (SELECT 1 FROM dbo.v_catalog_categories_v1 WHERE service_category_id=@org_category_id
+        AND category_name=N'Nhóm catalog đã sửa' AND display_order=6 AND is_active=0)
+        THROW 55617,N'Không tạo/sửa được nhóm dịch vụ.',1;
+    IF (SELECT COUNT(*) FROM dbo.audit_logs WHERE actor_user_id=@admin_id
+        AND action_code IN ('BRANCH_CREATED','BRANCH_UPDATED','SPECIALTY_CREATED','SPECIALTY_UPDATED',
+                            'SERVICE_CATEGORY_CREATED','SERVICE_CATEGORY_UPDATED'))<>6
+        THROW 55618,N'Thiếu audit cho danh mục tổ chức.',1;
 
     DECLARE @room_id bigint;
     DECLARE @room_code varchar(30)=CONCAT('CR',LEFT(@suffix,20));

@@ -5,7 +5,7 @@ import { createApp } from '../src/app.js';
 import type { ClinicPrincipal, PrincipalAuthenticator } from '../src/modules/identity/index.js';
 import { ReportsService, type ReportsRepository } from '../src/modules/reports/index.js';
 
-const branchId = randomUUID();
+const branchId = '8DFFE243-78B2-F111-9787-387A0E5C4A9E';
 const principal: ClinicPrincipal = { userId: 42, publicId: randomUUID(), tokenVersion: 1,
   roles: [{ code: 'MANAGER', branchId: 1 }] };
 class Auth implements PrincipalAuthenticator {

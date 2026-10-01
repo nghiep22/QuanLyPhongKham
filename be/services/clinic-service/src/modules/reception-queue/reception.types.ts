@@ -1,6 +1,6 @@
 import type { ClinicPrincipal } from '../identity/index.js';
 
-export type QueueStatus = 'WAITING' | 'CALLED' | 'SERVING';
+export type QueueStatus = 'WAITING' | 'CALLED' | 'SERVING' | 'SKIPPED';
 
 export type ReceptionBranch = {
   publicId: string;
@@ -23,6 +23,10 @@ export type QueueTicket = {
   priorityLevel: number;
   status: QueueStatus;
   issuedAtUtc: string;
+  plannedStartUtc: string | null;
+  plannedStartTimeLocal: string | null;
+  eligibleToCall: boolean;
+  estimatedWaitMinutes: number | null;
   calledAtUtc: string | null;
   serviceStartedAtUtc: string | null;
   encounterCode: string;
@@ -75,6 +79,7 @@ export type ReceptionWorkspace = {
     businessDate: string;
     checkInEarlyMinutes: number;
     checkInLateMinutes: number;
+    walkInMaxWaitMinutes: number;
   };
   queue: QueueTicket[];
   appointments: CheckInCandidate[];
@@ -82,6 +87,8 @@ export type ReceptionWorkspace = {
   rooms: Array<{ publicId: string; code: string; name: string }>;
   services: Array<{ publicId: string; code: string; name: string; priceAmount: string; currencyCode: 'VND' }>;
   doctorServices: Array<{ doctorPublicId: string; servicePublicId: string }>;
+  walkInSlots: Array<{ doctorPublicId: string; roomPublicId: string; servicePublicId: string;
+    startsAtUtc: string; startTimeLocal: string }>;
 };
 
 export type WalkInInput = {
@@ -99,6 +106,7 @@ export type QueueCommandResult = {
   encounterPublicId: string;
   displayNumber: string;
 };
+export type QueueActionResult = QueueCommandResult & { status: 'SKIPPED' | 'CALLED' };
 
 export interface ReceptionRepository {
   branches(actor: ClinicPrincipal, requestId: string): Promise<ReceptionBranch[]>;
@@ -109,5 +117,7 @@ export interface ReceptionRepository {
   createWalkIn(actor: ClinicPrincipal, input: WalkInInput, idempotencyKey: string,
     requestId: string): Promise<QueueCommandResult>;
   callNext(actor: ClinicPrincipal, branchPublicId: string, requestId: string): Promise<QueueCommandResult | null>;
+  changeTicketStatus(actor: ClinicPrincipal, ticketPublicId: string, action: 'SKIP' | 'RECALL',
+    reason: string, requestId: string): Promise<QueueActionResult>;
   cancelEncounter(actor: ClinicPrincipal, encounterPublicId: string, reason: string, requestId: string): Promise<void>;
 }

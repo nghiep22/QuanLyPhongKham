@@ -77,6 +77,7 @@ export type FinalizeResultInput = {
 export type AmendmentInput = { reason: string; content: string };
 
 export type ClinicalEncounterDetail = ClinicalEncounterSummary & ClinicalNotesInput & {
+  rowVersion: string;
   signedAtUtc: string | null;
   patientRelease: { releasedAtUtc: string; releasedBy: string } | null;
   signature: { schemaVersion: string; sha256: string; signedAtUtc: string; isVerified: boolean } | null;
@@ -149,7 +150,8 @@ export interface ClinicalRepository {
   get(actor: ClinicPrincipal, encounterPublicId: string, requestId: string): Promise<ClinicalEncounterDetail>;
   start(actor: ClinicPrincipal, encounterPublicId: string, roomPublicId: string | null,
     queueBypassReason: string | null, requestId: string): Promise<void>;
-  updateNotes(actor: ClinicPrincipal, encounterPublicId: string, input: ClinicalNotesInput, requestId: string): Promise<void>;
+  updateNotes(actor: ClinicPrincipal, encounterPublicId: string, input: ClinicalNotesInput,
+    expectedRowVersion: string, requestId: string): Promise<void>;
   addVitalSigns(actor: ClinicPrincipal, encounterPublicId: string, input: VitalSignsInput,
     requestId: string): Promise<ClinicalCommandResult>;
   addDiagnosis(actor: ClinicPrincipal, encounterPublicId: string, input: DiagnosisInput,

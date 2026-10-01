@@ -37,10 +37,11 @@ export type Evaluation = {
 };
 
 type ApiBody<T> = { data?: T; error?: { code?: string; message?: string }; meta?: { responseMs: number; warning: string | null } };
+const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
 
 async function request<T>(path: string): Promise<{ data: T; meta?: ApiBody<T>['meta'] }> {
   let response: Response;
-  try { response = await fetch(path); }
+  try { response = await fetch(`${apiBaseUrl}${path}`); }
   catch { throw new Error('Không kết nối được BE ở cổng 4003. Hãy chạy npm run dev trong be/HocMayBE.'); }
   const raw = await response.text();
   let body: ApiBody<T> | null = null;

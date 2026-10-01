@@ -150,7 +150,9 @@ BEGIN TRY
     IF NOT EXISTS (SELECT 1 FROM dbo.encounters WHERE encounter_id=@encounter_id AND status='IN_PROGRESS')
       THROW 55903,N'Không bắt đầu được lượt đã CALLED.',1;
 
+    DECLARE @notes_row_ver binary(8)=(SELECT row_ver FROM dbo.encounters WHERE encounter_id=@encounter_id);
     EXEC dbo.sp_clinic_update_encounter_clinical_notes @actor_user_id=@doctor_user_id,
+      @expected_row_ver=@notes_row_ver,
       @encounter_public_id=@encounter_public_id,@history_of_present_illness=N'Đau đầu hai ngày',
       @physical_examination=N'Tỉnh, tiếp xúc tốt',@clinical_assessment=N'Cần theo dõi',
       @treatment_plan=N'Xét nghiệm',@follow_up_instructions=N'Tái khám nếu nặng hơn';

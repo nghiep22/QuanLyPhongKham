@@ -1,7 +1,7 @@
 import { executeCommand, sql } from '../../infrastructure/database/sql-database.js';
 import type { ClinicPrincipal } from '../identity/index.js';
 import type {
-  CheckInCandidate, QueueCommandResult, QueueTicket, ReceptionPatient, ReceptionRepository,
+  CheckInCandidate, QueueActionResult, QueueCommandResult, QueueTicket, ReceptionPatient, ReceptionRepository,
   ReceptionWorkspace, WalkInInput,
 } from './reception.types.js';
 
@@ -23,6 +23,9 @@ function ticket(row: Row): QueueTicket {
     publicId: String(row.publicId), encounterPublicId: String(row.encounterPublicId),
     displayNumber: String(row.displayNumber), priorityLevel: Number(row.priorityLevel), status: row.status as QueueTicket['status'],
     issuedAtUtc: utc(row.issuedAtUtc), calledAtUtc: nullableUtc(row.calledAtUtc),
+    plannedStartUtc: nullableUtc(row.plannedStartUtc), eligibleToCall: Boolean(row.eligibleToCall),
+    plannedStartTimeLocal: nullableText(row.plannedStartTimeLocal),
+    estimatedWaitMinutes: row.estimatedWaitMinutes == null ? null : Number(row.estimatedWaitMinutes),
     serviceStartedAtUtc: nullableUtc(row.serviceStartedAtUtc), encounterCode: String(row.encounterCode),
     encounterSource: row.encounterSource as QueueTicket['encounterSource'],
     bookingChannel: row.bookingChannel == null ? null : row.bookingChannel as QueueTicket['bookingChannel'],
@@ -80,7 +83,8 @@ export class SqlReceptionRepository implements ReceptionRepository {
     if (!branchRow) throw new Error('Reception procedure returned no branch.');
     return {
       branch: { ...branchMetadata(branchRow), businessDate: dateOnly(branchRow.businessDate),
-        checkInEarlyMinutes: Number(branchRow.checkInEarlyMinutes), checkInLateMinutes: Number(branchRow.checkInLateMinutes) },
+        checkInEarlyMinutes: Number(branchRow.checkInEarlyMinutes), checkInLateMinutes: Number(branchRow.checkInLateMinutes),
+        walkInMaxWaitMinutes: Number(branchRow.walkInMaxWaitMinutes) },
       queue: (sets[1] ?? []).map(ticket), appointments: (sets[2] ?? []).map(candidate),
       doctors: (sets[3] ?? []).map((row) => ({ publicId: String(row.publicId), fullName: String(row.fullName) })),
       rooms: (sets[4] ?? []).map((row) => ({ publicId: String(row.publicId), code: String(row.code), name: String(row.name) })),
@@ -88,6 +92,9 @@ export class SqlReceptionRepository implements ReceptionRepository {
         name: String(row.name), priceAmount: String(row.priceAmount), currencyCode: 'VND' as const })),
       doctorServices: (sets[6] ?? []).map((row) => ({ doctorPublicId: String(row.doctorPublicId),
         servicePublicId: String(row.servicePublicId) })),
+      walkInSlots: (sets[7] ?? []).map((row) => ({ doctorPublicId: String(row.doctorPublicId),
+        roomPublicId: String(row.roomPublicId), servicePublicId: String(row.servicePublicId),
+        startsAtUtc: utc(row.startsAtUtc), startTimeLocal: String(row.startTimeLocal).slice(0, 5) })),
     } satisfies ReceptionWorkspace;
   }
 
@@ -142,6 +149,21 @@ export class SqlReceptionRepository implements ReceptionRepository {
       { name: 'display_number', type: sql.VarChar(20), value: null, direction: 'output' },
     ], { requestId, actorUserId: actor.userId });
     return result.output.queue_ticket_public_id == null ? null : command(result);
+  }
+
+  async changeTicketStatus(actor: ClinicPrincipal, ticketPublicId: string, action: 'SKIP' | 'RECALL',
+    reason: string, requestId: string): Promise<QueueActionResult> {
+    const result = await executeCommand<Row>('dbo.sp_clinic_change_queue_ticket_status', [
+      { name: 'actor_user_id', type: sql.BigInt, value: actor.userId },
+      { name: 'queue_ticket_public_id', type: sql.UniqueIdentifier, value: ticketPublicId },
+      { name: 'action', type: sql.VarChar(10), value: action },
+      { name: 'reason', type: sql.NVarChar(500), value: reason },
+    ], { requestId, actorUserId: actor.userId });
+    const row = result.recordset[0];
+    if (!row) throw new Error('Queue action returned no ticket.');
+    return { queueTicketPublicId: String(row.queueTicketPublicId),
+      encounterPublicId: String(row.encounterPublicId), displayNumber: String(row.displayNumber),
+      status: row.status as QueueActionResult['status'] };
   }
 
   async cancelEncounter(actor: ClinicPrincipal, encounterPublicId: string, reason: string, requestId: string) {

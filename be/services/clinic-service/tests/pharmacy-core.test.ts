@@ -6,7 +6,7 @@ import { PharmacyService } from '../src/modules/pharmacy/pharmacy.service.js';
 import type { PharmacyRepository, PrescriptionDetail } from '../src/modules/pharmacy/pharmacy.types.js';
 import type { ClinicPrincipal, PrincipalAuthenticator } from '../src/modules/identity/index.js';
 
-const branchId = randomUUID(); const encounterId = randomUUID(); const prescriptionId = randomUUID();
+const branchId = '8DFFE243-78B2-F111-9787-387A0E5C4A9E'; const encounterId = randomUUID(); const prescriptionId = randomUUID();
 const itemId = randomUUID(); const locationId = randomUUID(); const batchId = randomUUID();
 const principal: ClinicPrincipal = { userId: 42, publicId: randomUUID(), tokenVersion: 1,
   roles: [{ code: 'PHARMACIST', branchId: 1 }] };
@@ -58,6 +58,8 @@ describe('pharmacy API', () => {
     expect(result.status).toBe(200);
     expect(result.body.data[0].publicId).toBe(branchId);
     expect(result.body.data[0]).not.toHaveProperty('branchId');
+    expect((await request(app).get('/api/v1/pharmacy/workspace')
+      .query({ branchPublicId: result.body.data[0].publicId }).set(authorization)).status).toBe(200);
   });
   it('creates, adds an item and issues a draft with validated UUIDs', async () => {
     const { app } = fixture();

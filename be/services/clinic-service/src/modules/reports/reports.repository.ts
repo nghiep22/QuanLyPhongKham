@@ -29,7 +29,9 @@ export class SqlReportsRepository implements ReportsRepository {
     return { summary: { appointmentCount: number(summary.appointmentCount), confirmedCount: number(summary.confirmedCount),
       cancelledCount: number(summary.cancelledCount), noShowCount: number(summary.noShowCount),
       encounterCount: number(summary.encounterCount), completedEncounterCount: number(summary.completedEncounterCount),
-      averageWaitMinutes: nullableNumber(summary.averageWaitMinutes) }, daily: (result[1] ?? []).map((row) => ({
+      averageWaitMinutes: nullableNumber(summary.averageWaitMinutes),
+      p90WaitMinutes: nullableNumber(summary.p90WaitMinutes),
+      walkInEncounterCount: number(summary.walkInEncounterCount) }, daily: (result[1] ?? []).map((row) => ({
         date: date(row.date), appointmentCount: number(row.appointmentCount), arrivedCount: number(row.arrivedCount),
         completedCount: number(row.completedCount), cancelledCount: number(row.cancelledCount),
         noShowCount: number(row.noShowCount) })) } satisfies OperationsReport;

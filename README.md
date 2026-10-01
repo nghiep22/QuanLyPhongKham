@@ -6,6 +6,7 @@ API gateway, các dịch vụ nghiệp vụ và SQL Server.
 ## Thành phần
 
 - `fe/admin-web`: React 19 + Vite dành cho quản trị viên và nhân viên.
+- `fe/user-web`: React 19 + Vite, cổng web riêng dành cho bệnh nhân.
 - `fe/mobile`: Expo/React Native dành cho bệnh nhân.
 - `be/gateway`: ASP.NET Core + Ocelot, cổng vào duy nhất tại cổng `5000`.
 - `be/services/auth-service`: xác thực và phân quyền, cổng `4001`.
@@ -67,11 +68,14 @@ development, có thể chạy lại mà không tạo trùng và không ghi đè 
 ## Chạy dự án
 
 ```powershell
-# Gateway, API, worker và Admin Web
+# Gateway, API, worker, Admin Web và User Web
 npm run dev
 
 # Mobile chạy ở terminal riêng
 npm run dev:mobile
+
+# Hoặc chỉ chạy cổng web bệnh nhân
+npm run dev:user
 ```
 
 Ở chế độ development qua LAN, mobile tự thay `localhost` trong địa chỉ API bằng
@@ -84,15 +88,32 @@ tiếp cổng gateway; trường hợp đó cần một API HTTPS truy cập đ�
 Bản preview/production bắt buộc cấu hình `EXPO_PUBLIC_API_BASE_URL` dùng HTTPS.
 
 - Admin Web: `http://localhost:5173`
+- User Web: `http://localhost:5174`
 - Gateway: `http://localhost:5000`
 - Kiểm tra gateway: `http://localhost:5000/health/live`
 - Kiểm tra toàn bộ dependency: `http://localhost:5000/health/ready`
 - JWKS xác minh access token: `http://localhost:5000/.well-known/jwks.json`
 
+User Web có các luồng bệnh nhân trên trình duyệt: khám phá danh sách và trang chi tiết
+chi nhánh, chuyên khoa, bác sĩ, dịch vụ và giá; đăng ký OTP, đăng nhập, khôi phục
+mật khẩu bằng liên kết hoặc mã; đặt/đổi/hủy lịch; liên kết hồ sơ; xem kết quả đã
+công bố, quản lý tài khoản và đổi mật khẩu. Nếu API không ở
+`localhost:5000`, đặt `VITE_API_BASE_URL` trong `fe/user-web/.env.local` và thêm
+origin của User Web vào `WEB_ALLOWED_ORIGINS` cùng `Cors:AllowedOrigins` của Gateway.
+
 Sau khi đăng nhập bằng Admin hoặc Manager, mở mục **Nhân sự** để tạo/cập nhật
 nhân viên, hồ sơ bác sĩ, khóa/mở tài khoản và quản lý role theo chi nhánh. Manager
 chỉ thao tác trong chi nhánh được phân quyền; quản lý role yêu cầu Admin toàn cục.
 Các cập nhật hồ sơ dùng `ETag`/`If-Match` để không ghi đè thay đổi đồng thời.
+
+Admin toàn cục có thể mở **Bệnh nhân**, chọn hồ sơ nguồn rồi dùng **Gộp hồ sơ
+trùng** để tìm hồ sơ chuẩn, xem dữ liệu liên quan và nhập lý do đối chiếu. Hệ thống
+chặn gộp khi định danh không tương thích, còn công việc hoặc liên kết chờ xử lý,
+quyền truy cập xung đột, hoặc cả hai hồ sơ đều có liên hệ khẩn cấp đang dùng.
+Hồ sơ nguồn trở thành bí danh tra cứu;
+lượt khám đã ký, đơn thuốc và hóa đơn giữ khóa bệnh nhân gốc để bảo toàn lịch sử
+và dấu SHA-256. Liên kết tài khoản đang hoạt động được chuyển sang hồ sơ chuẩn,
+dị ứng và bệnh nền của cả hai hồ sơ được đọc chung, và thao tác có lịch sử audit.
 
 Ở môi trường development, liên kết quên mật khẩu được ghi ra terminal của Auth
 Service với cờ `developmentOnly`. Khi chạy production phải cấu hình adapter gửi:
@@ -133,6 +154,10 @@ cầu theo cùng một cách dù thông tin có khớp hay không; chỉ yêu c�
 hàng đợi nhân viên. Lễ tân/Manager có permission `PATIENT_PORTAL_LINK_MANAGE`
 mở **Liên kết hồ sơ** trên Admin Web, đối chiếu giấy tờ rồi duyệt hoặc từ chối.
 Yêu cầu mặc định hết hạn sau 7 ngày và tối đa 5 yêu cầu mỗi tài khoản trong 24 giờ.
+Với liên kết `SELF` đã xác minh, bệnh nhân có thể mở **Liên hệ khẩn cấp** trong
+Hồ sơ được ủy quyền trên Web hoặc Mobile để thêm, sửa, xóa tối đa 5 người và chọn
+một người chính. Khi hồ sơ vừa được người khác cập nhật, ứng dụng yêu cầu tải lại
+trước khi lưu để tránh ghi đè. Liên kết người thân không có quyền sửa mục này.
 
 Admin/Manager có permission `MASTER_DATA_MANAGE` mở **Danh mục** để quản lý phòng,
 giá và khả dụng dịch vụ theo chi nhánh. Chỉ Admin toàn cục được tạo, sửa hoặc
@@ -145,9 +170,13 @@ Admin/Manager/Lễ tân có permission `PATIENTS_MANAGE` mở **Bệnh nhân** t
 Web để tra cứu theo chi nhánh, kiểm tra hồ sơ có thể trùng, tạo hồ sơ hành chính
 và cập nhật với `ETag`. Hồ sơ có thể trùng cần lý do xác nhận trước khi cấp mã
 mới; số định danh đã dùng ở chi nhánh khác sẽ bị từ chối mà không trả thông tin
-chi nhánh đó. API lâm sàng `/api/v1/patients/{patientId}/clinical-summary` chỉ trả
-dị ứng/bệnh nền cho bác sĩ hoặc điều dưỡng có lượt chăm sóc đang mở, và audit
-mỗi lần đọc. Patient/guardian không dùng endpoint nội bộ này; họ chỉ đọc hồ sơ
+chi nhánh đó. Hồ sơ hành chính có thể lưu tối đa 5 liên hệ khẩn cấp, với đúng một
+liên hệ chính; thay đổi dùng `If-Match`, giữ bản cũ ngừng hiệu lực và ghi audit.
+API lâm sàng `/api/v1/patients/{patientId}/clinical-summary` chỉ trả dị ứng/bệnh nền
+cho bác sĩ hoặc điều dưỡng có lượt chăm sóc đang mở, và audit mỗi lần đọc. Cùng
+phạm vi này được ghi dị ứng/bệnh nền và ngừng hiệu lực hoặc giải quyết với lý do;
+dị ứng thuốc được nối với danh mục dị nguyên dùng khi kê/cấp thuốc.
+Patient/guardian không dùng endpoint nội bộ này; họ chỉ đọc hồ sơ
 đã ký và công bố qua tab **Kết quả** cùng liên kết hồ sơ còn hiệu lực.
 
 Bệnh nhân mở **Đặt lịch khám** trên Mobile để chọn hồ sơ được ủy quyền, chi nhánh,
@@ -183,17 +212,26 @@ NOTIFICATION_WEBHOOK_BEARER_TOKEN=replace-with-a-long-random-secret
 Lễ tân/Điều dưỡng có permission phù hợp mở **Tiếp nhận** để check-in lịch
 `CONFIRMED`, tìm bệnh nhân walk-in, chọn dịch vụ/bác sĩ/phòng, cấp số và gọi người
 kế tiếp. Check-in/walk-in yêu cầu idempotency key và tạo Encounter + dịch vụ ban
-đầu + QueueTicket trong một transaction. Cửa sổ check-in lấy từ cấu hình chi
-nhánh; số tăng đơn điệu theo ngày, còn call-next xếp ưu tiên trước rồi FIFO và
+đầu + QueueTicket trong một transaction. Walk-in chỉ được nhận khi còn slot đúng
+bác sĩ, phòng, dịch vụ và bắt đầu trong ngưỡng chờ của chi nhánh (mặc định 45
+phút, chỉnh tại **Danh mục → Chi nhánh**); lượt này giữ slot nhưng không tạo
+appointment giả. Online, điện thoại và tại quầy cùng dùng số slot còn lại.
+Dịch vụ dài hơn slot không hiển thị để đặt. Quầy chỉ cho chọn bác sĩ/phòng còn
+ô giờ và hiển thị giờ khám gần nhất; khi xác nhận, SQL kiểm tra lại sức chứa.
+Cửa sổ check-in lấy từ cấu hình chi
+nhánh; số tăng đơn điệu theo ngày, còn call-next theo mức ưu tiên, lịch đã đến giờ
+và giờ dự kiến của walk-in; số chỉ được gọi sớm tối đa 10 phút. Call-next
 khóa ticket để hai quầy không gọi cùng một bệnh nhân. Ngay trên bảng hàng đợi,
-nhân viên có thể hủy lượt đang chờ/đang khám với lý do bắt buộc; hệ thống đóng
+nhân viên có thể bỏ qua số đã gọi và gọi lại số đã bỏ qua; mỗi bước cần lý do
+và được ghi audit. Nhân viên cũng có thể hủy lượt đang chờ/đang khám với lý do
+bắt buộc, kể cả khi số đã bỏ qua; hệ thống đóng
 đồng bộ ticket, dịch vụ và chứng từ nháp nhưng chặn hủy khi còn thuốc đã cấp chưa
 đảo hoặc đã phát sinh thanh toán.
 
 Bác sĩ được phân công mở **Khám bệnh** sau khi số đã được gọi để bắt đầu lượt.
 Người có `ENCOUNTERS_QUEUE_BYPASS` thấy hành động ngoại lệ cho ticket còn
-`WAITING`; lý do tối thiểu 10 ký tự là bắt buộc và SQL chỉ cho phép lượt đang
-đứng đầu theo ưu tiên/FIFO, đồng thời ghi audit và outbox metadata-only. Sau đó
+`WAITING`; lý do tối thiểu 10 ký tự là bắt buộc và SQL chỉ cho phép lượt đã đến
+giờ, đứng đầu theo thứ tự hàng đợi, đồng thời ghi audit và outbox metadata-only. Sau đó
 bác sĩ ghi sinh hiệu, bệnh sử, khám thực thể, chẩn đoán và chỉ định. Kết quả FINAL cần
 có nội dung và khớp schema đã chụp khi chỉ định; hệ thống yêu cầu một chẩn đoán chính và không
 còn dịch vụ bắt buộc đang mở. Sau khi ký, hồ sơ được khóa; nội dung bổ sung được
@@ -267,6 +305,7 @@ sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\p
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\patient-link.test.sql
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\catalog-directory.test.sql
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\patient-registry.test.sql
+sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\patient-merge.test.sql
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\scheduling-appointments.test.sql
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\reception-queue.test.sql
 sqlcmd -S localhost -d PrivateClinicManagement -E -C -b -i .\be\database\tests\clinical-core.test.sql

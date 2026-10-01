@@ -16,7 +16,7 @@ import type {
   WorkforceRepository,
 } from '../src/modules/workforce/workforce.types.js';
 
-const branchA = { id: 10, publicId: randomUUID(), code: 'MAIN', name: 'Chi nhánh chính' };
+const branchA = { id: 10, publicId: '8DFFE243-78B2-F111-9787-387A0E5C4A9E', code: 'MAIN', name: 'Chi nhánh chính' };
 const branchB = { id: 20, publicId: randomUUID(), code: 'WEST', name: 'Chi nhánh Tây' };
 const specialty = { id: 30, publicId: randomUUID(), code: 'GENERAL', name: 'Đa khoa' };
 

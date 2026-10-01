@@ -152,7 +152,8 @@ export class AuthService {
     }
   }
 
-  async requestPasswordReset(identifier: string, ipAddress: string | undefined, requestId: string) {
+  async requestPasswordReset(identifier: string, ipAddress: string | undefined, requestId: string,
+    origin?: string) {
     const startedAt = Date.now();
     const credential = await this.repository.findCredential(identifier);
     const token = this.tokens.createPasswordResetToken();
@@ -174,7 +175,8 @@ export class AuthService {
       await this.delayRecoveryResponse(startedAt);
       return;
     }
-    const url = new URL(env.PASSWORD_RESET_URL);
+    const url = origin && env.WEB_ALLOWED_ORIGINS.includes(origin)
+      ? new URL('/reset-password', origin) : new URL(env.PASSWORD_RESET_URL);
     url.hash = new URLSearchParams({ token }).toString();
     try {
       await this.recoveryDelivery.deliver({

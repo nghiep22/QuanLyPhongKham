@@ -7,7 +7,7 @@ dotenv.config({ path: new URL('../../../../.env', import.meta.url) });
 const environmentSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   CLINIC_SERVICE_PORT: z.coerce.number().int().positive().default(4002),
-  WEB_ALLOWED_ORIGINS: z.string().default('http://localhost:5173').transform((value) =>
+  WEB_ALLOWED_ORIGINS: z.string().default('http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174').transform((value) =>
     value.split(',').map((origin) => origin.trim()).filter(Boolean)),
   LOG_LEVEL: z.string().default('info'),
   SQL_SERVER: z.string().default('localhost'),

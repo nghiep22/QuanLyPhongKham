@@ -1,0 +1,151 @@
+:root { color-scheme: light; }
+html { scroll-behavior: smooth; }
+body { background: #f5f8f5; }
+::selection { background: #bce9d2; color: #174f42; }
+:focus-visible { outline: 3px solid #f4a76f; outline-offset: 3px; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid #e9a269; outline-offset: 2px; }
+
+.site-header { box-shadow: 0 5px 24px #164d3b0a; }
+.site-header nav a { transition: color .18s, border-color .18s, background .18s; }
+.menu-toggle { display: none; align-items: center; justify-content: center; gap: 8px; min-height: 42px; padding: 7px 11px; border: 1px solid #d7e6dc; border-radius: 11px; background: #f2f8f3; color: #176a57; font-weight: 800; }
+.menu-toggle span:first-child { font-size: 1.2rem; line-height: 1; }
+.site-header .header-actions .text-button { white-space: nowrap; }
+
+.page-intro { position: relative; isolation: isolate; max-width: none; overflow: hidden; padding: clamp(26px, 4vw, 43px); border: 1px solid #dfebe2; border-radius: 24px; background: radial-gradient(circle at 89% 10%, #e2f4e9 0, transparent 33%), #fff; box-shadow: 0 12px 35px #204a3909; }
+.page-intro::after { content: '✚'; position: absolute; z-index: -1; right: 4%; top: 50%; color: #daf0df; font-size: clamp(7rem, 17vw, 16rem); line-height: 1; transform: translateY(-50%) rotate(-12deg); }
+.page-intro h1 { max-width: 760px; }
+.page-intro p { max-width: 690px; margin-bottom: 0; }
+.page-intro .inline-link { margin-top: 15px; }
+.panel, .catalog-card, .appointment-card { box-shadow: 0 10px 30px #21483b0a; }
+.catalog-card, .appointment-card, .record-list button { transition: transform .2s, border-color .2s, box-shadow .2s; }
+.catalog-card:hover, .appointment-card:hover, .record-list button:hover { border-color: #b8d9c4; box-shadow: 0 18px 36px #17453214; transform: translateY(-2px); }
+.catalog-card h3 { line-height: 1.38; }
+.catalog-card .card-bottom { flex-wrap: wrap; }
+.catalog-card .card-bottom small { overflow-wrap: anywhere; }
+.feature-card:focus-visible, .catalog-card a:focus-visible, .home-news-card:focus-visible { outline-offset: 4px; }
+.detail-list-row:hover { color: #126a56; }
+
+.state, .catalog-empty, .retry-state { border: 1px solid #e2ebe3; border-radius: 18px; background: #fff; box-shadow: 0 10px 28px #21483b08; }
+.state { display: grid; justify-items: center; gap: 12px; padding: 46px 22px; }
+.state::before { content: ''; width: 29px; height: 29px; border: 3px solid #d8eee1; border-top-color: #1a836c; border-radius: 50%; animation: portal-spin .75s linear infinite; }
+@keyframes portal-spin { to { transform: rotate(360deg); } }
+.retry-state { display: grid; justify-items: center; padding: 44px 22px; text-align: center; }
+.retry-symbol { display: grid; place-items: center; width: 52px; height: 52px; margin-bottom: 14px; border-radius: 15px; background: #fff1e8; color: #ac6344; font-size: 1.65rem; }
+.retry-state strong { color: #294b40; font: 800 1.08rem 'Times New Roman', Times, serif; }
+.retry-state p { max-width: 460px; margin: 8px 0 19px; color: #708379; font-size: .88rem; }
+.catalog-empty { min-height: 210px; }
+.error, .success, .info-strip { line-height: 1.55; }
+.error .inline-link { color: #8d342d; margin-left: 5px; }
+.info-strip a { color: #126e59; font-weight: 800; text-decoration: underline; text-underline-offset: 3px; }
+.field-required { color: #a34c39; font-weight: 700; }
+
+.booking-layout { grid-template-columns: minmax(0, 1.08fr) minmax(0, .92fr); align-items: start; }
+.slot-panel { min-height: 400px; }
+.slot-card { border-color: #e0eae2; background: #fff; }
+.slot-card .time-tile { min-width: 66px; text-align: center; }
+.slot-card strong { color: #2b4b40; }
+.appointment-filter { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 21px; }
+.appointment-filter button { display: inline-flex; align-items: center; gap: 10px; padding: 10px 16px; border: 1px solid #d9e7dc; border-radius: 11px; background: #fff; color: #557064; font-weight: 800; }
+.appointment-filter button.active { border-color: #188169; background: #177c67; color: #fff; }
+.appointment-filter button span { min-width: 24px; padding: 2px 7px; border-radius: 100px; background: #e8f3eb; color: #177661; font-size: .72rem; }
+.appointment-filter button.active span { background: #ffffff29; color: #fff; }
+.appointment-card { display: flex; flex-direction: column; min-width: 0; }
+.appointment-card .appointment-actions { margin-top: auto; padding-top: 19px; flex-wrap: wrap; }
+.appointment-card .appointment-actions .button { flex: 1; min-width: 105px; }
+.appointment-status.status-cancelled, .appointment-status.status-no_show, .appointment-status.status-expired { background: #f2f1ee; color: #767b76; }
+.appointment-status.status-completed { background: #e3f3ec; color: #166c57; }
+.appointment-status.status-pending { background: #fff1db; color: #9b6725; }
+
+.emergency-contact-card { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 13px; align-items: end; padding: 18px 0; border-top: 1px solid #e8eee9; }
+.emergency-contact-card label { min-width: 0; margin-bottom: 0 !important; }
+.emergency-contact-card label:nth-of-type(4) { display: inline-flex !important; align-items: center; gap: 8px; min-height: 42px; }
+.emergency-contact-card input[type='radio'] { display: inline-block; width: auto; margin: 0; accent-color: #177b68; }
+.emergency-contact-card > button { justify-self: end; }
+.result-values { display: grid; gap: 0; margin: 13px 0 17px; border: 1px solid #e7eee8; border-radius: 12px; overflow: hidden; }
+.result-values > div { display: grid; grid-template-columns: minmax(120px, .85fr) minmax(0, 1.15fr); gap: 12px; padding: 10px 13px; border-top: 1px solid #e7eee8; }
+.result-values > div:first-child { border-top: 0; }
+.result-values dt { color: #678073; text-transform: capitalize; }
+.result-values dd { margin: 0; color: #294b40; font-weight: 700; overflow-wrap: anywhere; }
+.result-values dd .result-values { margin: 0; }
+.result-values-list { margin: 7px 0; padding-left: 21px; }
+.result-values-list li + li { margin-top: 7px; }
+.record-list button > span:nth-child(2) { min-width: 0; overflow-wrap: anywhere; }
+
+.otp-actions { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-top: 20px; }
+.otp-actions .text-button, .auth-form .otp-actions .text-button { margin-top: 0; }
+.not-found-page { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; max-width: 800px; }
+.not-found-page h1 { margin: 0 0 12px; }
+.not-found-page p { max-width: 510px; color: #71847d; }
+.not-found-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
+
+@media (max-width: 1200px) {
+  .site-header .header-inner { flex-wrap: wrap; gap: 10px 15px; min-height: 74px; padding: 11px 0; }
+  .site-header .header-actions { order: 1; margin-left: auto; }
+  .site-header .menu-toggle { display: inline-flex; order: 2; }
+  .site-header .header-inner nav.patient-nav, .site-header .header-inner nav.guest-nav { display: none; order: 3; flex-basis: 100%; width: 100%; gap: 9px; padding: 10px 0 2px; border-top: 1px solid #e4eee8; overflow: visible; background: transparent; }
+  .site-header .header-inner nav.patient-nav.is-open, .site-header .header-inner nav.guest-nav.is-open { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .site-header .header-inner nav a { display: flex; align-items: center; justify-content: flex-start; gap: 9px; min-width: 0; min-height: 48px; padding: 9px 12px; border: 1px solid #e0ebe3; border-radius: 10px; background: #f8fbf8; color: #4b6b5d; font-size: .83rem; line-height: 1.25; }
+  .site-header .header-inner nav a.active { border-color: #b9ddc6; background: #e7f5eb; color: #126e59; }
+  .site-header .header-inner nav .nav-icon { display: inline-block; font-size: 1.2rem; line-height: 1; }
+  .site-header .header-user { display: none; }
+}
+@media (max-width: 760px) {
+  .site-header .header-inner nav.patient-nav.is-open, .site-header .header-inner nav.guest-nav.is-open { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .site-header .header-inner nav.patient-nav a, .site-header .header-inner nav.guest-nav a { flex-direction: row; font-size: .82rem; }
+  .booking-layout { grid-template-columns: 1fr; }
+  .page-intro { padding: 28px; }
+  .page-intro::after { opacity: .6; right: -2%; }
+  .emergency-contact-card { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .result-values > div { grid-template-columns: 1fr; gap: 3px; }
+}
+
+/* Editorial clinic photography */
+.hero-art { isolation: isolate; }
+.hero-photo { position: absolute; inset: 24px 16px; width: calc(100% - 32px); height: calc(100% - 48px);
+  object-fit: cover; object-position: center; border-radius: 120px 24px 120px 24px;
+  box-shadow: 0 26px 55px #073e3560; }
+.hero-art .art-card { z-index: 1; }
+
+.explore-intro { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(260px, .8fr); align-items: center; gap: 28px; }
+.explore-intro::after { display: none; }
+.explore-intro-media { position: relative; height: 216px; margin: 0; overflow: hidden; border-radius: 18px; }
+.explore-intro-media img { width: 100%; height: 100%; object-fit: cover; object-position: center; }
+
+@media (max-width: 760px) {
+  .hero-art { display: block; height: 275px; width: min(520px, 100%); margin: 28px auto 0; }
+  .hero-photo { inset: 0; width: 100%; height: 100%; border-radius: 24px 90px 24px 24px; }
+  .hero-art .art-card { display: none; }
+  .explore-intro { grid-template-columns: 1fr; }
+  .explore-intro-media { height: 190px; }
+}
+
+@media (max-width: 470px) {
+  .hero-art { height: 215px; }
+  .explore-intro-media { height: 170px; }
+}
+@media (max-width: 520px) {
+  .site-header .header-inner { gap: 8px; }
+  .site-header .brand-mark { width: 35px; height: 35px; }
+  .site-header .brand strong { font-size: .96rem; }
+  .site-header .brand small { font-size: .47rem; }
+  .site-header .header-actions .button { display: none; }
+  .site-header .header-actions { gap: 0; }
+  .site-header .header-actions .text-button { font-size: .78rem; }
+  .site-header .menu-toggle { min-width: 39px; padding: 8px; }
+  .site-header .menu-toggle span:last-child { display: none; }
+  .page { padding-top: 22px; }
+  .page-intro { padding: 25px 22px; border-radius: 19px; }
+  .page-intro::after { display: none; }
+  .panel { padding: 21px; }
+  .emergency-contact-card { grid-template-columns: 1fr; }
+  .emergency-contact-card > button { justify-self: start; }
+  .slot-card { display: grid; grid-template-columns: auto minmax(0, 1fr); }
+  .slot-card .button { grid-column: 1 / -1; }
+  .appointment-filter button { flex: 1; justify-content: center; }
+  .not-found-actions .button { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .state::before { animation: none; }
+  .button, .feature-card, .catalog-card, .appointment-card, .record-list button, .news-card { transition: none; }
+}

@@ -15,12 +15,17 @@ function mapError(error: unknown): never {
   if ([53206, 53212].includes(code ?? 0)) throw new HttpError(409, 'IDEMPOTENCY_KEY_REUSED', 'Idempotency-Key đã dùng với nội dung khác.');
   if ([53207, 53213].includes(code ?? 0)) throw new HttpError(409, 'REQUEST_IN_PROGRESS', 'Yêu cầu trùng đang được xử lý.');
   if ([53209, 53210].includes(code ?? 0)) throw new HttpError(409, 'CHECK_IN_WINDOW_CLOSED', 'Lịch hẹn nằm ngoài cửa sổ check-in của chi nhánh.');
+  if (code === 53268) throw new HttpError(409, 'WALK_IN_CAPACITY_FULL', 'Không còn giờ khám phù hợp trong thời gian chờ cho phép. Hãy chọn bác sĩ hoặc phòng khác, hoặc đặt lịch.');
+  if (code === 53269) throw new HttpError(409, 'PATIENT_TIME_CONFLICT', 'Bệnh nhân đã có lịch hẹn trùng giờ khám.');
   if ([53208, 53211, 53214, 53215, 53216, 53217, 53218].includes(code ?? 0)) {
     throw new HttpError(409, 'RECEPTION_STATE_CONFLICT', 'Dữ liệu lịch, bệnh nhân hoặc tài nguyên tiếp nhận đã thay đổi.');
   }
   if (code === 53253) throw new HttpError(409, 'ENCOUNTER_CANCELLATION_NOT_ALLOWED', 'Chỉ có thể hủy lượt đang chờ hoặc đang khám.');
   if (code === 53254) throw new HttpError(409, 'ENCOUNTER_MEDICATION_NOT_REVERSED', 'Cần đảo toàn bộ thuốc đã cấp trước khi hủy lượt khám.');
   if (code === 53255) throw new HttpError(409, 'ENCOUNTER_HAS_PAYMENT', 'Không thể hủy lượt khám đã phát sinh thanh toán.');
+  if (code === 53761) throw new HttpError(404, 'RECEPTION_RESOURCE_NOT_FOUND', 'Không tìm thấy số hàng đợi.');
+  if (code === 53762) throw new HttpError(409, 'QUEUE_STATE_CONFLICT', 'Số hàng đợi đã đổi trạng thái. Hãy tải lại.');
+  if (code === 53760) throw new HttpError(400, 'RECEPTION_VALIDATION_ERROR', 'Hành động hoặc lý do không hợp lệ.');
   if ([53201, 53252, 53751].includes(code ?? 0)) throw new HttpError(400, 'RECEPTION_VALIDATION_ERROR', 'Thông tin tiếp nhận không hợp lệ.');
   throw error;
 }
@@ -48,6 +53,11 @@ export class ReceptionService {
   }
   async callNext(actor: ClinicPrincipal, branchPublicId: string, requestId: string) {
     try { return await this.repository.callNext(actor, branchPublicId, requestId); } catch (error) { mapError(error); }
+  }
+  async changeTicketStatus(actor: ClinicPrincipal, ticketPublicId: string, action: 'SKIP' | 'RECALL',
+    reason: string, requestId: string) {
+    try { return await this.repository.changeTicketStatus(actor, ticketPublicId, action, reason, requestId); }
+    catch (error) { mapError(error); }
   }
   async cancelEncounter(actor: ClinicPrincipal, encounterPublicId: string, reason: string, requestId: string) {
     try {

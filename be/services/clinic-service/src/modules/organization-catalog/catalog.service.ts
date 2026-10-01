@@ -3,6 +3,8 @@ import type { ClinicPrincipal } from '../identity/index.js';
 import type {
   CatalogRepository, CreateRoomInput, CreateServiceInput, SetBranchPriceInput,
   UpdateRoomInput, UpdateServiceInput,
+  CreateBranchInput, UpdateBranchInput, CreateSpecialtyInput, UpdateSpecialtyInput,
+  CreateCategoryInput, UpdateCategoryInput,
 } from './catalog.types.js';
 
 function databaseErrorNumber(error: unknown): number | undefined {
@@ -32,6 +34,18 @@ function mapDatabaseError(error: unknown): never {
   if (number === 53612) {
     throw new HttpError(400, 'CATALOG_RESULT_SCHEMA_INVALID', 'Schema kết quả dịch vụ không hợp lệ.');
   }
+  if ([53622, 53626, 53629].includes(number ?? 0)) {
+    throw new HttpError(409, 'CATALOG_VERSION_CONFLICT', 'Dữ liệu đã được người khác cập nhật. Vui lòng tải lại.');
+  }
+  if ([53623, 53624, 53627].includes(number ?? 0)) {
+    throw new HttpError(409, 'CATALOG_IN_USE', 'Danh mục đang được lịch hẹn hoặc dịch vụ hoạt động sử dụng.');
+  }
+  if ([53621, 53625, 53628].includes(number ?? 0)) {
+    throw new HttpError(404, 'CATALOG_NOT_FOUND', 'Danh mục không còn tồn tại.');
+  }
+  if (number === 53620 || number === 547) {
+    throw new HttpError(400, 'VALIDATION_ERROR', 'Múi giờ hoặc chính sách chi nhánh không hợp lệ.');
+  }
   if (number === 51002) {
     throw new HttpError(403, 'FORBIDDEN', 'Bạn không có quyền quản lý danh mục trong phạm vi này.');
   }
@@ -54,6 +68,85 @@ function serviceView(service: Awaited<ReturnType<CatalogRepository['getService']
 
 export class CatalogService {
   constructor(private readonly repository: CatalogRepository) {}
+
+  private async assertOrganizationPermission(actor: ClinicPrincipal) {
+    await this.assertPermission(actor, null);
+  }
+
+  async organization(actor: ClinicPrincipal) {
+    await this.assertOrganizationPermission(actor);
+    const [branches, specialties, categories] = await Promise.all([
+      this.repository.listOrganizationBranches(), this.repository.listOrganizationSpecialties(),
+      this.repository.listOrganizationCategories(),
+    ]);
+    return {
+      branches: branches.map(({ id: _id, ...item }) => item),
+      specialties: specialties.map(({ id: _id, ...item }) => item),
+      categories: categories.map(({ id: _id, ...item }) => item),
+    };
+  }
+
+  async createBranch(actor: ClinicPrincipal, input: CreateBranchInput, requestId: string) {
+    await this.assertOrganizationPermission(actor);
+    try {
+      const id = await this.repository.createBranch(actor, input, requestId);
+      const item = (await this.repository.listOrganizationBranches()).find((branch) => branch.publicId === id)!;
+      const { id: _id, ...view } = item;
+      return view;
+    } catch (error) { mapDatabaseError(error); }
+  }
+
+  async updateBranch(actor: ClinicPrincipal, publicId: string, input: UpdateBranchInput, version: string, requestId: string) {
+    await this.assertOrganizationPermission(actor);
+    const before = (await this.repository.listOrganizationBranches()).find((branch) => branch.publicId === publicId);
+    if (!before) throw new HttpError(404, 'BRANCH_NOT_FOUND', 'Không tìm thấy chi nhánh.');
+    try {
+      await this.repository.updateBranch(actor, before.id, input, version, requestId);
+      const after = (await this.repository.listOrganizationBranches()).find((branch) => branch.publicId === publicId)!;
+      const { id: _id, ...view } = after;
+      return view;
+    } catch (error) { mapDatabaseError(error); }
+  }
+
+  async createSpecialty(actor: ClinicPrincipal, input: CreateSpecialtyInput, requestId: string) {
+    await this.assertOrganizationPermission(actor);
+    try {
+      const id = await this.repository.createSpecialty(actor, input, requestId);
+      const { id: _id, ...view } = (await this.repository.listOrganizationSpecialties()).find((item) => item.publicId === id)!;
+      return view;
+    } catch (error) { mapDatabaseError(error); }
+  }
+
+  async updateSpecialty(actor: ClinicPrincipal, publicId: string, input: UpdateSpecialtyInput, version: string, requestId: string) {
+    await this.assertOrganizationPermission(actor);
+    const before = (await this.repository.listOrganizationSpecialties()).find((item) => item.publicId === publicId);
+    if (!before) throw new HttpError(404, 'SPECIALTY_NOT_FOUND', 'Không tìm thấy chuyên khoa.');
+    try {
+      await this.repository.updateSpecialty(actor, before.id, input, version, requestId);
+      const { id: _id, ...view } = (await this.repository.listOrganizationSpecialties()).find((item) => item.publicId === publicId)!;
+      return view;
+    } catch (error) { mapDatabaseError(error); }
+  }
+
+  async createCategory(actor: ClinicPrincipal, input: CreateCategoryInput, requestId: string) {
+    await this.assertOrganizationPermission(actor);
+    try {
+      const id = await this.repository.createCategory(actor, input, requestId);
+      const { id: _id, ...view } = (await this.repository.listOrganizationCategories()).find((item) => item.publicId === id)!;
+      return view;
+    } catch (error) { mapDatabaseError(error); }
+  }
+
+  async updateCategory(actor: ClinicPrincipal, publicId: string, input: UpdateCategoryInput, version: string, requestId: string) {
+    await this.assertOrganizationPermission(actor);
+    const before = (await this.repository.listOrganizationCategories()).find((item) => item.publicId === publicId);
+    if (!before) throw new HttpError(404, 'CATEGORY_NOT_FOUND', 'Không tìm thấy nhóm dịch vụ.');
+    try {
+      await this.repository.updateCategory(actor, before.id, input, version, requestId);
+      const { id: _id, ...view } = (await this.repository.listOrganizationCategories()).find((item) => item.publicId === publicId)!;
+      return view;
+    } catch (error) { mapDatabaseError(error); }
+  }
 
   publicBranches() { return this.repository.listPublicBranches(); }
   publicSpecialties() { return this.repository.listPublicSpecialties(); }
@@ -84,12 +177,12 @@ export class CatalogService {
 
   async references(actor: ClinicPrincipal) {
     const branches = await this.repository.listManageableBranches(actor.userId);
-    if (branches.length === 0) {
+    const canManageOrganizationServices = await this.repository.hasPermission(actor.userId, null);
+    if (branches.length === 0 && !canManageOrganizationServices) {
       throw new HttpError(403, 'FORBIDDEN', 'Bạn không có phạm vi quản lý danh mục.');
     }
-    const [categories, specialties, canManageOrganizationServices] = await Promise.all([
+    const [categories, specialties] = await Promise.all([
       this.repository.listCategories(), this.repository.listSpecialties(),
-      this.repository.hasPermission(actor.userId, null),
     ]);
     return {
       branches: branches.map(({ id: _id, ...item }) => item),

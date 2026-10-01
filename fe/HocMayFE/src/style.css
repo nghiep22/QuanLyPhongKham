@@ -9,3 +9,41 @@
 footer{background:#fff;border-top:1px solid #e0e9e1}.footer-inner{display:flex;justify-content:space-between;gap:20px;padding:23px 0;color:#829388;font-size:.75rem;font-weight:700}
 @media(max-width:950px){.header-project{display:none}.hero-inner{grid-template-columns:1fr}.hero-visual{display:none}.hero-inner{min-height:450px}.search-layout{grid-template-columns:1fr}.metric-grid{grid-template-columns:repeat(2,1fr)}.dashboard-grid{grid-template-columns:1fr}.error-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:650px){.page-shell{width:min(100% - 30px,1180px)}.header-inner{height:auto;min-height:74px;flex-wrap:wrap;padding:12px 0}.site-header nav{order:2;width:100%;height:40px;justify-content:space-between;gap:6px}.site-header nav button{font-size:.74rem}.hero-inner{min-height:470px}.hero h1{font-size:2.65rem}.hero-facts{gap:8px}.intro-row{display:block}.intro-row p{margin-top:15px}.steps,.metric-grid,.error-grid{grid-template-columns:1fr}.about-note{display:block}.about-note button{margin-top:20px}.search-page,.evaluation-page{padding-top:35px}.search-page .intro-row{display:block}.dataset-badge{display:inline-block;margin-top:20px}.search-panel,.results-panel,.card{padding:19px}.query-row{display:block}.query-row input{display:block}.query-row button{width:100%;height:43px;margin-top:8px}.filter-row{grid-template-columns:1fr 100px}.score-row{grid-template-columns:140px 1fr 45px;font-size:.7rem}.footer-inner{display:block}.footer-inner span{display:block;margin:4px 0}}
+
+/* Interaction and state polish across the three views. */
+body{background:radial-gradient(circle at 95% 15%,#e6f3e9 0,transparent 28%),#f5f8f4}
+:focus-visible{outline:3px solid #f0a454;outline-offset:3px}
+.site-header{box-shadow:0 8px 28px #0f49320a}
+.site-header nav button,.hero-button,.about-note button,.query-row button,.example-box button{transition:background-color .18s,color .18s,transform .18s,box-shadow .18s}
+.hero-button:hover,.about-note button:hover,.query-row button:not(:disabled):hover{transform:translateY(-2px);box-shadow:0 12px 24px #0a55322b}
+.search-panel,.results-panel,.steps article,.metric-card,.card{box-shadow:0 18px 38px #214f360c}
+.search-panel{position:relative;overflow:hidden}
+.search-panel:before{content:'';position:absolute;inset:0 0 auto;height:4px;background:linear-gradient(90deg,#12816b,#89d5a8)}
+.results-panel{min-width:0}
+.dataset-badge{display:inline-flex;align-items:center;gap:2px;border:1px solid #cce9d9}
+.dataset-badge.unavailable{background:#fff3ea;color:#965634;border-color:#f0d7c3}
+.dataset-badge.unavailable .status-dot{background:#e8985b}
+.result-status{color:#587467;font-size:.8rem;font-weight:700;min-height:1.4em;margin:-4px 0 17px;overflow-wrap:anywhere}
+.result-status:empty{display:none}
+.filter-changed{background:#fff8e8;border:1px solid #f2dda9;border-radius:10px;color:#765d2b;font-size:.79rem;line-height:1.5;padding:10px 13px;margin-bottom:15px}
+.results-panel .notice{margin:0 0 16px}
+.retry-button,.connection-notice button,.evaluation-unavailable button{border:1px solid #b6dcc8;background:#fff;color:#176c57;border-radius:9px;font-weight:800;font-size:.79rem;padding:9px 12px;white-space:nowrap}
+.retry-button{margin-left:12px}
+.retry-button:hover,.connection-notice button:hover,.evaluation-unavailable button:hover{background:#e8f5eb}
+.connection-notice{display:flex;align-items:center;justify-content:space-between;gap:15px;border:1px solid #efcfbf;border-radius:13px;background:#fff5ef;color:#934938;font-size:.85rem;line-height:1.5;padding:15px 18px;margin-top:16px}
+.connection-notice span{overflow-wrap:anywhere}
+.loading-state{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:260px;color:#4a6a59;text-align:center}
+.loading-state p{font-size:.83rem;color:#83988a;margin:7px 0 0}
+.loading-spinner{display:block;width:36px;height:36px;border:3px solid #d9ede1;border-top-color:#17816c;border-radius:50%;margin-bottom:18px;animation:search-spin .9s linear infinite}
+@keyframes search-spin{to{transform:rotate(360deg)}}
+.result-list li{padding:23px 0}
+.result-list h3{color:#234d3a}
+.category-pill{letter-spacing:.01em}
+.evaluation-unavailable{max-width:570px;margin-top:28px;padding:36px;background:linear-gradient(140deg,#fff,#f7fbf7)}
+.evaluation-unavailable-icon{display:grid;place-items:center;width:52px;height:52px;border-radius:14px;background:#e4f5eb;color:#16816b;font-size:1.6rem;margin-bottom:20px}
+.evaluation-unavailable h2{margin:0 0 10px}
+.evaluation-unavailable p{color:#657e6c;font-size:.9rem;max-width:45ch;margin:0 0 20px}
+.metric-card{position:relative;overflow:hidden}
+.metric-card:after{content:'';position:absolute;inset:auto 0 0;height:3px;background:#71c49c}
+@media(max-width:650px){.search-panel,.results-panel{border-radius:16px}.connection-notice{align-items:flex-start;flex-direction:column}.retry-button{display:block;margin:10px 0 0}.evaluation-unavailable{padding:25px}.result-status{font-size:.76rem}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}}

@@ -493,7 +493,7 @@ thân/người giám hộ. SEC-09, SEC-11 và SEC-12 là P1.
 | PAT-07 | Quản lý bảo hiểm và thời hạn | Receptionist/Cashier | P1 |
 | PAT-08 | Xác minh quyền đặt lịch cho bản thân/người thân | Receptionist/Admin | MVP |
 | PAT-09 | Thu hồi quyền truy cập hồ sơ người thân | Patient/Admin | MVP |
-| PAT-10 | Gộp hồ sơ bệnh nhân trùng có lịch sử audit | Admin chuyên trách | P1 |
+| PAT-10 | Gộp hồ sơ bệnh nhân trùng có lịch sử audit | Admin chuyên trách | P1 — đã có API, SQL, Admin Web và regression local; cần kiểm thử giao diện thật |
 | PAT-11 | Cờ hạn chế riêng tư và lý do truy cập khẩn cấp | Admin/Doctor | P2 |
 
 ### 8.4 Lịch bác sĩ và slot khám
@@ -529,6 +529,12 @@ thân/người giám hộ. SEC-09, SEC-11 và SEC-12 là P1.
 | APT-11 | Retry an toàn bằng idempotency key | Hệ thống | MVP |
 | APT-12 | Cấu hình phí đặt cọc/chính sách hủy | Manager | P2 |
 
+Online, điện thoại và tại quầy dùng cùng kho slot. Slot chỉ hiện nếu đủ thời lượng
+dịch vụ; walk-in giữ slot thực và không tạo appointment. Ngưỡng chờ walk-in theo
+chi nhánh mặc định 45 phút (15–180). Không áp tỷ lệ quota online/walk-in cố định
+khi chưa có đủ số liệu nhu cầu; báo cáo vận hành có chờ trung bình, P90 và số
+lượt walk-in để điều chỉnh ngưỡng theo từng chi nhánh.
+
 ### 8.6 Tiếp nhận, walk-in và hàng đợi
 
 | Mã | Chức năng | Vai trò | Ưu tiên |
@@ -536,12 +542,12 @@ thân/người giám hộ. SEC-09, SEC-11 và SEC-12 là P1.
 | QUE-01 | Check-in lịch đã xác nhận | Receptionist/Nurse | MVP |
 | QUE-02 | Tạo lượt khám trực tiếp không cần appointment giả | Receptionist | MVP |
 | QUE-03 | Phát số hàng đợi tăng đơn điệu theo chi nhánh/ngày/loại | Hệ thống | MVP |
-| QUE-04 | Hàng đợi ưu tiên rồi FIFO | Receptionist/Nurse | MVP |
+| QUE-04 | Hàng đợi ưu tiên, lịch đến giờ rồi thứ tự giờ dự kiến | Receptionist/Nurse | MVP |
 | QUE-05 | Gọi số tiếp theo chống hai quầy gọi cùng một người | Nhân viên | MVP |
 | QUE-06 | Chuyển WAITING → CALLED → SERVING → COMPLETED | Nhân viên/Hệ thống | MVP |
-| QUE-07 | Bỏ qua/gọi lại/hủy ticket có lý do | Receptionist | P1 |
+| QUE-07 | Bỏ qua/gọi lại/hủy ticket có lý do | Receptionist | P1 — đã có SQL, API, Admin Web và regression local; cần thử giao diện thật |
 | QUE-08 | Màn hình hiển thị số và phòng khám | Bệnh nhân | P1 |
-| QUE-09 | Ước lượng thời gian chờ | Hệ thống | P2 |
+| QUE-09 | Dự báo chờ động theo tiến độ thực tế | Hệ thống | P2; hiện có giờ slot dự kiến và thời gian còn lại đến giờ này |
 
 ### 8.7 Khám bệnh và hồ sơ lâm sàng
 
@@ -666,7 +672,7 @@ Trong bảng này, **P0** nghĩa là phải chốt thiết kế trước và ho�
 | P0 | Một nguồn kiểm tra role assignment hiệu lực | Có defect | Mọi custom authz đều kiểm tra role active, assignment active, `validFrom/validTo` và branch; không né hạn hủy bằng role hết hiệu lực |
 | P0 | Permission và command danh mục dược | Khung | Pharmacist quản lý batch/location/supplier cần thiết mà không có `MASTER_DATA_MANAGE` toàn cục |
 | P0 | Phạm vi danh mục và giá theo chi nhánh | Có defect thiết kế | Global catalog có quyền riêng; availability/giá hiệu lực theo branch và invoice giữ snapshot |
-| P0 | Request/cancel leave và approve/reject leave | Khung | Doctor không cần `SCHEDULES_MANAGE`; Manager xử lý xung đột có audit |
+| P0 | Request/cancel leave và approve/reject leave | **DONE** | Doctor tự báo bận/hủy yêu cầu đang chờ; Manager duyệt/từ chối theo chi nhánh. Lịch hẹn xung đột phải được xử lý trước khi duyệt; slot trống được chặn, mọi chuyển trạng thái có audit. |
 | P0 | Break, holiday, block/unblock slot | Khung | Không tạo xung đột với slot/lịch hẹn hiện hữu |
 | P0 | Cửa sổ check-in/no-show theo chính sách chi nhánh | Có hard-code | Thay mốc `-120/+180` bằng cấu hình có default, validation và snapshot/audit khi dùng override |
 | P0 | Điều kiện hành nghề của bác sĩ | Khung | Schedule/book/check-in/walk-in chặn bác sĩ inactive, hết hạn chứng chỉ hoặc không còn assignment tại service date |
@@ -802,8 +808,11 @@ Invoice status được tính lại từ số thu ròng: refund có thể chuy�
 
 1. Lễ tân tìm hoặc tạo patient.
 2. Chọn chi nhánh, bác sĩ, phòng và dịch vụ phù hợp.
-3. Tạo trực tiếp encounter nguồn `WALK_IN`; không tạo appointment giả.
-4. Encounter service ban đầu và queue ticket được tạo nguyên tử.
+3. Chỉ nhận khi có slot trống đủ thời lượng, bắt đầu trong ngưỡng chờ của chi
+   nhánh; giữ slot trong cùng transaction để online và quầy không chiếm trùng.
+4. Tạo trực tiếp encounter nguồn `WALK_IN`; không tạo appointment giả.
+5. Encounter service ban đầu và queue ticket được tạo nguyên tử. Khi hủy lượt,
+   slot được giải phóng.
 
 ### 10.5 Khám, kê đơn và ký
 
@@ -1191,15 +1200,22 @@ password lifecycle, branch-scoped authorization và database role tối thiểu 
 baseline freeze tổng thể vẫn mở; lần chạy CI/branch protection được xác minh sau khi push.
 Phase 3 đã hoàn thành Catalog/Directory và phần hồ sơ hành chính, chống trùng,
 đọc tóm tắt lâm sàng theo care relationship của Slice 08. Quản lý liên hệ khẩn cấp,
-ghi dị ứng/bệnh nền vẫn cần lát cắt riêng; chính sách công bố kết quả cho
-patient/guardian đã hoàn thành ở Slice 17.
+ghi/ngừng dị ứng và ghi/giải quyết bệnh nền đã có API, SQL, giao diện và regression
+local. PAT-04 đã có luồng tự quản lý liên hệ khẩn cấp cho tài khoản có liên kết
+SELF đang hiệu lực trên User Web và Mobile, với `If-Match`, audit và regression SQL.
+Còn cần kiểm chứng thao tác thật trên giao diện với dữ liệu thử. Gộp hồ sơ trùng
+PAT-10 đã có lệnh Admin với xem trước, kiểm tra phiên bản và xung đột, bí danh
+tra cứu, lịch sử audit và regression giữ nguyên dấu lượt khám đã ký.
+Chính sách
+công bố kết quả cho patient/guardian đã hoàn thành ở Slice 17.
 Phase 4 đã có lát cắt dọc đặt lịch online/tại quầy dùng được từ UI đến SQL, đạt
 điều kiện double-booking/idempotency và có reminder email/SMS qua delivery adapter.
 Time-off, ngày nghỉ/lịch đặc biệt và quy trình duyệt ca còn dành cho lát cắt sau.
 Phase 5 đã có quầy tiếp nhận dùng được từ Admin Web đến SQL: check-in, walk-in,
 cấp số và call-next an toàn khi nhiều quầy cùng gọi. Slice 21 khóa cả đường bypass
-bước gọi số theo priority/FIFO, permission và lý do. Recall/skip/cancel/transfer
-ticket, bảng hiển thị công khai và ước lượng thời gian chờ vẫn thuộc P1/P2.
+bước gọi số theo giờ đến hạn, ưu tiên, permission và lý do. QUE-07 đã có bỏ qua/gọi lại
+số có lý do, hủy lượt đóng cả số đã bỏ qua; cần thử giao diện thật. Chuyển số,
+bảng hiển thị công khai và dự báo chờ động vẫn thuộc P1/P2.
 Phase 6 đã có luồng bác sĩ hoàn tất/ký/công bố hồ sơ, hủy lượt an toàn và bệnh
 nhân/người giám hộ xem lịch sử đã công bố từ UI đến SQL. Dấu SHA-256 V3 được
 recompute khi đọc và ổn định qua cấp/đảo thuốc; chức năng kiểm tra kết quả FINAL đã khóa dữ liệu theo
@@ -1352,3 +1368,87 @@ MVP được xem là có thể bàn giao khi một phòng khám có thể thực
 ---
 
 Khi bắt đầu code, ưu tiên triển khai Phase 0 và Phase 1 trước. Không tạo màn hình CRUD hàng loạt trước khi auth, OpenAPI, error contract, permission scope, stored-procedure command runner và cấu trúc feature/module đã ổn định.
+
+## 23. Rà soát màn hình và luồng thao tác (2026-09-23)
+
+### 23.1 Phạm vi và kết quả kiểm tra
+
+- Đã chạy Gateway, Auth, Clinic, Worker và Admin Web với SQL Server local. Đăng nhập tài khoản demo `admin.demo` và tài khoản lễ tân đang có phiên; kiểm tra điều hướng, trạng thái tải/rỗng/lỗi, các nút và trường nhập trên những màn hai vai trò này truy cập được. Thử form Quên mật khẩu để trống và xác nhận thông báo kiểm tra dữ liệu. Không thực hiện giao dịch tạo/sửa/xóa hồ sơ y tế hoặc tài chính trên dữ liệu đang có.
+- Đã rà soát tuyến xử lý submit, validation, loading, chọn chi nhánh và gọi API trong mã các màn Admin Web: Đăng nhập/Quên mật khẩu/Đặt lại/Đổi mật khẩu, Tổng quan, Nhân sự, Liên kết hồ sơ, Danh mục, Bệnh nhân, Lịch hẹn, Ca & slot, Lịch của tôi, Tiếp nhận, Khám bệnh, Nhà thuốc, Thu ngân, Báo cáo; và các màn Mobile: onboarding/đăng nhập/đăng ký OTP/đổi mật khẩu, khám phá, hồ sơ được ủy quyền, đặt lịch, lịch sử khám. Các nhánh chưa có dữ liệu hoặc thiếu vai trò phù hợp được ghi ở 23.3 để kiểm thử tiếp.
+- `npm run typecheck`, `npm run test` (164 test ở 27 file) và `npm run build` đều đạt. Các test hiện có không bắt được lỗi GUID ở dữ liệu SQL thật. Chưa chạy thao tác Mobile trên emulator/thiết bị (`adb` không có trong PATH); chưa kiểm chứng end-to-end các nút mutation trên màn không có dữ liệu phù hợp hoặc cần vai trò bác sĩ. Các mục đó là **chưa kiểm chứng trên UI**, không coi là đã đạt.
+
+### 23.2 Thiếu sót cần xử lý
+
+| Ưu tiên | Màn / luồng | Bằng chứng và ảnh hưởng | Tiêu chí hoàn tất |
+|---|---|---|---|
+| P0 | Nhà thuốc, Thu ngân, Báo cáo theo chi nhánh | Chọn `Cơ sở mẫu 1` làm Nhà thuốc báo “Dữ liệu nhà thuốc không hợp lệ”, Thu ngân báo “Dữ liệu hóa đơn không hợp lệ”, cả ba báo cáo báo “Bộ lọc báo cáo không hợp lệ”; chuyển `Phòng khám chính` thì Nhà thuốc/Báo cáo tải được. ID mẫu `8DFFE243-78B2-F111-9787-387A0E5C4A9E` do read API trả về nhưng `z.string().uuid()` trong `pharmacy.router.ts`, `billing.router.ts`, `reports.router.ts` từ chối vì nibble version `F`. ID mẫu 2/3 cũng có nibble `F`, cần kiểm chứng trực tiếp. Dữ liệu do chính hệ thống trả về không thể dùng để truy vấn/submit ở ba phân hệ. | Thống nhất quy ước public ID từ SQL, OpenAPI và validator (sửa seed hoặc dùng validator GUID phù hợp). Kiểm tra lại mọi endpoint nhận public ID bằng ID thực từ read API; smoke cả ba chi nhánh mẫu và chi nhánh chính, có regression API cho GUID SQL hiện có. |
+| P1 | Thu ngân: lưu bảo hiểm của hóa đơn nháp | `billing-page.tsx` khởi tạo `insuranceAmount = '0'` một lần và không cập nhật khi chọn hóa đơn khác. Mở hóa đơn đã có phần bảo hiểm rồi nhấn “Lưu bảo hiểm” có thể ghi đè thành 0; đổi hóa đơn còn giữ giá trị của hóa đơn trước. | Đồng bộ giá trị form với hóa đơn đang chọn/phiên bản mới, đánh dấu dirty, chỉ cho lưu khi người dùng chủ động sửa; test chuyển giữa hai hóa đơn có mức bảo hiểm khác nhau. |
+| P1 | Mobile: chọn ngày rồi giữ slot/đổi lịch | `appointment-screen.tsx` chỉ `setDate` khi sửa ô ngày, không xóa `slots` của lần tìm trước; nút “Giữ chỗ/Chuyển lịch” vẫn gửi slot của ngày cũ trong khi ô ngày hiển thị ngày mới. | Xóa kết quả khi ngày/bộ lọc thay đổi, hiển thị ngày/chi nhánh/dịch vụ trong từng slot và chặn submit nếu slot không khớp bộ lọc hiện tại; test đổi ngày sau khi tìm slot. |
+| P1 | Mobile: hồ sơ đặt lịch sau khi quyền bị thu hồi | `load()` của màn Đặt lịch giữ `profileId` cũ bằng `current || allowed[0]`; khi quyền đặt lịch bị thu hồi, chip không còn chọn nhưng `profileId` cũ vẫn được gửi khi nhấn “Giữ chỗ”. Backend từ chối, người dùng không biết phải chọn lại hồ sơ. | Khi refresh, chỉ giữ ID còn trong danh sách `bookingAllowed`; nếu không, chọn hồ sơ hợp lệ đầu tiên hoặc khóa đặt lịch và hướng dẫn mở Hồ sơ được ủy quyền. Test quyền bị thu hồi trong lúc màn đang mở. |
+| P1 | Admin: duyệt liên kết hồ sơ | `patient-links-page.tsx` luôn gọi `page: 1, pageSize: 50`, không có phân trang nên yêu cầu thứ 51 trở đi không thể mở/duyệt. `loadRequests` không hủy/đối chiếu request cũ khi đổi chi nhánh hoặc trạng thái nhanh, có thể hiện danh sách của bộ lọc trước dưới nhãn bộ lọc mới. | Thêm phân trang/tổng số và khóa xử lý khi đổi bộ lọc; chỉ nhận kết quả của request mới nhất. Test >50 yêu cầu và phản hồi API đảo thứ tự. |
+| P1 | Ca & slot: nhập khoảng nghỉ | `scheduling-page.tsx` chỉ gửi `breaks` nếu cả `breakStart` và `breakEnd` có giá trị; nhập một đầu rồi “Gửi đề xuất” thì ca được tạo **không có khoảng nghỉ**, không có cảnh báo. | Bắt buộc nhập đủ hai đầu hoặc để cả hai trống; kiểm tra đầu < cuối và nằm trong giờ ca trước khi submit, hiển thị lỗi cạnh trường. |
+| P2 | Báo cáo: nút “Làm mới” theo quyền | `reports-page.tsx` gọi `operations.refetch()`, `revenue.refetch()`, `inventory.refetch()` cùng lúc dù vai trò chỉ có quyền một hoặc hai nhóm báo cáo; các query bị `enabled: false` vẫn bị gọi thủ công và có thể nhận 403 ẩn. | Chỉ refetch nhóm được cấp quyền tại chi nhánh đã chọn; test vai trò chỉ xem vận hành, chỉ xem doanh thu và chỉ xem tồn. |
+| P2 | Điều hướng Khám bệnh cho Admin | Menu Admin hiện liên kết “Khám bệnh”, nhưng đăng nhập `admin.demo` rồi mở trang chỉ thấy “Tài khoản chưa có chi nhánh lâm sàng được phân công.” Người dùng được dẫn vào màn không thao tác được. | Quyết định rõ quyền Admin có được khám hay không; đồng bộ điều kiện hiển thị menu với phạm vi bác sĩ/chi nhánh thực tế và nêu cách xin phân công khi thiếu quyền. |
+
+### 23.3 Kịch bản cần chạy sau khi sửa
+
+1. Web theo vai trò Admin, Manager, Receptionist, Doctor, Nurse, Pharmacist, Cashier: đi qua toàn bộ menu được cấp quyền; thử dữ liệu hợp lệ/không hợp lệ, submit lặp, lỗi 403/409, đổi chi nhánh và tải lại. Bao gồm phê duyệt ca/nghỉ, check-in → gọi số → khám → ký/công bố → kê/cấp thuốc → hóa đơn/thu/hoàn trên bộ dữ liệu test riêng.
+2. Mobile trên Android emulator hoặc thiết bị: đăng ký/OTP, đăng nhập, liên kết hồ sơ, khám phá dịch vụ/bác sĩ, đặt/đổi/hủy lịch, xem hồ sơ đã công bố và đổi mật khẩu; thử mất mạng, hết phiên, quyền bị thu hồi, bấm submit hai lần và bàn phím che nút.
+3. Bổ sung test UI/API cho các ca ở bảng trên, nhất là ID SQL thực qua Gateway. Chỉ đánh dấu hoàn tất khi mutation thành công và trạng thái mới hiện sau refresh; typecheck/build/unit test đạt chưa thay thế kịch bản này.
+
+### 23.4 Phát hiện bổ sung khi rà sâu luồng submit
+
+Các mục dưới đây xác nhận bằng tuyến gọi UI → generated client → API/SQL và kiểm tra trực tiếp khi đổi vai trò. Chưa tạo dữ liệu giao dịch để kích hoạt lỗi thu tiền/cấp thuốc trên màn thật; cần regression có mô phỏng phản hồi mất sau khi server đã commit.
+
+| Ưu tiên | Màn / luồng | Bằng chứng và ảnh hưởng | Tiêu chí hoàn tất |
+|---|---|---|---|
+| P0 | Thu ngân thu/hoàn tiền; Nhà thuốc nhập/cấp thuốc | `billing-page.tsx` gọi `billing.pay/refund` và `pharmacy-page.tsx` gọi `pharmacy.receive/dispense` mà không truyền idempotency key. `packages/generated-api-client/src/index.ts` tự tạo `crypto.randomUUID()` **mỗi lần gọi**; SQL chỉ dedupe khi cùng key. Nếu server đã commit nhưng phản hồi mất, bấm lại với form còn nguyên gửi key mới: có thể ghi nhận thêm lần thu/hoàn tiền hoặc biến động kho thứ hai khi số dư/số lượng vẫn cho phép. | UI giữ key theo loại thao tác + đối tượng + payload qua lỗi mạng/kết quả chưa rõ, tra trạng thái mới nhất trước khi tạo ý định mới; chỉ đổi key khi người dùng thật sự bắt đầu giao dịch khác. Test mất phản hồi sau commit rồi bấm lại, xác nhận chỉ một payment/refund/stock movement. |
+| P0 | Đổi tài khoản trong cùng tab: dữ liệu truy vấn của vai trò trước | Sau khi đăng xuất `admin.demo` và đăng nhập `cashier.demo`, màn Báo cáo vẫn hiện bốn chi nhánh và cả ba nhóm do React Query giữ cache `report-branches` từ Admin; cả ba request của Thu ngân trả 403. Cùng cơ chế có thể giữ tạm dữ liệu đã tải ở các màn khác sau khi đổi tài khoản. | Xóa toàn bộ query cache khi đăng xuất, hết phiên hoặc đăng nhập tài khoản mới; kiểm tra đổi Admin/Dược sĩ → Thu ngân, chỉ thấy chi nhánh và báo cáo được cấp quyền, không thấy dữ liệu phiên trước. |
+| P0 | Đối chiếu giao dịch Thu ngân/Nhà thuốc sau lỗi mạng | Banner “Tải lại để đối chiếu” dùng `selectedBranch`/`selectedId` hiện tại, còn nút “Đã đối chiếu” xóa `pendingScope` của giao dịch gốc. Nếu chuyển từ hóa đơn/chi nhánh A sang B, người dùng có thể tải B rồi xóa khóa của A. `refetchQueries` mặc định cũng không ném lỗi khi tải thất bại nên vẫn có thể bật nút xác nhận. | Gắn giao dịch chờ với chi nhánh và hóa đơn/đơn thuốc gốc; chỉ cho đối chiếu đúng đối tượng; bắt lỗi tải lại và chỉ mở nút xác nhận sau khi dữ liệu gốc tải thành công. Test đổi đối tượng trước/trong lúc tải và lỗi tải lại không xóa khóa. |
+| P1 | Nhà thuốc/Thu ngân giữ nháp khi đổi chi nhánh hoặc hóa đơn | `PharmacyPage` chỉ đổi `branchId`/`selectedId`, vẫn giữ kho, lô, số lượng, vị trí cấp; `BillingPage` giữ số tiền, phương thức, mã giao dịch và khoản thu thủ công. Nháp của đối tượng A có thể hiện trong form của B; API nhập kho suy ra chi nhánh từ kho/lô nên cần chặn ID cũ ở client. | Reset dữ liệu nhập theo chi nhánh/hóa đơn/đơn thuốc; trước khi nhập kho xác nhận kho và lô thuộc workspace hiện tại. Thử điền nháp ở Cơ sở mẫu 1 rồi chuyển sang Cơ sở mẫu 2, không gửi mutation. |
+| P1 | Khám bệnh: lưu nội dung khám từ hai phiên | `EncounterEditor` chỉ dùng `key={publicId}` và khởi tạo `notes` một lần; refresh detail không cập nhật form. PATCH ghi lại toàn bộ sáu trường ghi chú; API/SQL không nhận `If-Match` hoặc phiên bản bản ghi. Hai tab của cùng bác sĩ có thể lần lượt lưu, tab cũ ghi đè nội dung tab mới mà không báo xung đột. | Thêm phiên bản/`If-Match` cho clinical notes hoặc cơ chế chống ghi đè tương đương; khi dữ liệu server đổi, báo xung đột và cho đối chiếu trước khi lưu. Test hai phiên cùng sửa và refresh khi form đang dirty. |
+| P1 | Lễ tân đổi lịch hẹn tại quầy | `appointmentAdmin.reschedule` đã có trong generated client và APT-06 giao cho Receptionist, nhưng `AppointmentCard` chỉ có In/Xác nhận/Hủy/Không đến; không có nút/biểu mẫu chọn slot mới. Lễ tân phải hủy rồi đặt lại, làm mất tính nguyên tử của đổi lịch và lịch sử chuyển slot. | Thêm thao tác Đổi lịch cho trạng thái hợp lệ, tìm slot theo chi nhánh/dịch vụ/ngày, nhập lý do, dùng idempotency key ổn định; test giữ lịch cũ nếu slot mới vừa bị chiếm và hiển thị lịch mới sau thành công. |
+| P1 | Bệnh nhân: đổi chi nhánh khi đang kiểm tra hồ sơ trùng | `PatientsPage` đổi `branchPublicId` nhưng `CreateForm` không remount/reset `values`, `candidates`, `reason`; danh sách hồ sơ trùng từ chi nhánh A còn hiển thị khi bộ lọc đã sang B. Nhấn “Xác nhận tạo hồ sơ mới” dùng `branchPublicId` B cùng căn cứ kiểm tra A. | Khi đổi chi nhánh, xóa kết quả đối chiếu/lý do và buộc chạy lại kiểm tra trùng theo B; gắn branch ID với kết quả duplicate, chặn submit nếu không khớp. Test chuyển chi nhánh sau khi hiện cảnh báo trùng. |
+| P1 | Tìm slot Web tại quầy và Mobile | `CounterBooking.findSlots` và `AppointmentScreen.findSlots` gán kết quả async bằng `setSlots(response.data)` mà không xác nhận bộ lọc vẫn là bộ lọc đã gửi. Nếu đổi dịch vụ/ngày trong lúc request cũ còn chạy, phản hồi cũ có thể hiện slot sai dưới lựa chọn mới; submit dùng service ID hiện tại với slot cũ và trả lỗi. `CounterBooking.choosePatient` cũng không xóa slot đã tìm cho bệnh nhân trước. | Hủy/đánh số request và chỉ nhận kết quả khớp chi nhánh, dịch vụ, ngày, bác sĩ và người bệnh hiện tại; xóa slot khi đổi bệnh nhân. Test hai request availability trả về đảo thứ tự và đổi bệnh nhân trước khi chọn slot. |
+| P1 | Lễ tân tìm slot rồi đổi ngày A → B → A | `CounterBooking` chỉ so sánh `slotsFor` với bộ lọc hiện tại; sau khi quay lại ngày A, kết quả slot cũ tự hiện lại dù không truy vấn mới. Slot có thể đã bị giữ trong thời gian đó. | Mỗi lần đổi ngày làm mất hiệu lực kết quả cũ, kể cả khi quay về cùng ngày; giữ bệnh nhân/dịch vụ đã chọn và buộc tìm lại slot. |
+| P1 | Lễ tân tìm bệnh nhân nhiều lần liên tiếp | `CounterBooking.search` nhận mọi phản hồi theo thời điểm về, không xét từ khóa/lần tìm mới nhất. Kết quả tìm cũ có thể thay danh sách mới dưới từ khóa hiện tại. | Xóa kết quả khi sửa từ khóa và chỉ nhận phản hồi của lần tìm mới nhất. |
+| P1 | Đổi lịch tại quầy: nút Tìm slot mới và cache | `RescheduleEditor` dùng React Query với `staleTime: 30_000`; bấm “Tìm slot mới” lặp lại cùng bộ lọc không nhất thiết gọi API. Trong lúc refetch hoặc sau lỗi, danh sách cache vẫn có thể chọn. | Mỗi lần bấm tìm phải lấy dữ liệu mới; khóa danh sách khi đang tải/lỗi và kiểm tra slot vẫn nằm trong kết quả hiện hành trước khi gửi đổi lịch. |
+| P1 | Mobile tải lại hồ sơ/lịch song song | `AppointmentScreen.load()` có thể chạy khi vào màn, kéo để tải lại và sau mutation; phản hồi cũ đến muộn ghi đè quyền đặt lịch hoặc danh sách lịch mới. | Đánh số yêu cầu, chỉ nhận kết quả mới nhất và bỏ kết quả sau khi rời màn; thử phản hồi đảo thứ tự trên thiết bị. |
+| P2 | Nhân sự: xem danh sách lớn | `StaffPage` cố định `page: 1, pageSize: 50` dù API trả `meta.total`; không có trang tiếp nên danh sách tổng hợp không thể duyệt hết. Sau khi tạo nhân viên, `selectedId` có thể trỏ tới người mới nhưng `selected = staff.find(...)` không tìm thấy nếu người đó ngoài 50 dòng/bộ lọc hiện tại. | Thêm phân trang hoặc tải tiếp theo `meta.total`, giữ khả năng mở nhân viên vừa tạo khi bộ lọc/trang thay đổi; test dữ liệu >50 nhân viên và tạo ở chi nhánh khác bộ lọc. |
+| P2 | Mobile: nút đặt lịch trong chi tiết bác sĩ | `DoctorDetailScreen` vẫn hiện nút “Đặt lịch với bác sĩ” khi `doctorServices` rỗng; chính màn này đồng thời báo “Chưa có dịch vụ tại cơ sở này”. Nút chuyển sang Đặt lịch với `doctorPublicId` nhưng không có `servicePublicId`, màn sau tự chọn dịch vụ đầu tiên của chi nhánh, thường không thuộc bác sĩ đang lọc nên không tìm được slot. | Chỉ cho đặt khi bác sĩ có dịch vụ khả dụng tại chi nhánh, hoặc chuyển sang luồng chọn lại bác sĩ/dịch vụ và giải thích rõ; test bác sĩ không còn dịch vụ online và khi đổi chi nhánh. |
+| P1 | Mobile: quên/đặt lại mật khẩu bệnh nhân | SEC-06 áp dụng cho mọi người dùng và Auth API đã có request/reset password, nhưng `LoginScreen` Mobile chỉ dẫn tới Đăng ký; `RootStackParamList` không có màn Quên/Đặt lại mật khẩu. Bệnh nhân quên mật khẩu không có đường tự khôi phục trong ứng dụng. | Thêm yêu cầu khôi phục từ màn Đăng nhập và xử lý deep link/token đặt lại trên Mobile, giữ phản hồi chống dò tài khoản và validation mật khẩu như Web; test email/SMS, token sai/hết hạn và quay lại đăng nhập. |
+| P1 | Danh mục: chỉnh sửa phòng và định nghĩa dịch vụ | `CatalogPage` có Tạo phòng, Tạo dịch vụ, bật/tắt, lưu giá/schema; không có form sửa tên/loại/sức chứa phòng hay tên/nhóm/chuyên khoa/thời lượng dịch vụ dù `updateRoom/updateService` API đã có và ADM-02/04 là MVP. Sai thông tin phải sửa trực tiếp qua API/SQL hoặc ngừng mục rồi tạo mục khác. | Thêm thao tác Sửa với dữ liệu hiện tại và `If-Match`, validation, quyền Admin/Manager theo scope; test xung đột phiên bản và bảo toàn giá/hóa đơn lịch sử. |
+| P1 | Quản lý chi nhánh, chuyên khoa và nhóm dịch vụ | ADM-01/03 trong kế hoạch là MVP nhưng Admin Web hiện chỉ đọc danh sách chi nhánh/chuyên khoa/nhóm để chọn; không có màn hay command quản lý địa chỉ, múi giờ, chính sách đặt lịch/check-in hoặc danh mục chuyên khoa/nhóm. Vận hành vẫn phụ thuộc seed/SQL khi cần thay đổi. | Hoàn thiện API và màn quản lý theo quyền Admin, có validation, audit và kiểm tra tác động lên lịch/giá đang hiệu lực; chạy luồng tạo/sửa/tạm ngừng mà không truy cập SQL trực tiếp. |
+
+### 23.5 Tiến độ sửa lỗi (2026-09-23)
+
+Các trạng thái dưới đây nói về bản sửa trong mã và kiểm thử tự động. Chưa đánh dấu hoàn tất kiểm thử thao tác trực tiếp trên tất cả vai trò, trình duyệt và thiết bị Mobile; kịch bản ở 23.3 vẫn phải chạy trên bộ dữ liệu test riêng.
+
+| Ưu tiên | Mục | Trạng thái bản sửa | Kiểm chứng / việc còn lại |
+|---|---|---|---|
+| P0 | GUID SQL trong Nhà thuốc, Thu ngân, Báo cáo và các route public ID khác | Đã đổi validator public ID sang GUID; idempotency key vẫn dùng UUID chuẩn. | API regression và smoke qua Gateway đạt 20/20 GET: Nhà thuốc, Thu ngân, ba báo cáo ở chi nhánh chính và ba chi nhánh mẫu; Admin Web cũng tải được ba màn ở Cơ sở mẫu 1. |
+| P0 | Gửi lặp giao dịch Thu ngân/Nhà thuốc khi mất phản hồi | Đã giữ idempotency key theo thao tác, đối tượng và payload trong session; khóa payload mới đến khi đối chiếu. | Unit test mô phỏng phản hồi mất sau commit; SQL `billing-core` và `pharmacy-core` xác nhận gửi lại cùng key không tạo thêm giao dịch. Cần thử mất phản hồi thật trên giao diện với dữ liệu test riêng. |
+| P0 | Dữ liệu truy vấn còn lại khi đổi tài khoản | Đã xóa React Query cache khi đăng xuất, hết phiên, đổi mật khẩu và khi thông tin người dùng/quyền thay đổi lúc đăng nhập hoặc gia hạn phiên. | UI đổi Dược sĩ → Thu ngân trong cùng tab: danh sách chi nhánh chuyển về phạm vi Thu ngân, chỉ còn báo cáo doanh thu; không hiện báo cáo tồn của Dược sĩ. Đã tái hiện lỗi Admin → Thu ngân trước khi sửa. |
+| P0 | Đối chiếu giao dịch sai hóa đơn/chi nhánh | Đã lưu đối tượng gốc của giao dịch chờ, khóa nút khi màn đang chọn đối tượng khác, tải lại đúng query với lỗi được báo ra. Khóa idempotency chỉ có thể xóa sau khi đúng đối tượng tải thành công; Đổi lịch cũng buộc tải lại sau mỗi lần gửi lại chưa rõ kết quả. | Unit test đối chiếu sai đối tượng, đổi đối tượng giữa chừng và lỗi tải vẫn giữ khóa đạt; cần thử gián đoạn mạng trực tiếp với dữ liệu test riêng. |
+| P1 | Nháp Nhà thuốc/Thu ngân sang đối tượng khác | Đã reset trường theo chi nhánh, đơn thuốc hoặc hóa đơn; nhập kho kiểm tra kho/lô có trong workspace đang xem trước khi gọi API. | UI Admin: điền kho/lô/số lượng ở Cơ sở mẫu 1 rồi sang Cơ sở mẫu 2, các trường trống; điền số tiền 10.000 ₫ ở hóa đơn mẫu 1 rồi mở hóa đơn mẫu 2, trường số tiền trống. Chưa gửi mutation. |
+| P1 | Bảo hiểm hóa đơn nháp | Đã đồng bộ form theo hóa đơn, chỉ lưu khi người dùng sửa, báo xung đột nếu số tiền trên server đổi. | Cần thử đổi giữa hai hóa đơn và phản hồi refetch chậm trên UI. |
+| P1 | Mobile đổi ngày còn slot cũ và quyền đặt lịch hồ sơ bị thu hồi | Đã xóa slot khi đổi bộ lọc, chặn slot không khớp, chỉ giữ hồ sơ còn quyền. | Cần thử trên Android emulator/thiết bị và giả lập quyền bị thu hồi. |
+| P1 | Duyệt liên kết hồ sơ quá 50 dòng / phản hồi cũ | Đã thêm phân trang, tổng số và đánh số request. | Cần dữ liệu >50 và phản hồi API đảo thứ tự trên UI. |
+| P1 | Ca và slot nhập một đầu khoảng nghỉ | Đã kiểm tra đủ hai đầu, thứ tự thời gian và giới hạn trong ca trước khi submit. | UI đã chặn gửi khi chỉ nhập `Nghỉ từ` và khi `Nghỉ đến` đứng trước giờ bắt đầu ca; chưa tạo ca mới trên dữ liệu test riêng. |
+| P1 | Khám bệnh ghi đè nội dung từ hai phiên | Đã thêm row version và `If-Match` từ SQL đến UI, trả 409 và yêu cầu đối chiếu bản server. | API + SQL regression đạt; cần thử hai tab và refresh khi form đang sửa. |
+| P1 | Lễ tân đổi lịch tại quầy | Đã thêm tìm slot nhân viên, form lý do, thao tác đổi lịch với key ổn định và tải lại để đối chiếu. | API + SQL scheduling regression đạt; cần thử slot vừa bị chiếm và xác nhận lịch mới trên UI. |
+| P1 | Đổi chi nhánh khi kiểm tra bệnh nhân trùng | Đã reset form và kết quả kiểm tra trùng theo chi nhánh. | Cần thử đổi chi nhánh sau cảnh báo trùng trên UI. |
+| P1 | Phản hồi tìm slot Web/Mobile về sai thứ tự | Đã đối chiếu bộ lọc và số thứ tự request, xóa slot khi đổi bệnh nhân/dịch vụ/ngày. | Cần thử hai phản hồi đảo thứ tự trên UI và thiết bị. |
+| P1 | Slot cũ hiện lại khi đổi ngày A → B → A | Đã gắn phiên bản lần chọn ngày vào bộ lọc tìm slot; kết quả cũ không thể xuất hiện lại khi quay về A. | UI Admin ở Cơ sở mẫu 1: tìm được ba slot ngày 28/9, đổi sang 29/9 rồi quay lại 28/9; không còn nút slot cũ, vẫn giữ bệnh nhân/dịch vụ. |
+| P1 | Tìm bệnh nhân tại quầy trả phản hồi cũ | Đã đánh số lần tìm và xóa danh sách khi sửa từ khóa; chỉ kết quả mới nhất được hiển thị. | Cần giả lập hai phản hồi API đảo thứ tự trên UI. |
+| P1 | Tìm slot đổi lịch dùng cache | Đã buộc làm mới theo bộ lọc mỗi lần bấm; ẩn slot khi đang tải/lỗi và đối chiếu slot với kết quả hiện hành trước submit. | Cần lịch hẹn PENDING/CONFIRMED trong bộ dữ liệu test để thử nút lặp, slot vừa bị chiếm và trạng thái mới sau đổi. |
+| P1 | Mobile tải hồ sơ/lịch đảo thứ tự | Đã đánh số lần tải và bỏ phản hồi cũ hoặc sau khi rời màn. | Cần thử trên emulator/thiết bị với phản hồi đảo thứ tự và quyền hồ sơ bị thu hồi. |
+| P1 | Mobile quên/đặt lại mật khẩu | Đã thêm màn yêu cầu/nhập token, validation và deep link của ứng dụng. | Cần thử liên kết email/SMS, token hết hạn và quay lại đăng nhập trên thiết bị. |
+| P1 | Chỉnh sửa phòng và định nghĩa dịch vụ | Đã thêm form Sửa dùng giá trị hiện tại và `If-Match`. | API catalog regression đạt; cần thử 409 và xác nhận giá/lịch sử hóa đơn giữ nguyên trên UI. |
+| P1 | Quản lý chi nhánh, chuyên khoa, nhóm dịch vụ | Đã thêm màn Admin, API, stored procedure có audit, row version, kiểm tra slot/lịch tương lai khi đổi múi giờ hoặc ngừng chi nhánh, chặn ngừng nhóm/chuyên khoa còn dịch vụ hoạt động. | OpenAPI, API và SQL catalog regression đạt; cần thử tạo/sửa/tạm ngừng qua giao diện với Admin toàn cục. |
+| P2 | Báo cáo: Làm mới theo quyền | Đã giới hạn refetch theo capability được cấp. | UI Thu ngân chỉ hiện doanh thu, Dược sĩ chỉ hiện tồn; còn cần thử nút Làm mới và vai trò chỉ xem vận hành. |
+| P2 | Điều hướng Khám bệnh cho Admin | Đã yêu cầu phân công Doctor theo chi nhánh trước khi hiện menu; trang có hướng dẫn khi thiếu quyền. | UI Admin không còn menu Khám bệnh; Doctor có menu và mở được hồ sơ đã ký. |
+| P2 | Nhân sự quá 50 dòng | Đã thêm phân trang và đưa nhân viên vừa tạo vào bộ lọc phù hợp. | Cần thử dữ liệu >50 và tạo nhân viên khác chi nhánh đang chọn. |
+| P2 | Nút đặt lịch bác sĩ không có dịch vụ | Đã ẩn nút khi bác sĩ không có dịch vụ khả dụng tại chi nhánh. | Cần thử trên Mobile sau khi đổi chi nhánh/dịch vụ. |
+
+Kiểm tra chung sau các bản sửa: `npm run typecheck`, `npm run test` (172 test), `npm run build`, `npm run openapi:lint` đạt; SQL `catalog-directory`, `clinical-core`, `scheduling-appointments`, `billing-core`, `pharmacy-core` đạt khi chạy tuần tự. Đã đăng nhập Admin Web demo và kiểm tra màn Danh mục, Nhà thuốc, Thu ngân, Báo cáo tải dữ liệu ở Cơ sở mẫu 1; form Sửa chi nhánh hiển thị đủ giá trị hiện tại. `npm run lint` đạt không còn cảnh báo React sau khi sửa đồng bộ form Bảo hiểm và Nội dung khám.

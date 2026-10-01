@@ -2,7 +2,8 @@ import { executeCommand, getSqlPool, sql } from '../../infrastructure/database/s
 import type { ClinicPrincipal } from '../identity/index.js';
 import type {
   Appointment, AppointmentRepository, AppointmentStatus, AvailabilitySlot, BookAppointmentInput,
-  CreateScheduleInput, ScheduleBreakInput, SchedulingData,
+  CreateScheduleInput, DoctorTimeOff, DoctorWorkingSchedule, RequestTimeOffInput,
+  ScheduleBreakInput, ScheduleWorkflowStatus, SchedulingData,
 } from './appointment.types.js';
 
 type Row = Record<string, unknown>;
@@ -35,6 +36,20 @@ function breaks(value: unknown): ScheduleBreakInput[] {
   try { return JSON.parse(value) as ScheduleBreakInput[]; } catch { return []; }
 }
 
+function availabilitySlot(row: Row): AvailabilitySlot {
+  return {
+    publicId: String(row.slot_public_id),
+    branch: { publicId: String(row.branch_public_id), code: String(row.branch_code),
+      name: String(row.branch_name), timezoneName: String(row.timezone_name) },
+    doctor: { publicId: String(row.doctor_public_id), name: String(row.doctor_name) },
+    service: { publicId: String(row.service_public_id), code: String(row.service_code), name: String(row.service_name),
+      price: { amount: String(row.price_amount), currency: 'VND' } },
+    room: { publicId: String(row.room_public_id), code: String(row.room_code), name: String(row.room_name) },
+    serviceDateLocal: dateOnly(row.service_date_local), startTimeLocal: timeOnly(row.start_time_local),
+    endTimeLocal: timeOnly(row.end_time_local), startsAtUtc: utc(row.starts_at_utc), endsAtUtc: utc(row.ends_at_utc),
+  };
+}
+
 export class SqlAppointmentRepository implements AppointmentRepository {
   async availability(branchPublicId: string, servicePublicId: string, fromDate: string, toDate: string,
     doctorPublicId?: string) {
@@ -51,17 +66,18 @@ export class SqlAppointmentRepository implements AppointmentRepository {
           AND service_date_local BETWEEN @from_date AND @to_date
           AND (@doctor_public_id IS NULL OR doctor_public_id=@doctor_public_id)
         ORDER BY service_date_local,start_time_local,doctor_name;`);
-    return result.recordset.map((row): AvailabilitySlot => ({
-      publicId: String(row.slot_public_id),
-      branch: { publicId: String(row.branch_public_id), code: String(row.branch_code),
-        name: String(row.branch_name), timezoneName: String(row.timezone_name) },
-      doctor: { publicId: String(row.doctor_public_id), name: String(row.doctor_name) },
-      service: { publicId: String(row.service_public_id), code: String(row.service_code), name: String(row.service_name),
-        price: { amount: String(row.price_amount), currency: 'VND' } },
-      room: { publicId: String(row.room_public_id), code: String(row.room_code), name: String(row.room_name) },
-      serviceDateLocal: dateOnly(row.service_date_local), startTimeLocal: timeOnly(row.start_time_local),
-      endTimeLocal: timeOnly(row.end_time_local), startsAtUtc: utc(row.starts_at_utc), endsAtUtc: utc(row.ends_at_utc),
-    }));
+    return result.recordset.map(availabilitySlot);
+  }
+
+  async adminAvailability(actor: ClinicPrincipal, branchPublicId: string, servicePublicId: string,
+    serviceDate: string, requestId: string) {
+    const result = await executeCommand<Row>('dbo.sp_clinic_list_admin_available_slots', [
+      { name: 'actor_user_id', type: sql.BigInt, value: actor.userId },
+      { name: 'branch_public_id', type: sql.UniqueIdentifier, value: branchPublicId },
+      { name: 'service_public_id', type: sql.UniqueIdentifier, value: servicePublicId },
+      { name: 'service_date_local', type: sql.Date, value: serviceDate },
+    ], { requestId, actorUserId: actor.userId });
+    return result.recordset.map(availabilitySlot);
   }
 
   async scheduling(actor: ClinicPrincipal, branchPublicId: string, requestId: string) {
@@ -85,7 +101,9 @@ export class SqlAppointmentRepository implements AppointmentRepository {
         localEndTime: timeOnly(row.localEndTime), slotDurationMinutes: Number(row.slotDurationMinutes),
         bookingHorizonDays: row.bookingHorizonDays == null ? null : Number(row.bookingHorizonDays),
         effectiveFrom: dateOnly(row.effectiveFrom), effectiveTo: row.effectiveTo == null ? null : dateOnly(row.effectiveTo),
-        isActive: Boolean(row.isActive), breaks: breaks(row.breaksJson), slotCount: Number(row.slotCount),
+        isActive: Boolean(row.isActive), workflowStatus: row.workflowStatus as ScheduleWorkflowStatus,
+        decisionNote: row.decisionNote == null ? null : String(row.decisionNote),
+        breaks: breaks(row.breaksJson), slotCount: Number(row.slotCount),
         rowVersion: Buffer.from(row.rowVersion as Uint8Array).toString('base64') })),
     } satisfies SchedulingData;
   }
@@ -107,6 +125,76 @@ export class SqlAppointmentRepository implements AppointmentRepository {
       { name: 'working_schedule_public_id', type: sql.UniqueIdentifier, value: null, direction: 'output' },
     ], { requestId, actorUserId: actor.userId });
     return String(result.output.working_schedule_public_id);
+  }
+
+  async listMySchedules(actor: ClinicPrincipal, requestId: string): Promise<DoctorWorkingSchedule[]> {
+    const result = await executeCommand<Row>('dbo.sp_clinic_list_my_working_schedules', [
+      { name: 'actor_user_id', type: sql.BigInt, value: actor.userId },
+    ], { requestId, actorUserId: actor.userId });
+    return result.recordset.map((row) => ({
+      publicId: String(row.publicId), branchPublicId: String(row.branchPublicId),
+      branchName: String(row.branchName), timezoneName: String(row.timezoneName), roomName: String(row.roomName),
+      weekdayIso: Number(row.weekdayIso), localStartTime: timeOnly(row.localStartTime),
+      localEndTime: timeOnly(row.localEndTime), slotDurationMinutes: Number(row.slotDurationMinutes),
+      effectiveFrom: dateOnly(row.effectiveFrom), effectiveTo: row.effectiveTo == null ? null : dateOnly(row.effectiveTo),
+      workflowStatus: row.workflowStatus as ScheduleWorkflowStatus,
+      decisionNote: row.decisionNote == null ? null : String(row.decisionNote), breaks: breaks(row.breaksJson),
+    }));
+  }
+
+  async decideSchedule(actor: ClinicPrincipal, schedulePublicId: string, decision: 'CONFIRM' | 'REJECT',
+    reason: string | null, requestId: string) {
+    await executeCommand('dbo.sp_clinic_decide_working_schedule', [
+      { name: 'actor_user_id', type: sql.BigInt, value: actor.userId },
+      { name: 'working_schedule_public_id', type: sql.UniqueIdentifier, value: schedulePublicId },
+      { name: 'decision', type: sql.VarChar(10), value: decision },
+      { name: 'reason', type: sql.NVarChar(500), value: reason },
+    ], { requestId, actorUserId: actor.userId });
+  }
+
+  async publishSchedule(actor: ClinicPrincipal, schedulePublicId: string, requestId: string) {
+    await executeCommand('dbo.sp_clinic_publish_working_schedule', [
+      { name: 'actor_user_id', type: sql.BigInt, value: actor.userId },
+      { name: 'working_schedule_public_id', type: sql.UniqueIdentifier, value: schedulePublicId },
+    ], { requestId, actorUserId: actor.userId });
+  }
+
+  async requestTimeOff(actor: ClinicPrincipal, input: RequestTimeOffInput, requestId: string) {
+    const result = await executeCommand('dbo.sp_clinic_request_time_off', [
+      { name: 'actor_user_id', type: sql.BigInt, value: actor.userId },
+      { name: 'branch_public_id', type: sql.UniqueIdentifier, value: input.branchPublicId },
+      { name: 'service_date_local', type: sql.Date, value: input.serviceDate },
+      { name: 'local_start_time', type: sql.Time(0), value: input.localStartTime },
+      { name: 'local_end_time', type: sql.Time(0), value: input.localEndTime },
+      { name: 'reason', type: sql.NVarChar(500), value: input.reason },
+      { name: 'time_off_public_id', type: sql.UniqueIdentifier, value: null, direction: 'output' },
+    ], { requestId, actorUserId: actor.userId });
+    return String(result.output.time_off_public_id);
+  }
+
+  async listTimeOff(actor: ClinicPrincipal, branchPublicId: string | null, requestId: string): Promise<DoctorTimeOff[]> {
+    const result = await executeCommand<Row>('dbo.sp_clinic_list_time_off', [
+      { name: 'actor_user_id', type: sql.BigInt, value: actor.userId },
+      { name: 'branch_public_id', type: sql.UniqueIdentifier, value: branchPublicId },
+    ], { requestId, actorUserId: actor.userId });
+    return result.recordset.map((row) => ({
+      publicId: String(row.publicId), branchPublicId: String(row.branchPublicId),
+      branchName: String(row.branchName), doctorName: String(row.doctorName),
+      serviceDate: dateOnly(row.serviceDate), localStartTime: timeOnly(row.localStartTime),
+      localEndTime: timeOnly(row.localEndTime), reason: String(row.reason),
+      decisionNote: row.decisionNote == null ? null : String(row.decisionNote),
+      status: row.status as DoctorTimeOff['status'], appointmentConflictCount: Number(row.appointmentConflictCount),
+    }));
+  }
+
+  async decideTimeOff(actor: ClinicPrincipal, timeOffPublicId: string, decision: 'APPROVE' | 'REJECT' | 'CANCEL',
+    reason: string | null, requestId: string) {
+    await executeCommand('dbo.sp_clinic_decide_time_off', [
+      { name: 'actor_user_id', type: sql.BigInt, value: actor.userId },
+      { name: 'time_off_public_id', type: sql.UniqueIdentifier, value: timeOffPublicId },
+      { name: 'decision', type: sql.VarChar(10), value: decision },
+      { name: 'decision_note', type: sql.NVarChar(500), value: reason },
+    ], { requestId, actorUserId: actor.userId });
   }
 
   async generateSlots(actor: ClinicPrincipal, schedulePublicId: string, fromDate: string, toDate: string, requestId: string) {

@@ -1,12 +1,13 @@
 import { ApiClientError } from '@clinic/generated-api-client'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState, type FormEvent } from 'react'
+import { useLayoutEffect, useRef, useState, type FormEvent } from 'react'
 import { apiClient } from '../../shared/api/client'
+import { clearPendingOperation, executeIdempotent, hasPendingOperation, verifyPendingOperation } from '../../shared/api/idempotent-operation'
 import { invoicePrintDocument, openPrintDocument, paymentReceiptPrintDocument, refundReceiptPrintDocument } from '../../shared/printing'
 import { useAuth } from '../auth/auth-context'
 
 function message(error: unknown) {
-  if (!(error instanceof ApiClientError)) return 'Không thể kết nối hệ thống. Hãy thử lại.'
+  if (!(error instanceof ApiClientError)) return error instanceof Error ? error.message : 'Không thể kết nối hệ thống. Hãy thử lại.'
   if (error.status === 403) return 'Bạn không có quyền thu ngân tại chi nhánh này.'
   if (error.status === 409) return `${error.message} Tải lại hóa đơn trước khi thử tiếp.`
   return error.message
@@ -14,6 +15,36 @@ function message(error: unknown) {
 const money = (value: string | number) => `${Number(value).toLocaleString('vi-VN')} ₫`
 const methodName: Record<string, string> = {
   CASH: 'Tiền mặt', CARD: 'Thẻ', BANK_TRANSFER: 'Chuyển khoản', EWALLET: 'Ví điện tử', OTHER: 'Khác',
+}
+
+function InsuranceEditor({ serverAmount, busy, onSave }: {
+  serverAmount: string; busy: boolean; onSave: (amount: number) => Promise<boolean>
+}) {
+  const [draft, setDraft] = useState({ amount: serverAmount, original: serverAmount,
+    lastSeenServerAmount: serverAmount, conflict: false })
+  if (serverAmount !== draft.lastSeenServerAmount) {
+    setDraft(draft.amount !== draft.original
+      ? { ...draft, lastSeenServerAmount: serverAmount, conflict: true }
+      : { amount: serverAmount, original: serverAmount, lastSeenServerAmount: serverAmount, conflict: false })
+  }
+  const { amount, original, conflict } = draft
+  const dirty = amount !== original
+
+  const save = async (event: FormEvent) => {
+    event.preventDefault()
+    if (!dirty || conflict) return
+    if (await onSave(Number(amount))) setDraft((current) => ({ ...current, original: amount, conflict: false }))
+  }
+
+  return <form className="clinical-form-grid" onSubmit={(event) => void save(event)}>
+    <label>Số tiền bảo hiểm<input required type="number" min="0" step="0.01" value={amount}
+      onChange={(event) => setDraft((current) => ({ ...current, amount: event.target.value }))} /></label>
+    {conflict && <div className="form-error" role="alert">Hóa đơn đã thay đổi khi bạn đang sửa. Tải giá trị mới rồi nhập lại.</div>}
+    {conflict && <button type="button" className="secondary" onClick={() => {
+      setDraft({ amount: serverAmount, original: serverAmount, lastSeenServerAmount: serverAmount, conflict: false })
+    }}>Tải giá trị mới</button>}
+    <button type="submit" disabled={busy || !dirty || conflict}>Lưu bảo hiểm</button>
+  </form>
 }
 
 export function BillingPage() {
@@ -24,18 +55,23 @@ export function BillingPage() {
   const [busy, setBusy] = useState('')
   const [error, setError] = useState<unknown>(null)
   const [notice, setNotice] = useState('')
+  const [pending, setPending] = useState<{ scope: string; branchId: string; invoiceId: string } | null>(null)
+  const [reconciledScope, setReconciledScope] = useState('')
+  const [reconciling, setReconciling] = useState(false)
   const [itemName, setItemName] = useState('')
   const [itemCode, setItemCode] = useState('')
   const [itemQuantity, setItemQuantity] = useState('1')
   const [itemPrice, setItemPrice] = useState('0')
   const [itemDiscount, setItemDiscount] = useState('0')
-  const [insuranceAmount, setInsuranceAmount] = useState('0')
   const [paymentAmount, setPaymentAmount] = useState('')
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD' | 'BANK_TRANSFER' | 'EWALLET' | 'OTHER'>('CASH')
   const [transactionId, setTransactionId] = useState('')
 
   const branches = useQuery({ queryKey: ['billing-branches'], queryFn: () => apiClient.billing.branches() })
   const selectedBranch = branchId || branches.data?.data[0]?.publicId || ''
+  const currentContext = useRef({ branchId: selectedBranch, invoiceId: selectedId })
+  useLayoutEffect(() => { currentContext.current = { branchId: selectedBranch, invoiceId: selectedId } },
+    [selectedBranch, selectedId])
   const workspace = useQuery({ queryKey: ['billing-workspace', selectedBranch],
     queryFn: () => apiClient.billing.workspace(selectedBranch), enabled: Boolean(selectedBranch) })
   const invoice = useQuery({ queryKey: ['billing-invoice', selectedId],
@@ -45,11 +81,34 @@ export function BillingPage() {
     void queryClient.invalidateQueries({ queryKey: ['billing-workspace', selectedBranch] })
     if (selectedId) void queryClient.invalidateQueries({ queryKey: ['billing-invoice', selectedId] })
   }
-  const run = async (label: string, operation: () => Promise<unknown>) => {
+  const run = async (label: string, operation: () => Promise<unknown>, scope?: string) => {
     setBusy(label); setError(null); setNotice('')
-    try { await operation(); refresh(); setNotice(`${label} thành công.`); return true }
-    catch (cause) { setError(cause); return false }
+    try { await operation(); refresh(); if (scope) { setPending(null); setReconciledScope('') }
+      setNotice(`${label} thành công.`); return true }
+    catch (cause) { setError(cause); if (scope && hasPendingOperation(scope)) {
+      setPending({ scope, branchId: selectedBranch, invoiceId: selectedId }); setReconciledScope('')
+    } return false }
     finally { setBusy('') }
+  }
+  const selectInvoice = (id: string) => {
+    setSelectedId(id); setReconciledScope('')
+    setItemCode(''); setItemName(''); setItemQuantity('1'); setItemPrice('0'); setItemDiscount('0')
+    setPaymentAmount(''); setPaymentMethod('CASH'); setTransactionId('')
+  }
+  const pendingMatches = Boolean(pending && pending.branchId === selectedBranch && pending.invoiceId === selectedId)
+  const reconcilePending = async () => {
+    if (!pending || !pendingMatches || !hasPendingOperation(pending.scope)) return
+    setReconciling(true); setReconciledScope(''); setError(null)
+    try {
+      const verified = await verifyPendingOperation(pending.scope,
+        () => currentContext.current.branchId === pending.branchId && currentContext.current.invoiceId === pending.invoiceId,
+        async () => {
+          await queryClient.refetchQueries({ queryKey: ['billing-workspace', pending.branchId], exact: true }, { throwOnError: true })
+          await queryClient.refetchQueries({ queryKey: ['billing-invoice', pending.invoiceId], exact: true }, { throwOnError: true })
+        })
+      if (verified) setReconciledScope(pending.scope)
+    } catch (cause) { setError(cause) }
+    finally { setReconciling(false) }
   }
   const create = async (encounterId: string, supersedesInvoicePublicId?: string) => {
     let created = ''
@@ -57,7 +116,7 @@ export function BillingPage() {
       created = (await apiClient.billing.create(encounterId,
         supersedesInvoicePublicId ? { supersedesInvoicePublicId } : {})).data.publicId
     }))
-      setSelectedId(created)
+      selectInvoice(created)
   }
   const addItem = async (event: FormEvent) => {
     event.preventDefault()
@@ -68,18 +127,23 @@ export function BillingPage() {
   }
   const pay = async (event: FormEvent) => {
     event.preventDefault()
-    if (await run('Ghi nhận thanh toán', () => apiClient.billing.pay(selectedId, {
+    const body = {
       amount: Number(paymentAmount), method: paymentMethod,
       externalTransactionId: paymentMethod === 'CASH' ? null : transactionId.trim(),
-    }))) { setPaymentAmount(''); setTransactionId('') }
+    }
+    const scope = `${user?.publicId}:billing:pay:${selectedId}`
+    if (await run('Ghi nhận thanh toán', () => executeIdempotent(scope, body,
+      (key) => apiClient.billing.pay(selectedId, body, key)), scope)) { setPaymentAmount(''); setTransactionId('') }
   }
   const refund = async (allocationId: string, refundableAmount: string) => {
     const raw = window.prompt(`Số tiền hoàn tối đa ${money(refundableAmount)}`, refundableAmount)
     if (!raw) return
     const reason = window.prompt('Lý do hoàn tiền')
     if (!reason) return
-    await run('Hoàn tiền', () => apiClient.billing.refund(allocationId,
-      { amount: Number(raw), method: 'CASH', reason }))
+    const body = { amount: Number(raw), method: 'CASH' as const, reason: reason.trim() }
+    const scope = `${user?.publicId}:billing:refund:${allocationId}`
+    await run('Hoàn tiền', () => executeIdempotent(scope, body,
+      (key) => apiClient.billing.refund(allocationId, body, key)), scope)
   }
 
   if (branches.isLoading) return <div className="page-state">Đang tải phạm vi thu ngân…</div>
@@ -90,14 +154,22 @@ export function BillingPage() {
   const branch = branches.data.data.find((entry) => entry.publicId === selectedBranch) ?? branches.data.data[0]
 
   return <>
-    <header><div><span className="eyebrow">BILLING WORKSPACE</span><h1>Thu ngân</h1>
+    <header><div><span className="eyebrow">THANH TOÁN VÀ HÓA ĐƠN</span><h1>Thu ngân</h1>
       <p>Đồng bộ khoản thu, phát hành hóa đơn, thu từng phần, hoàn tiền và VOID có kiểm soát.</p></div></header>
     <section className="panel clinical-toolbar"><label>Chi nhánh<select value={selectedBranch}
-      onChange={(event) => { setBranchId(event.target.value); setSelectedId('') }}>
+      onChange={(event) => { setBranchId(event.target.value); selectInvoice('') }}>
       {branches.data.data.map((branch) => <option key={branch.publicId} value={branch.publicId}>{branch.name}</option>)}</select></label>
       <button type="button" className="secondary" onClick={refresh}>Tải lại</button></section>
     {notice && <div className="form-success" role="status">{notice}</div>}
     {Boolean(error) && <div className="form-error" role="alert">{message(error)}</div>}
+    {pending && <section className="panel"><p>Giao dịch chưa rõ kết quả. Gửi lại cùng dữ liệu sẽ dùng lại khóa giao dịch.</p>
+      {!pendingMatches && <p className="appointment-warning">Chọn lại đúng chi nhánh và hóa đơn của giao dịch trước để đối chiếu.</p>}
+      <div className="action-row"><button type="button" className="secondary" disabled={!pendingMatches || reconciling}
+        onClick={() => void reconcilePending()}>{reconciling ? 'Đang tải…' : 'Tải lại để đối chiếu'}</button>
+        {reconciledScope === pending.scope && pendingMatches && !reconciling && <button type="button" className="secondary" onClick={() => {
+          if (!window.confirm('Bạn đã đối chiếu giao dịch trên hóa đơn và muốn bắt đầu giao dịch mới?')) return
+          clearPendingOperation(pending.scope); setPending(null); setReconciledScope(''); setError(null)
+        }}>Đã đối chiếu, bắt đầu giao dịch mới</button>}</div></section>}
     {workspace.isLoading ? <section className="panel page-state">Đang tải dữ liệu thu ngân…</section>
       : workspace.error ? <section className="panel error-state page-state">{message(workspace.error)}</section>
         : data && <>
@@ -106,7 +178,7 @@ export function BillingPage() {
               <strong>{encounter.patientName} · {encounter.patientCode}</strong>
               <p>{encounter.code} · <span className="status">{encounter.status}</span></p>
               {encounter.activeInvoicePublicId
-                ? <button type="button" className="secondary" onClick={() => setSelectedId(encounter.activeInvoicePublicId ?? '')}>
+                ? <button type="button" className="secondary" onClick={() => selectInvoice(encounter.activeInvoicePublicId ?? '')}>
                   Mở hóa đơn {encounter.activeInvoiceStatus}</button>
                 : <button type="button" disabled={Boolean(busy)} onClick={() => void create(encounter.publicId)}>Tạo hóa đơn</button>}
             </article>)}</div>
@@ -114,7 +186,7 @@ export function BillingPage() {
           <div className="clinical-workspace"><section className="panel clinical-list"><h2>Hóa đơn gần đây</h2>
             {data.invoices.map((entry) => <button type="button" key={entry.publicId}
               className={`clinical-list-item ${selectedId === entry.publicId ? 'selected' : ''}`}
-              onClick={() => setSelectedId(entry.publicId)}><span className="status">{entry.status}</span>
+              onClick={() => selectInvoice(entry.publicId)}><span className="status">{entry.status}</span>
               <strong>{entry.patientName}</strong><small>{entry.number} · {entry.encounterCode}</small>
               <small>Còn thu {money(entry.balanceDue)}</small></button>)}
             {!data.invoices.length && <p>Chưa có hóa đơn tại chi nhánh.</p>}</section>
@@ -146,11 +218,9 @@ export function BillingPage() {
                         onClick={() => void create(bill.encounterPublicId, bill.publicId)}>Tạo hóa đơn thay thế</button>}
                     </section>
                     {bill.status === 'DRAFT' && <><section className="panel"><h2>Phần bảo hiểm</h2>
-                      <form className="clinical-form-grid" onSubmit={(event) => { event.preventDefault();
-                        void run('Cập nhật bảo hiểm', () => apiClient.billing.setInsurance(bill.publicId,
-                          { amount: Number(insuranceAmount) })) }}><label>Số tiền bảo hiểm<input required type="number" min="0" step="0.01"
-                            value={insuranceAmount} onChange={(event) => setInsuranceAmount(event.target.value)} /></label>
-                        <button type="submit" disabled={Boolean(busy)}>Lưu bảo hiểm</button></form></section>
+                      <InsuranceEditor key={bill.publicId} serverAmount={String(bill.insuranceAmount)} busy={Boolean(busy)}
+                        onSave={(amount) => run('Cập nhật bảo hiểm', () => apiClient.billing.setInsurance(bill.publicId,
+                          { amount }))} /></section>
                       <section className="panel"><h2>Khoản thu thủ công</h2><form className="clinical-form-grid" onSubmit={(event) => void addItem(event)}>
                         <label>Mã khoản<input maxLength={40} value={itemCode} onChange={(event) => setItemCode(event.target.value)} /></label>
                         <label>Tên khoản<input required maxLength={300} value={itemName} onChange={(event) => setItemName(event.target.value)} /></label>

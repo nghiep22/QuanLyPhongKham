@@ -6,7 +6,7 @@ import { AuthService } from '../auth/auth.service.js';
 import { employeeTypes } from './workforce.types.js';
 import { WorkforceService } from './workforce.service.js';
 
-const uuid = z.string().uuid();
+const uuid = z.guid();
 const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const optionalText = (max: number) => z.string().trim().max(max).optional();
 const employeeType = z.enum(employeeTypes);

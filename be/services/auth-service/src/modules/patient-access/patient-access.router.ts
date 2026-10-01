@@ -6,7 +6,8 @@ import { AuthService } from '../auth/auth.service.js';
 import { patientRelationships } from './patient-access.types.js';
 import { PatientAccessService } from './patient-access.service.js';
 
-const uuid = z.string().uuid();
+const guid = z.guid();
+const uuid = z.uuid();
 const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((value) => {
   const parsed = new Date(`${value}T00:00:00.000Z`);
   return !Number.isNaN(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value && parsed < new Date();
@@ -14,7 +15,7 @@ const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((value) => {
 const relationship = z.enum(patientRelationships);
 const reasonSchema = z.object({ reason: z.string().trim().min(3).max(500) }).strict();
 const requestSchema = z.object({
-  branchPublicId: uuid,
+  branchPublicId: guid,
   patientCode: z.string().trim().min(2).max(30),
   dateOfBirth: dateOnly,
   relationshipType: relationship,
@@ -25,7 +26,7 @@ const requestSchema = z.object({
   }
 });
 const requestListSchema = z.object({
-  branchPublicId: uuid,
+  branchPublicId: guid,
   status: z.enum(['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED', 'EXPIRED']).optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
@@ -101,13 +102,13 @@ export function createPatientAccessRouter(auth: AuthService, service: PatientAcc
   }));
   router.delete('/requests/:requestId', asyncRoute(async (request, response) => {
     success(response, await service.cancel(
-      await actor(request, auth), validate(uuid, request.params.requestId), response.locals.requestId,
+      await actor(request, auth), validate(guid, request.params.requestId), response.locals.requestId,
     ));
   }));
   router.delete('/links/:linkId', asyncRoute(async (request, response) => {
     const body = validate(reasonSchema, request.body);
     success(response, await service.revoke(
-      await actor(request, auth), validate(uuid, request.params.linkId), body.reason, response.locals.requestId,
+      await actor(request, auth), validate(guid, request.params.linkId), body.reason, response.locals.requestId,
     ));
   }));
   return router;
@@ -128,14 +129,14 @@ export function createPatientAccessAdminRouter(auth: AuthService, service: Patie
   router.post('/patient-link-requests/:requestId/decision', asyncRoute(async (request, response) => {
     const body = validate(decisionSchema, request.body);
     success(response, await service.decide(
-      await actor(request, auth), validate(uuid, request.params.requestId), body.decision,
+      await actor(request, auth), validate(guid, request.params.requestId), body.decision,
       body.reason, ifMatch(request), response.locals.requestId,
     ));
   }));
   router.delete('/patient-links/:linkId', asyncRoute(async (request, response) => {
     const body = validate(reasonSchema, request.body);
     success(response, await service.revoke(
-      await actor(request, auth), validate(uuid, request.params.linkId), body.reason, response.locals.requestId,
+      await actor(request, auth), validate(guid, request.params.linkId), body.reason, response.locals.requestId,
     ));
   }));
   return router;

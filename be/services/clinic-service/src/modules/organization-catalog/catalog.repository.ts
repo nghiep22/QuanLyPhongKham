@@ -6,6 +6,9 @@ import type {
   CreateRoomInput, CreateServiceInput, PublicBranch, PublicDoctor, PublicService,
   PublicSpecialty, Room, SetBranchPriceInput, SpecialtyReference, UpdateRoomInput,
   UpdateServiceInput,
+  OrganizationBranch, OrganizationSpecialty, OrganizationCategory,
+  CreateBranchInput, UpdateBranchInput, CreateSpecialtyInput, UpdateSpecialtyInput,
+  CreateCategoryInput, UpdateCategoryInput,
 } from './catalog.types.js';
 
 function dateOnly(value: Date | string | null): string | null {
@@ -104,6 +107,132 @@ const serviceColumns = `
   specialty_code AS specialtyCode,specialty_name AS specialtyName`;
 
 export class SqlCatalogRepository implements CatalogRepository {
+  async listOrganizationBranches(): Promise<OrganizationBranch[]> {
+    const result = await (await getSqlPool()).request().query(`
+      SELECT branch_id AS id,CONVERT(varchar(36),public_id) AS publicId,
+        branch_code AS code,branch_name AS name,medical_license_no AS medicalLicenseNo,
+        phone,email,address_line AS addressLine,ward,district,province,
+        timezone_name AS timezoneName,booking_horizon_days AS bookingHorizonDays,
+        online_hold_minutes AS onlineHoldMinutes,
+        cancellation_deadline_minutes AS cancellationDeadlineMinutes,
+        check_in_early_minutes AS checkInEarlyMinutes,check_in_late_minutes AS checkInLateMinutes,
+        walk_in_max_wait_minutes AS walkInMaxWaitMinutes,
+        is_active AS isActive,row_version AS rowVersion
+      FROM dbo.v_catalog_branches_v1 ORDER BY branch_name;`);
+    return result.recordset.map((row: Record<string, unknown>) => ({
+      ...row, id: Number(row.id), isActive: Boolean(row.isActive),
+      rowVersion: encodeRowVersion(row.rowVersion as Uint8Array),
+    })) as OrganizationBranch[];
+  }
+
+  async listOrganizationSpecialties(): Promise<OrganizationSpecialty[]> {
+    const result = await (await getSqlPool()).request().query(`
+      SELECT specialty_id AS id,CONVERT(varchar(36),public_id) AS publicId,
+        specialty_code AS code,specialty_name AS name,description,is_active AS isActive,
+        row_version AS rowVersion FROM dbo.v_catalog_specialties_v1 ORDER BY specialty_name;`);
+    return result.recordset.map((row: Record<string, unknown>) => ({
+      ...row, id: Number(row.id), isActive: Boolean(row.isActive),
+      rowVersion: encodeRowVersion(row.rowVersion as Uint8Array),
+    })) as OrganizationSpecialty[];
+  }
+
+  async listOrganizationCategories(): Promise<OrganizationCategory[]> {
+    const result = await (await getSqlPool()).request().query(`
+      SELECT service_category_id AS id,CONVERT(varchar(36),public_id) AS publicId,
+        category_code AS code,category_name AS name,display_order AS displayOrder,
+        is_active AS isActive,row_version AS rowVersion
+      FROM dbo.v_catalog_categories_v1 ORDER BY display_order,category_name;`);
+    return result.recordset.map((row: Record<string, unknown>) => ({
+      ...row, id: Number(row.id), displayOrder: Number(row.displayOrder),
+      isActive: Boolean(row.isActive),rowVersion: encodeRowVersion(row.rowVersion as Uint8Array),
+    })) as OrganizationCategory[];
+  }
+
+  private branchParameters(input: CreateBranchInput | UpdateBranchInput) {
+    return [
+      { name: 'name', type: sql.NVarChar(200), value: input.name },
+      { name: 'address_line', type: sql.NVarChar(300), value: input.addressLine },
+      { name: 'ward', type: sql.NVarChar(100), value: input.ward },
+      { name: 'district', type: sql.NVarChar(100), value: input.district },
+      { name: 'province', type: sql.NVarChar(100), value: input.province },
+      { name: 'phone', type: sql.VarChar(20), value: input.phone },
+      { name: 'email', type: sql.VarChar(254), value: input.email },
+      { name: 'medical_license_no', type: sql.NVarChar(100), value: input.medicalLicenseNo },
+      { name: 'timezone_name', type: sql.NVarChar(128), value: input.timezoneName },
+      { name: 'booking_horizon_days', type: sql.SmallInt, value: input.bookingHorizonDays },
+      { name: 'online_hold_minutes', type: sql.SmallInt, value: input.onlineHoldMinutes },
+      { name: 'cancellation_deadline_minutes', type: sql.Int, value: input.cancellationDeadlineMinutes },
+      { name: 'check_in_early_minutes', type: sql.SmallInt, value: input.checkInEarlyMinutes },
+      { name: 'check_in_late_minutes', type: sql.SmallInt, value: input.checkInLateMinutes },
+      { name: 'walk_in_max_wait_minutes', type: sql.SmallInt, value: input.walkInMaxWaitMinutes },
+    ];
+  }
+
+  async createBranch(actor: ClinicPrincipal, input: CreateBranchInput, requestId: string) {
+    const result = await executeCommand('dbo.sp_catalog_create_branch', [
+      { name: 'actor_user_id', type: sql.BigInt, value: actor.userId },
+      { name: 'code', type: sql.VarChar(20), value: input.code },
+      ...this.branchParameters(input),
+      { name: 'branch_id', type: sql.BigInt, value: null, direction: 'output' },
+    ], { requestId, actorUserId: actor.userId });
+    const row = (await this.listOrganizationBranches()).find((item) => item.id === Number(result.output.branch_id));
+    return row!.publicId;
+  }
+
+  updateBranch(actor: ClinicPrincipal, branchId: number, input: UpdateBranchInput, expectedVersion: string, requestId: string) {
+    return executeCommand('dbo.sp_catalog_update_branch', [
+      { name: 'actor_user_id', type: sql.BigInt, value: actor.userId },
+      { name: 'branch_id', type: sql.BigInt, value: branchId },
+      ...this.branchParameters(input),
+      { name: 'is_active', type: sql.Bit, value: input.isActive },
+      { name: 'expected_row_ver', type: sql.VarBinary(8), value: Buffer.from(expectedVersion, 'base64') },
+    ], { requestId, actorUserId: actor.userId, branchId }).then(() => undefined);
+  }
+
+  async createSpecialty(actor: ClinicPrincipal, input: CreateSpecialtyInput, requestId: string) {
+    const result = await executeCommand('dbo.sp_catalog_create_specialty', [
+      { name: 'actor_user_id', type: sql.BigInt, value: actor.userId },
+      { name: 'code', type: sql.VarChar(30), value: input.code },
+      { name: 'name', type: sql.NVarChar(150), value: input.name },
+      { name: 'description', type: sql.NVarChar(1000), value: input.description },
+      { name: 'specialty_id', type: sql.BigInt, value: null, direction: 'output' },
+    ], { requestId, actorUserId: actor.userId });
+    return (await this.listOrganizationSpecialties()).find((item) => item.id === Number(result.output.specialty_id))!.publicId;
+  }
+
+  updateSpecialty(actor: ClinicPrincipal, specialtyId: number, input: UpdateSpecialtyInput, expectedVersion: string, requestId: string) {
+    return executeCommand('dbo.sp_catalog_update_specialty', [
+      { name: 'actor_user_id', type: sql.BigInt, value: actor.userId },
+      { name: 'specialty_id', type: sql.BigInt, value: specialtyId },
+      { name: 'name', type: sql.NVarChar(150), value: input.name },
+      { name: 'description', type: sql.NVarChar(1000), value: input.description },
+      { name: 'is_active', type: sql.Bit, value: input.isActive },
+      { name: 'expected_row_ver', type: sql.VarBinary(8), value: Buffer.from(expectedVersion, 'base64') },
+    ], { requestId, actorUserId: actor.userId }).then(() => undefined);
+  }
+
+  async createCategory(actor: ClinicPrincipal, input: CreateCategoryInput, requestId: string) {
+    const result = await executeCommand('dbo.sp_catalog_create_category', [
+      { name: 'actor_user_id', type: sql.BigInt, value: actor.userId },
+      { name: 'code', type: sql.VarChar(30), value: input.code },
+      { name: 'name', type: sql.NVarChar(150), value: input.name },
+      { name: 'display_order', type: sql.Int, value: input.displayOrder },
+      { name: 'category_id', type: sql.BigInt, value: null, direction: 'output' },
+    ], { requestId, actorUserId: actor.userId });
+    return (await this.listOrganizationCategories()).find((item) => item.id === Number(result.output.category_id))!.publicId;
+  }
+
+  updateCategory(actor: ClinicPrincipal, categoryId: number, input: UpdateCategoryInput, expectedVersion: string, requestId: string) {
+    return executeCommand('dbo.sp_catalog_update_category', [
+      { name: 'actor_user_id', type: sql.BigInt, value: actor.userId },
+      { name: 'category_id', type: sql.BigInt, value: categoryId },
+      { name: 'name', type: sql.NVarChar(150), value: input.name },
+      { name: 'display_order', type: sql.Int, value: input.displayOrder },
+      { name: 'is_active', type: sql.Bit, value: input.isActive },
+      { name: 'expected_row_ver', type: sql.VarBinary(8), value: Buffer.from(expectedVersion, 'base64') },
+    ], { requestId, actorUserId: actor.userId }).then(() => undefined);
+  }
+
   async listPublicBranches(): Promise<PublicBranch[]> {
     const result = await (await getSqlPool()).request().query(`
       SELECT CONVERT(varchar(36),public_id) AS publicId,branch_code AS code,branch_name AS name,

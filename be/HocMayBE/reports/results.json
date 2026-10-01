@@ -1,5 +1,5 @@
 {
-  "evaluatedAtUtc": "2026-09-24T10:53:52.323Z",
+  "evaluatedAtUtc": "2026-09-29T00:27:30.175Z",
   "selectedModel": "unigram",
   "validation": [
     {
@@ -10,8 +10,8 @@
         "queries": 200,
         "precisionAt5": 0.2940000000000001,
         "mrr": 0.5053194444444444,
-        "medianLatencyMs": 3.4219000000000506,
-        "p95LatencyMs": 3.9763999999999555,
+        "medianLatencyMs": 3.6364000000003216,
+        "p95LatencyMs": 4.527200000000448,
         "byCategory": {
           "comp.graphics": {
             "queries": 25,
@@ -60,7 +60,7 @@
             "relevantCategory": "comp.sys.ibm.pc.hardware",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.6393999999999664,
+            "latencyMs": 4.248099999999795,
             "topCategory": "rec.autos"
           },
           {
@@ -68,7 +68,7 @@
             "relevantCategory": "comp.sys.ibm.pc.hardware",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.7380000000000564,
+            "latencyMs": 3.1179000000001906,
             "topCategory": "comp.graphics"
           },
           {
@@ -76,7 +76,7 @@
             "relevantCategory": "comp.sys.ibm.pc.hardware",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.6215000000000828,
+            "latencyMs": 2.841500000000451,
             "topCategory": "sci.space"
           },
           {
@@ -84,7 +84,7 @@
             "relevantCategory": "comp.sys.ibm.pc.hardware",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.5919000000000096,
+            "latencyMs": 2.972399999999652,
             "topCategory": "talk.politics.guns"
           },
           {
@@ -92,7 +92,7 @@
             "relevantCategory": "comp.sys.ibm.pc.hardware",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.4236000000000786,
+            "latencyMs": 3.539099999999962,
             "topCategory": "sci.med"
           },
           {
@@ -100,7 +100,7 @@
             "relevantCategory": "misc.forsale",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.5819999999999936,
+            "latencyMs": 3.783900000000358,
             "topCategory": "comp.graphics"
           },
           {
@@ -108,7 +108,7 @@
             "relevantCategory": "misc.forsale",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.154700000000048,
+            "latencyMs": 3.41150000000016,
             "topCategory": "comp.graphics"
           },
           {
@@ -116,7 +116,7 @@
             "relevantCategory": "misc.forsale",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.087599999999952,
+            "latencyMs": 3.591400000000249,
             "topCategory": "comp.graphics"
           },
           {
@@ -124,7 +124,7 @@
             "relevantCategory": "misc.forsale",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.4891999999999825,
+            "latencyMs": 3.5771999999997206,
             "topCategory": "sci.med"
           },
           {
@@ -132,7 +132,7 @@
             "relevantCategory": "misc.forsale",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.4162999999999784,
+            "latencyMs": 3.42870000000039,
             "topCategory": "comp.graphics"
           },
           {
@@ -140,7 +140,7 @@
             "relevantCategory": "rec.autos",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.524799999999914,
+            "latencyMs": 3.9476000000004206,
             "topCategory": "sci.space"
           },
           {
@@ -148,7 +148,7 @@
             "relevantCategory": "rec.autos",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.5534000000000106,
+            "latencyMs": 3.751100000000406,
             "topCategory": "comp.graphics"
           }
         ],
@@ -215,8 +215,8 @@
         "queries": 32,
         "precisionAt5": 0.7812500000000002,
         "mrr": 0.8942708333333333,
-        "medianLatencyMs": 1.8214000000000397,
-        "p95LatencyMs": 2.5960000000000036,
+        "medianLatencyMs": 2.3139000000001033,
+        "p95LatencyMs": 2.876999999999498,
         "byCategory": {
           "comp.graphics": {
             "queries": 4,
@@ -265,7 +265,7 @@
             "relevantCategory": "comp.sys.ibm.pc.hardware",
             "precisionAt5": 0.2,
             "reciprocalRank": 0.2,
-            "latencyMs": 2.5960000000000036,
+            "latencyMs": 2.68119999999999,
             "topCategory": "comp.graphics"
           },
           {
@@ -273,7 +273,7 @@
             "relevantCategory": "misc.forsale",
             "precisionAt5": 0.4,
             "reciprocalRank": 0.25,
-            "latencyMs": 1.5335000000000036,
+            "latencyMs": 1.490299999999479,
             "topCategory": "comp.graphics"
           },
           {
@@ -281,7 +281,7 @@
             "relevantCategory": "misc.forsale",
             "precisionAt5": 0.2,
             "reciprocalRank": 0.3333333333333333,
-            "latencyMs": 2.1730999999999767,
+            "latencyMs": 2.6730999999999767,
             "topCategory": "rec.autos"
           },
           {
@@ -289,7 +289,7 @@
             "relevantCategory": "rec.autos",
             "precisionAt5": 0.6,
             "reciprocalRank": 0.3333333333333333,
-            "latencyMs": 1.0349999999998545,
+            "latencyMs": 1.5819000000001324,
             "topCategory": "misc.forsale"
           },
           {
@@ -297,7 +297,7 @@
             "relevantCategory": "comp.sys.ibm.pc.hardware",
             "precisionAt5": 0.2,
             "reciprocalRank": 0.5,
-            "latencyMs": 2.5832000000000335,
+            "latencyMs": 2.6073999999998705,
             "topCategory": "comp.graphics"
           }
         ],
@@ -345,8 +345,8 @@
         "queries": 200,
         "precisionAt5": 0.46900000000000014,
         "mrr": 0.6831289682539682,
-        "medianLatencyMs": 3.040499999999838,
-        "p95LatencyMs": 6.089199999999892,
+        "medianLatencyMs": 2.2942000000002736,
+        "p95LatencyMs": 5.403700000000754,
         "byCategory": {
           "comp.graphics": {
             "queries": 25,
@@ -395,7 +395,7 @@
             "relevantCategory": "comp.graphics",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.7296000000001186,
+            "latencyMs": 13.96060000000034,
             "topCategory": "comp.sys.ibm.pc.hardware"
           },
           {
@@ -403,7 +403,7 @@
             "relevantCategory": "comp.graphics",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.0161000000000513,
+            "latencyMs": 2.7033000000001266,
             "topCategory": "sci.med"
           },
           {
@@ -411,7 +411,7 @@
             "relevantCategory": "comp.graphics",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.7934999999999945,
+            "latencyMs": 3.1878999999998996,
             "topCategory": "sci.med"
           },
           {
@@ -419,7 +419,7 @@
             "relevantCategory": "comp.sys.ibm.pc.hardware",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.0222000000001117,
+            "latencyMs": 2.7366000000001804,
             "topCategory": "sci.space"
           },
           {
@@ -427,7 +427,7 @@
             "relevantCategory": "comp.sys.ibm.pc.hardware",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.350599999999986,
+            "latencyMs": 2.883600000000115,
             "topCategory": "rec.autos"
           },
           {
@@ -435,7 +435,7 @@
             "relevantCategory": "comp.sys.ibm.pc.hardware",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.039800000000014,
+            "latencyMs": 2.599199999999655,
             "topCategory": "sci.space"
           },
           {
@@ -443,7 +443,7 @@
             "relevantCategory": "misc.forsale",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 1.8700000000001182,
+            "latencyMs": 1.6817000000000917,
             "topCategory": "comp.graphics"
           },
           {
@@ -451,7 +451,7 @@
             "relevantCategory": "misc.forsale",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.1755000000000564,
+            "latencyMs": 2.2188999999998487,
             "topCategory": "comp.graphics"
           },
           {
@@ -459,7 +459,7 @@
             "relevantCategory": "rec.autos",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 4.21550000000002,
+            "latencyMs": 2.8481000000001586,
             "topCategory": "rec.sport.baseball"
           },
           {
@@ -467,7 +467,7 @@
             "relevantCategory": "rec.autos",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 7.300799999999981,
+            "latencyMs": 3.028400000000147,
             "topCategory": "comp.sys.ibm.pc.hardware"
           },
           {
@@ -475,7 +475,7 @@
             "relevantCategory": "rec.autos",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.576000000000022,
+            "latencyMs": 2.609099999999671,
             "topCategory": "talk.politics.guns"
           },
           {
@@ -483,7 +483,7 @@
             "relevantCategory": "rec.sport.baseball",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.040499999999838,
+            "latencyMs": 2.0119999999997162,
             "topCategory": "talk.politics.guns"
           }
         ],
@@ -559,8 +559,8 @@
         "queries": 32,
         "precisionAt5": 0.8625,
         "mrr": 0.9419642857142857,
-        "medianLatencyMs": 0.9497000000001208,
-        "p95LatencyMs": 1.4673999999999978,
+        "medianLatencyMs": 0.9270999999998821,
+        "p95LatencyMs": 1.3937999999998283,
         "byCategory": {
           "comp.graphics": {
             "queries": 4,
@@ -609,7 +609,7 @@
             "relevantCategory": "comp.graphics",
             "precisionAt5": 0,
             "reciprocalRank": 0.14285714285714285,
-            "latencyMs": 0.18449999999984357,
+            "latencyMs": 0.174300000000585,
             "topCategory": "misc.forsale"
           },
           {
@@ -617,7 +617,7 @@
             "relevantCategory": "comp.sys.ibm.pc.hardware",
             "precisionAt5": 0.4,
             "reciprocalRank": 0.5,
-            "latencyMs": 1.1239000000000487,
+            "latencyMs": 1.072599999999511,
             "topCategory": "misc.forsale"
           },
           {
@@ -625,7 +625,7 @@
             "relevantCategory": "misc.forsale",
             "precisionAt5": 0.8,
             "reciprocalRank": 0.5,
-            "latencyMs": 1.343499999999949,
+            "latencyMs": 1.2910000000001673,
             "topCategory": "sci.space"
           }
         ],
@@ -672,8 +672,8 @@
         "queries": 200,
         "precisionAt5": 0.425,
         "mrr": 0.6368908730158729,
-        "medianLatencyMs": 3.516599999999926,
-        "p95LatencyMs": 6.690900000000056,
+        "medianLatencyMs": 3.5438999999987573,
+        "p95LatencyMs": 6.692900000000009,
         "byCategory": {
           "comp.graphics": {
             "queries": 25,
@@ -722,7 +722,7 @@
             "relevantCategory": "comp.graphics",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.1347999999998137,
+            "latencyMs": 3.3480000000017753,
             "topCategory": "sci.space"
           },
           {
@@ -730,7 +730,7 @@
             "relevantCategory": "comp.graphics",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.6334999999999127,
+            "latencyMs": 3.8377000000000407,
             "topCategory": "comp.sys.ibm.pc.hardware"
           },
           {
@@ -738,7 +738,7 @@
             "relevantCategory": "comp.graphics",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.7291999999997643,
+            "latencyMs": 3.5438999999987573,
             "topCategory": "sci.med"
           },
           {
@@ -746,7 +746,7 @@
             "relevantCategory": "comp.graphics",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 4.491799999999785,
+            "latencyMs": 4.1203999999997905,
             "topCategory": "sci.med"
           },
           {
@@ -754,7 +754,7 @@
             "relevantCategory": "comp.sys.ibm.pc.hardware",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.7314000000001215,
+            "latencyMs": 3.515400000000227,
             "topCategory": "misc.forsale"
           },
           {
@@ -762,7 +762,7 @@
             "relevantCategory": "comp.sys.ibm.pc.hardware",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.4115999999999076,
+            "latencyMs": 3.178600000001097,
             "topCategory": "talk.politics.guns"
           },
           {
@@ -770,7 +770,7 @@
             "relevantCategory": "comp.sys.ibm.pc.hardware",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 2.4056000000000495,
+            "latencyMs": 2.4483000000000175,
             "topCategory": "sci.space"
           },
           {
@@ -778,7 +778,7 @@
             "relevantCategory": "comp.sys.ibm.pc.hardware",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.4646999999999935,
+            "latencyMs": 4.739400000000387,
             "topCategory": "misc.forsale"
           },
           {
@@ -786,7 +786,7 @@
             "relevantCategory": "misc.forsale",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 4.614100000000235,
+            "latencyMs": 4.228599999998551,
             "topCategory": "sci.space"
           },
           {
@@ -794,7 +794,7 @@
             "relevantCategory": "rec.autos",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 4.544199999999819,
+            "latencyMs": 4.2828000000008615,
             "topCategory": "comp.sys.ibm.pc.hardware"
           },
           {
@@ -802,7 +802,7 @@
             "relevantCategory": "rec.autos",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.99330000000009,
+            "latencyMs": 3.570400000000518,
             "topCategory": "sci.med"
           },
           {
@@ -810,7 +810,7 @@
             "relevantCategory": "rec.autos",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 5.321699999999964,
+            "latencyMs": 4.576399999999921,
             "topCategory": "comp.graphics"
           }
         ],
@@ -886,8 +886,8 @@
         "queries": 32,
         "precisionAt5": 0.8562500000000001,
         "mrr": 0.959375,
-        "medianLatencyMs": 1.0201999999999316,
-        "p95LatencyMs": 1.7078999999998814,
+        "medianLatencyMs": 1.0645000000004075,
+        "p95LatencyMs": 2.085299999998824,
         "byCategory": {
           "comp.graphics": {
             "queries": 4,
@@ -936,7 +936,7 @@
             "relevantCategory": "misc.forsale",
             "precisionAt5": 0.2,
             "reciprocalRank": 0.2,
-            "latencyMs": 1.4823999999998705,
+            "latencyMs": 1.4861000000000786,
             "topCategory": "sci.space"
           },
           {
@@ -944,7 +944,7 @@
             "relevantCategory": "comp.sys.ibm.pc.hardware",
             "precisionAt5": 0.4,
             "reciprocalRank": 0.5,
-            "latencyMs": 1.1675999999997657,
+            "latencyMs": 1.171200000000681,
             "topCategory": "comp.graphics"
           }
         ],
@@ -990,8 +990,8 @@
         "queries": 200,
         "precisionAt5": 0.4340000000000001,
         "mrr": 0.6531884920634918,
-        "medianLatencyMs": 3.5509000000001834,
-        "p95LatencyMs": 6.785700000000361,
+        "medianLatencyMs": 3.584899999999834,
+        "p95LatencyMs": 6.586100000000442,
         "byCategory": {
           "comp.graphics": {
             "queries": 25,
@@ -1040,7 +1040,7 @@
             "relevantCategory": "comp.graphics",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.3436000000001513,
+            "latencyMs": 3.3836000000010245,
             "topCategory": "sci.space"
           },
           {
@@ -1048,7 +1048,7 @@
             "relevantCategory": "comp.graphics",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.796100000000024,
+            "latencyMs": 3.782500000001164,
             "topCategory": "sci.med"
           },
           {
@@ -1056,7 +1056,7 @@
             "relevantCategory": "comp.sys.ibm.pc.hardware",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.8548000000000684,
+            "latencyMs": 3.764100000000326,
             "topCategory": "misc.forsale"
           },
           {
@@ -1064,7 +1064,7 @@
             "relevantCategory": "comp.sys.ibm.pc.hardware",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 2.4018999999998414,
+            "latencyMs": 2.441900000001624,
             "topCategory": "sci.space"
           },
           {
@@ -1072,7 +1072,7 @@
             "relevantCategory": "comp.sys.ibm.pc.hardware",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.5057999999999083,
+            "latencyMs": 3.206399999999121,
             "topCategory": "misc.forsale"
           },
           {
@@ -1080,7 +1080,7 @@
             "relevantCategory": "misc.forsale",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 4.564300000000003,
+            "latencyMs": 4.659200000000055,
             "topCategory": "sci.space"
           },
           {
@@ -1088,7 +1088,7 @@
             "relevantCategory": "rec.autos",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 4.617699999999786,
+            "latencyMs": 4.42069999999876,
             "topCategory": "comp.sys.ibm.pc.hardware"
           },
           {
@@ -1096,7 +1096,7 @@
             "relevantCategory": "rec.autos",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.7318999999997686,
+            "latencyMs": 3.9112999999997555,
             "topCategory": "sci.med"
           },
           {
@@ -1104,7 +1104,7 @@
             "relevantCategory": "rec.autos",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 4.030099999999948,
+            "latencyMs": 4.137899999999718,
             "topCategory": "sci.space"
           },
           {
@@ -1112,7 +1112,7 @@
             "relevantCategory": "rec.sport.baseball",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.4768000000003667,
+            "latencyMs": 3.8695999999999913,
             "topCategory": "sci.med"
           },
           {
@@ -1120,7 +1120,7 @@
             "relevantCategory": "rec.sport.baseball",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.943699999999808,
+            "latencyMs": 4.287800000000061,
             "topCategory": "comp.sys.ibm.pc.hardware"
           },
           {
@@ -1128,7 +1128,7 @@
             "relevantCategory": "sci.med",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 2.934599999999591,
+            "latencyMs": 2.912000000000262,
             "topCategory": "rec.autos"
           }
         ],
@@ -1207,8 +1207,8 @@
         "queries": 32,
         "precisionAt5": 0.8625,
         "mrr": 0.9375,
-        "medianLatencyMs": 1.0397000000002663,
-        "p95LatencyMs": 1.6026999999994587,
+        "medianLatencyMs": 0.9578999999994267,
+        "p95LatencyMs": 1.525100000000748,
         "byCategory": {
           "comp.graphics": {
             "queries": 4,
@@ -1257,7 +1257,7 @@
             "relevantCategory": "misc.forsale",
             "precisionAt5": 0,
             "reciprocalRank": 0.16666666666666666,
-            "latencyMs": 1.512300000000323,
+            "latencyMs": 1.3513999999995576,
             "topCategory": "comp.graphics"
           },
           {
@@ -1265,7 +1265,7 @@
             "relevantCategory": "misc.forsale",
             "precisionAt5": 0.6,
             "reciprocalRank": 0.3333333333333333,
-            "latencyMs": 1.195199999999204,
+            "latencyMs": 0.9578999999994267,
             "topCategory": "comp.graphics"
           },
           {
@@ -1273,7 +1273,7 @@
             "relevantCategory": "comp.sys.ibm.pc.hardware",
             "precisionAt5": 0.4,
             "reciprocalRank": 0.5,
-            "latencyMs": 1.238299999999981,
+            "latencyMs": 1.1754000000000815,
             "topCategory": "comp.graphics"
           }
         ],
@@ -1319,8 +1319,8 @@
         "queries": 200,
         "precisionAt5": 0.402,
         "mrr": 0.6120059523809522,
-        "medianLatencyMs": 3.1080999999994674,
-        "p95LatencyMs": 5.899400000000242,
+        "medianLatencyMs": 3.243800000000192,
+        "p95LatencyMs": 6.158999999999651,
         "byCategory": {
           "comp.graphics": {
             "queries": 25,
@@ -1369,7 +1369,7 @@
             "relevantCategory": "comp.graphics",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 5.745999999999185,
+            "latencyMs": 4.865700000000288,
             "topCategory": "sci.space"
           },
           {
@@ -1377,7 +1377,7 @@
             "relevantCategory": "comp.graphics",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.837300000000141,
+            "latencyMs": 3.844699999999648,
             "topCategory": "sci.med"
           },
           {
@@ -1385,7 +1385,7 @@
             "relevantCategory": "comp.graphics",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.735899999999674,
+            "latencyMs": 3.705500000000029,
             "topCategory": "sci.med"
           },
           {
@@ -1393,7 +1393,7 @@
             "relevantCategory": "comp.sys.ibm.pc.hardware",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.7619999999997162,
+            "latencyMs": 3.343799999998737,
             "topCategory": "misc.forsale"
           },
           {
@@ -1401,7 +1401,7 @@
             "relevantCategory": "comp.sys.ibm.pc.hardware",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.483999999999469,
+            "latencyMs": 7.156699999999546,
             "topCategory": "talk.politics.guns"
           },
           {
@@ -1409,7 +1409,7 @@
             "relevantCategory": "comp.sys.ibm.pc.hardware",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 2.433899999999994,
+            "latencyMs": 2.2919999999994616,
             "topCategory": "comp.graphics"
           },
           {
@@ -1417,7 +1417,7 @@
             "relevantCategory": "comp.sys.ibm.pc.hardware",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.4304000000001906,
+            "latencyMs": 3.417700000001787,
             "topCategory": "misc.forsale"
           },
           {
@@ -1425,7 +1425,7 @@
             "relevantCategory": "comp.sys.ibm.pc.hardware",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 2.9655000000002474,
+            "latencyMs": 3.363600000000588,
             "topCategory": "sci.space"
           },
           {
@@ -1433,7 +1433,7 @@
             "relevantCategory": "misc.forsale",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.6556000000000495,
+            "latencyMs": 3.813799999999901,
             "topCategory": "sci.space"
           },
           {
@@ -1441,7 +1441,7 @@
             "relevantCategory": "misc.forsale",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 3.0028000000002066,
+            "latencyMs": 3.2883999999994558,
             "topCategory": "comp.sys.ibm.pc.hardware"
           },
           {
@@ -1449,7 +1449,7 @@
             "relevantCategory": "rec.autos",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 7.540799999999763,
+            "latencyMs": 4.233900000001086,
             "topCategory": "comp.sys.ibm.pc.hardware"
           },
           {
@@ -1457,7 +1457,7 @@
             "relevantCategory": "rec.autos",
             "precisionAt5": 0,
             "reciprocalRank": 0,
-            "latencyMs": 4.570999999999913,
+            "latencyMs": 11.097200000000157,
             "topCategory": "comp.sys.ibm.pc.hardware"
           }
         ],
@@ -1533,8 +1533,8 @@
         "queries": 32,
         "precisionAt5": 0.8562500000000001,
         "mrr": 0.96875,
-        "medianLatencyMs": 0.8708999999998923,
-        "p95LatencyMs": 1.3350999999993292,
+        "medianLatencyMs": 1.0675000000010186,
+        "p95LatencyMs": 1.5699000000004162,
         "byCategory": {
           "comp.graphics": {
             "queries": 4,
@@ -1583,7 +1583,7 @@
             "relevantCategory": "comp.sys.ibm.pc.hardware",
             "precisionAt5": 0.4,
             "reciprocalRank": 0.5,
-            "latencyMs": 1.0614000000005035,
+            "latencyMs": 5.037899999999354,
             "topCategory": "comp.graphics"
           },
           {
@@ -1591,7 +1591,7 @@
             "relevantCategory": "misc.forsale",
             "precisionAt5": 0.6,
             "reciprocalRank": 0.5,
-            "latencyMs": 0.8984999999993306,
+            "latencyMs": 1.0675000000010186,
             "topCategory": "comp.graphics"
           }
         ],
@@ -1630,8 +1630,8 @@
     "queries": 200,
     "precisionAt5": 0.47599999999999987,
     "mrr": 0.6637162698412697,
-    "medianLatencyMs": 2.9284000000000106,
-    "p95LatencyMs": 6.122100000000046,
+    "medianLatencyMs": 4.552200000000084,
+    "p95LatencyMs": 8.073699999999008,
     "byCategory": {
       "comp.graphics": {
         "queries": 25,
@@ -1680,7 +1680,7 @@
         "relevantCategory": "comp.sys.ibm.pc.hardware",
         "precisionAt5": 0,
         "reciprocalRank": 0,
-        "latencyMs": 3.372799999999984,
+        "latencyMs": 4.725599999999758,
         "topCategory": "comp.graphics"
       },
       {
@@ -1688,7 +1688,7 @@
         "relevantCategory": "comp.sys.ibm.pc.hardware",
         "precisionAt5": 0,
         "reciprocalRank": 0,
-        "latencyMs": 3.202699999999993,
+        "latencyMs": 4.375900000000911,
         "topCategory": "rec.autos"
       },
       {
@@ -1696,7 +1696,7 @@
         "relevantCategory": "comp.sys.ibm.pc.hardware",
         "precisionAt5": 0,
         "reciprocalRank": 0,
-        "latencyMs": 2.761099999999999,
+        "latencyMs": 4.337700000000041,
         "topCategory": "comp.graphics"
       },
       {
@@ -1704,7 +1704,7 @@
         "relevantCategory": "rec.sport.baseball",
         "precisionAt5": 0,
         "reciprocalRank": 0,
-        "latencyMs": 3.74350000000004,
+        "latencyMs": 5.34269999999924,
         "topCategory": "sci.space"
       },
       {
@@ -1712,7 +1712,7 @@
         "relevantCategory": "rec.sport.baseball",
         "precisionAt5": 0,
         "reciprocalRank": 0,
-        "latencyMs": 3.2789000000000215,
+        "latencyMs": 4.850800000000163,
         "topCategory": "comp.sys.ibm.pc.hardware"
       },
       {
@@ -1720,7 +1720,7 @@
         "relevantCategory": "sci.med",
         "precisionAt5": 0,
         "reciprocalRank": 0,
-        "latencyMs": 2.6725999999999885,
+        "latencyMs": 4.294700000000375,
         "topCategory": "rec.autos"
       },
       {
@@ -1728,7 +1728,7 @@
         "relevantCategory": "sci.space",
         "precisionAt5": 0,
         "reciprocalRank": 0,
-        "latencyMs": 3.315499999999929,
+        "latencyMs": 5.667199999999866,
         "topCategory": "comp.graphics"
       },
       {
@@ -1736,7 +1736,7 @@
         "relevantCategory": "talk.politics.guns",
         "precisionAt5": 0,
         "reciprocalRank": 0,
-        "latencyMs": 2.728999999999928,
+        "latencyMs": 5.0187000000005355,
         "topCategory": "sci.med"
       },
       {
@@ -1744,7 +1744,7 @@
         "relevantCategory": "talk.politics.guns",
         "precisionAt5": 0,
         "reciprocalRank": 0,
-        "latencyMs": 2.9506999999999834,
+        "latencyMs": 4.528800000000047,
         "topCategory": "sci.med"
       },
       {
@@ -1752,7 +1752,7 @@
         "relevantCategory": "talk.politics.guns",
         "precisionAt5": 0,
         "reciprocalRank": 0,
-        "latencyMs": 2.5424000000000433,
+        "latencyMs": 6.550100000000384,
         "topCategory": "comp.graphics"
       },
       {
@@ -1760,7 +1760,7 @@
         "relevantCategory": "misc.forsale",
         "precisionAt5": 0,
         "reciprocalRank": 0.1,
-        "latencyMs": 3.2368999999999915,
+        "latencyMs": 8.776100000000952,
         "topCategory": "sci.med"
       },
       {
@@ -1768,7 +1768,7 @@
         "relevantCategory": "rec.autos",
         "precisionAt5": 0,
         "reciprocalRank": 0.1,
-        "latencyMs": 3.1730999999999767,
+        "latencyMs": 4.788000000000466,
         "topCategory": "sci.space"
       }
     ],
@@ -1849,8 +1849,8 @@
     "queries": 200,
     "precisionAt5": 0.28400000000000025,
     "mrr": 0.49493253968253975,
-    "medianLatencyMs": 4.0353000000000065,
-    "p95LatencyMs": 5.180000000000064,
+    "medianLatencyMs": 4.7643000000007305,
+    "p95LatencyMs": 6.003200000001016,
     "byCategory": {
       "comp.graphics": {
         "queries": 25,
@@ -1899,7 +1899,7 @@
         "relevantCategory": "comp.sys.ibm.pc.hardware",
         "precisionAt5": 0,
         "reciprocalRank": 0,
-        "latencyMs": 4.53670000000011,
+        "latencyMs": 5.288299999998344,
         "topCategory": "comp.graphics"
       },
       {
@@ -1907,7 +1907,7 @@
         "relevantCategory": "misc.forsale",
         "precisionAt5": 0,
         "reciprocalRank": 0,
-        "latencyMs": 4.0353999999999814,
+        "latencyMs": 4.83009999999922,
         "topCategory": "comp.graphics"
       },
       {
@@ -1915,7 +1915,7 @@
         "relevantCategory": "misc.forsale",
         "precisionAt5": 0,
         "reciprocalRank": 0,
-        "latencyMs": 4.117199999999912,
+        "latencyMs": 5.001800000000003,
         "topCategory": "comp.graphics"
       },
       {
@@ -1923,7 +1923,7 @@
         "relevantCategory": "misc.forsale",
         "precisionAt5": 0,
         "reciprocalRank": 0,
-        "latencyMs": 2.960900000000038,
+        "latencyMs": 3.7093000000004395,
         "topCategory": "sci.space"
       },
       {
@@ -1931,7 +1931,7 @@
         "relevantCategory": "misc.forsale",
         "precisionAt5": 0,
         "reciprocalRank": 0,
-        "latencyMs": 3.0452999999999975,
+        "latencyMs": 4.214400000000751,
         "topCategory": "comp.sys.ibm.pc.hardware"
       },
       {
@@ -1939,7 +1939,7 @@
         "relevantCategory": "misc.forsale",
         "precisionAt5": 0,
         "reciprocalRank": 0,
-        "latencyMs": 3.8422999999997955,
+        "latencyMs": 5.019099999999526,
         "topCategory": "comp.graphics"
       },
       {
@@ -1947,7 +1947,7 @@
         "relevantCategory": "misc.forsale",
         "precisionAt5": 0,
         "reciprocalRank": 0,
-        "latencyMs": 3.8526999999999134,
+        "latencyMs": 5.191500000000815,
         "topCategory": "comp.graphics"
       },
       {
@@ -1955,7 +1955,7 @@
         "relevantCategory": "misc.forsale",
         "precisionAt5": 0,
         "reciprocalRank": 0,
-        "latencyMs": 3.817199999999957,
+        "latencyMs": 5.5297000000009575,
         "topCategory": "sci.med"
       },
       {
@@ -1963,7 +1963,7 @@
         "relevantCategory": "rec.autos",
         "precisionAt5": 0,
         "reciprocalRank": 0,
-        "latencyMs": 3.9543999999998505,
+        "latencyMs": 5.55409999999938,
         "topCategory": "comp.graphics"
       },
       {
@@ -1971,7 +1971,7 @@
         "relevantCategory": "rec.autos",
         "precisionAt5": 0,
         "reciprocalRank": 0,
-        "latencyMs": 3.833599999999933,
+        "latencyMs": 4.302800000001298,
         "topCategory": "sci.med"
       },
       {
@@ -1979,7 +1979,7 @@
         "relevantCategory": "rec.autos",
         "precisionAt5": 0,
         "reciprocalRank": 0,
-        "latencyMs": 4.223600000000033,
+        "latencyMs": 4.2564000000002125,
         "topCategory": "comp.graphics"
       },
       {
@@ -1987,7 +1987,7 @@
         "relevantCategory": "rec.sport.baseball",
         "precisionAt5": 0,
         "reciprocalRank": 0,
-        "latencyMs": 3.755100000000084,
+        "latencyMs": 4.2476000000006024,
         "topCategory": "comp.graphics"
       }
     ],
@@ -2047,8 +2047,8 @@
     "queries": 32,
     "precisionAt5": 0.88125,
     "mrr": 0.9409722222222222,
-    "medianLatencyMs": 1.2772999999999683,
-    "p95LatencyMs": 2.0474000000001524,
+    "medianLatencyMs": 1.3048999999991793,
+    "p95LatencyMs": 2.001399999999194,
     "byCategory": {
       "comp.graphics": {
         "queries": 4,
@@ -2097,7 +2097,7 @@
         "relevantCategory": "comp.graphics",
         "precisionAt5": 0,
         "reciprocalRank": 0.1111111111111111,
-        "latencyMs": 0.24700000000007094,
+        "latencyMs": 0.22659999999996217,
         "topCategory": "comp.sys.ibm.pc.hardware"
       },
       {
@@ -2105,7 +2105,7 @@
         "relevantCategory": "comp.sys.ibm.pc.hardware",
         "precisionAt5": 0.4,
         "reciprocalRank": 0.5,
-        "latencyMs": 1.4134999999998854,
+        "latencyMs": 1.4460999999992055,
         "topCategory": "misc.forsale"
       },
       {
@@ -2113,7 +2113,7 @@
         "relevantCategory": "misc.forsale",
         "precisionAt5": 0.6,
         "reciprocalRank": 0.5,
-        "latencyMs": 1.9636000000000422,
+        "latencyMs": 1.8371999999999389,
         "topCategory": "sci.space"
       }
     ],

@@ -13,6 +13,7 @@ import {
   type RootStackParamList,
   WelcomeScreen,
 } from './src/features/auth/patient-auth';
+import { ForgotPasswordScreen, ResetPasswordScreen } from './src/features/auth/password-reset-screen';
 import { ChangePasswordScreen } from './src/features/auth/change-password-screen';
 import { apiClient } from './src/shared/api/client';
 import { authTokenStorage } from './src/shared/storage/auth-token';
@@ -22,6 +23,8 @@ import { PatientTabs } from './src/features/home/patient-tabs';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const queryClient = new QueryClient();
+const linking = { prefixes: ['quanlyphongkham://'],
+  config: { screens: { ResetPassword: 'password/reset' } } };
 
 function MobileApp() {
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
@@ -98,7 +101,7 @@ function MobileApp() {
     </SafeAreaView>;
   }
 
-  return <NavigationContainer>
+  return <NavigationContainer linking={linking}>
     <StatusBar style="dark" />
     <Stack.Navigator key={user ? 'patient' : `guest-${guestInitialRoute}`}
       initialRouteName={user ? 'PatientHome' : guestInitialRoute}
@@ -126,7 +129,12 @@ function MobileApp() {
           {(props) => <LoginScreen {...props} onAuthenticated={authenticated} />}
         </Stack.Screen>
         <Stack.Screen name="Register" component={RegistrationScreen} options={{ title: 'Đăng ký bệnh nhân' }} />
+        <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ title: 'Quên mật khẩu' }} />
       </>}
+      <Stack.Screen name="ResetPassword" options={{ title: 'Đặt lại mật khẩu' }}>
+        {(props) => <ResetPasswordScreen {...props} authenticated={Boolean(user)}
+          onReset={async () => { if (user) await passwordChanged(); }} />}
+      </Stack.Screen>
     </Stack.Navigator>
   </NavigationContainer>;
 }

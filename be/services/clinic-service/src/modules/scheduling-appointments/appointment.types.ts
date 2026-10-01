@@ -56,6 +56,47 @@ export type CreateScheduleInput = {
   breaks?: ScheduleBreakInput[];
 };
 
+export type ScheduleWorkflowStatus = 'PROPOSED' | 'DOCTOR_CONFIRMED' | 'REJECTED' | 'PUBLISHED';
+
+export type DoctorWorkingSchedule = {
+  publicId: string;
+  branchPublicId: string;
+  branchName: string;
+  timezoneName: string;
+  roomName: string;
+  weekdayIso: number;
+  localStartTime: string;
+  localEndTime: string;
+  slotDurationMinutes: number;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  workflowStatus: ScheduleWorkflowStatus;
+  decisionNote: string | null;
+  breaks: ScheduleBreakInput[];
+};
+
+export type DoctorTimeOff = {
+  publicId: string;
+  branchPublicId: string;
+  branchName: string;
+  doctorName: string;
+  serviceDate: string;
+  localStartTime: string;
+  localEndTime: string;
+  reason: string;
+  decisionNote: string | null;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+  appointmentConflictCount: number;
+};
+
+export type RequestTimeOffInput = {
+  branchPublicId: string;
+  serviceDate: string;
+  localStartTime: string;
+  localEndTime: string;
+  reason: string;
+};
+
 export type SchedulingData = {
   branch: { publicId: string; code: string; name: string; timezoneName: string; bookingHorizonDays: number };
   doctors: Array<{ publicId: string; fullName: string; defaultSlotMinutes: number; acceptsOnlineBooking: boolean }>;
@@ -74,6 +115,8 @@ export type SchedulingData = {
     effectiveFrom: string;
     effectiveTo: string | null;
     isActive: boolean;
+    workflowStatus: ScheduleWorkflowStatus;
+    decisionNote: string | null;
     breaks: ScheduleBreakInput[];
     slotCount: number;
     rowVersion: string;
@@ -92,8 +135,18 @@ export type BookAppointmentInput = {
 export interface AppointmentRepository {
   availability(branchPublicId: string, servicePublicId: string, fromDate: string, toDate: string,
     doctorPublicId?: string): Promise<AvailabilitySlot[]>;
+  adminAvailability(actor: ClinicPrincipal, branchPublicId: string, servicePublicId: string,
+    serviceDate: string, requestId: string): Promise<AvailabilitySlot[]>;
   scheduling(actor: ClinicPrincipal, branchPublicId: string, requestId: string): Promise<SchedulingData>;
   createSchedule(actor: ClinicPrincipal, input: CreateScheduleInput, requestId: string): Promise<string>;
+  listMySchedules(actor: ClinicPrincipal, requestId: string): Promise<DoctorWorkingSchedule[]>;
+  decideSchedule(actor: ClinicPrincipal, schedulePublicId: string, decision: 'CONFIRM' | 'REJECT',
+    reason: string | null, requestId: string): Promise<void>;
+  publishSchedule(actor: ClinicPrincipal, schedulePublicId: string, requestId: string): Promise<void>;
+  requestTimeOff(actor: ClinicPrincipal, input: RequestTimeOffInput, requestId: string): Promise<string>;
+  listTimeOff(actor: ClinicPrincipal, branchPublicId: string | null, requestId: string): Promise<DoctorTimeOff[]>;
+  decideTimeOff(actor: ClinicPrincipal, timeOffPublicId: string, decision: 'APPROVE' | 'REJECT' | 'CANCEL',
+    reason: string | null, requestId: string): Promise<void>;
   generateSlots(actor: ClinicPrincipal, schedulePublicId: string, fromDate: string, toDate: string,
     requestId: string): Promise<number>;
   listMine(actor: ClinicPrincipal, requestId: string): Promise<Appointment[]>;
