@@ -1,13 +1,13 @@
 {
-  "name": "hoc-may-fe",
+  "name": "hocmayfe",
   "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --port 5175 --strictPort",
-    "build": "tsc --noEmit && vite build",
+    "dev": "vite --config cauhinhvite.ts --port 5175 --strictPort",
+    "build": "tsc --noEmit && vite build --config cauhinhvite.ts",
     "typecheck": "tsc --noEmit",
-    "preview": "vite preview --port 4175"
+    "preview": "vite preview --config cauhinhvite.ts --port 4175"
   },
   "dependencies": {
     "react": "19.2.3",

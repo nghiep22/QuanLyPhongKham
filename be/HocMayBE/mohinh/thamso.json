@@ -1,0 +1,10 @@
+{
+  "ten": "unigram",
+  "cauhinh": {
+    "minDf": 3,
+    "maxDf": 0.95,
+    "ngramMax": 1
+  },
+  "dauvan": "452c6448ba9921d7d0dbbe8c3414465369a2d2a4c3f0ca102cfa680af0f73c36",
+  "trainOnly": true
+}

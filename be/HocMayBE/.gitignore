@@ -1,6 +1,9 @@
 node_modules/
 dist/
-data/raw/
-data/processed/
-models/*.json
+dulieu/tho/
+dulieu/xuly/
+mohinh/*.joblib
+.venv/
+__pycache__/
+.pytest_cache/
 *.log

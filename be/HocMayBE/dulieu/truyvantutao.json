@@ -1,0 +1,162 @@
+[
+  {
+    "madinhdanh": "Q01",
+    "truyvan": "computer graphics rendering and image pixels",
+    "chudelienquan": "comp.graphics"
+  },
+  {
+    "madinhdanh": "Q02",
+    "truyvan": "3d graphics ray tracing software",
+    "chudelienquan": "comp.graphics"
+  },
+  {
+    "madinhdanh": "Q03",
+    "truyvan": "jpeg image compression and color",
+    "chudelienquan": "comp.graphics"
+  },
+  {
+    "madinhdanh": "Q04",
+    "truyvan": "graphics card display resolution",
+    "chudelienquan": "comp.graphics"
+  },
+  {
+    "madinhdanh": "Q05",
+    "truyvan": "pc motherboard memory upgrade",
+    "chudelienquan": "comp.sys.ibm.pc.hardware"
+  },
+  {
+    "madinhdanh": "Q06",
+    "truyvan": "hard drive controller for ibm pc",
+    "chudelienquan": "comp.sys.ibm.pc.hardware"
+  },
+  {
+    "madinhdanh": "Q07",
+    "truyvan": "computer bios and cpu compatibility",
+    "chudelienquan": "comp.sys.ibm.pc.hardware"
+  },
+  {
+    "madinhdanh": "Q08",
+    "truyvan": "installing new ram in desktop pc",
+    "chudelienquan": "comp.sys.ibm.pc.hardware"
+  },
+  {
+    "madinhdanh": "Q09",
+    "truyvan": "selling used computer equipment",
+    "chudelienquan": "misc.forsale"
+  },
+  {
+    "madinhdanh": "Q10",
+    "truyvan": "item for sale asking price",
+    "chudelienquan": "misc.forsale"
+  },
+  {
+    "madinhdanh": "Q11",
+    "truyvan": "shipping payment for second hand sale",
+    "chudelienquan": "misc.forsale"
+  },
+  {
+    "madinhdanh": "Q12",
+    "truyvan": "wanted to buy used electronics",
+    "chudelienquan": "misc.forsale"
+  },
+  {
+    "madinhdanh": "Q13",
+    "truyvan": "car engine fuel mileage",
+    "chudelienquan": "rec.autos"
+  },
+  {
+    "madinhdanh": "Q14",
+    "truyvan": "automobile transmission and repair",
+    "chudelienquan": "rec.autos"
+  },
+  {
+    "madinhdanh": "Q15",
+    "truyvan": "best tires for driving in winter",
+    "chudelienquan": "rec.autos"
+  },
+  {
+    "madinhdanh": "Q16",
+    "truyvan": "buying a reliable used car",
+    "chudelienquan": "rec.autos"
+  },
+  {
+    "madinhdanh": "Q17",
+    "truyvan": "baseball season team standings",
+    "chudelienquan": "rec.sport.baseball"
+  },
+  {
+    "madinhdanh": "Q18",
+    "truyvan": "pitcher batting average statistics",
+    "chudelienquan": "rec.sport.baseball"
+  },
+  {
+    "madinhdanh": "Q19",
+    "truyvan": "major league baseball playoffs",
+    "chudelienquan": "rec.sport.baseball"
+  },
+  {
+    "madinhdanh": "Q20",
+    "truyvan": "home run record for baseball player",
+    "chudelienquan": "rec.sport.baseball"
+  },
+  {
+    "madinhdanh": "Q21",
+    "truyvan": "medical treatment for disease symptoms",
+    "chudelienquan": "sci.med"
+  },
+  {
+    "madinhdanh": "Q22",
+    "truyvan": "doctor diagnosis and patient health",
+    "chudelienquan": "sci.med"
+  },
+  {
+    "madinhdanh": "Q23",
+    "truyvan": "medicine side effects and clinical study",
+    "chudelienquan": "sci.med"
+  },
+  {
+    "madinhdanh": "Q24",
+    "truyvan": "blood pressure health research",
+    "chudelienquan": "sci.med"
+  },
+  {
+    "madinhdanh": "Q25",
+    "truyvan": "nasa spacecraft orbit around earth",
+    "chudelienquan": "sci.space"
+  },
+  {
+    "madinhdanh": "Q26",
+    "truyvan": "space shuttle launch mission",
+    "chudelienquan": "sci.space"
+  },
+  {
+    "madinhdanh": "Q27",
+    "truyvan": "astronomy telescope distant planets",
+    "chudelienquan": "sci.space"
+  },
+  {
+    "madinhdanh": "Q28",
+    "truyvan": "satellite launch and rocket science",
+    "chudelienquan": "sci.space"
+  },
+  {
+    "madinhdanh": "Q29",
+    "truyvan": "gun ownership laws and rights",
+    "chudelienquan": "talk.politics.guns"
+  },
+  {
+    "madinhdanh": "Q30",
+    "truyvan": "firearm control legislation debate",
+    "chudelienquan": "talk.politics.guns"
+  },
+  {
+    "madinhdanh": "Q31",
+    "truyvan": "second amendment and gun policy",
+    "chudelienquan": "talk.politics.guns"
+  },
+  {
+    "madinhdanh": "Q32",
+    "truyvan": "public safety and firearms regulation",
+    "chudelienquan": "talk.politics.guns"
+  }
+]
